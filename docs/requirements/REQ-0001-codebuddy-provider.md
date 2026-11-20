@@ -111,7 +111,7 @@ Owner：wayne
 
 | CHG ID | 标题 | 状态 | 链接 |
 |---|---|---|---|
-| CHG-0001 | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 提议 | [CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md) |
+| CHG-0001 | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 开发中 | [CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md) |
 
 ## 11. 链接
 

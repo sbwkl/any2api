@@ -12,7 +12,7 @@
 
 | ID | 标题 | 状态 | 功能卡 |
 |---|---|---|---|
-| [CHG-0001](changes/CHG-0001-codebuddy-provider-initial.md) | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 提议 | REQ-0001 |
+| [CHG-0001](changes/CHG-0001-codebuddy-provider-initial.md) | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 开发中 | REQ-0001 |
 
 ## RFC（rfcs）
 

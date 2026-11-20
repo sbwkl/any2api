@@ -1,31 +1,42 @@
 # any2api
 
-把各 AI 编程工具的私有 LLM 通道封装为通用 **OpenAI 兼容 API**。每个工具是一个独立 provider（`src/providers/<name>/`），对外统一暴露 `/v1/chat/completions` 与 `/v1/models`。
+把各 AI 编程工具的私有 LLM 通道封装为通用 **OpenAI 兼容 API**。每个工具是一个独立 provider（`src/providers/<name>/`），对外统一暴露 OpenAI 兼容端点（codearts：`/v1/*`；codebuddy：`/codebuddy/v1/*`）。
 
-- 当前 provider：**codearts**（码道 CodeArts Agent，华为云 snap-access 通道）
-- 计划 provider：codebuddy 等
+- 当前 provider：**codearts**（码道 CodeArts Agent，华为云 snap-access 通道）、**codebuddy**（腾讯 CodeBuddy CN，`copilot.tencent.com`）
+- 路由：`/v1/*` → codearts（默认，向后兼容）；`/codebuddy/v1/*` → codebuddy
 - 运行时：Bun（原生执行 TypeScript，无需编译）
 
 ## 结构
 
 ```
 src/
-├── index.ts                  # 顶层入口：provider 注册点（新增 provider 在此加一行）
+├── index.ts                  # 顶层入口：多 provider 路由（/v1 → codearts；/codebuddy/v1 → codebuddy）
 ├── shared/
 │   └── ids.ts                # 通用 ID 生成（跨 provider 复用）
 └── providers/
-    └── codearts/             # 码道适配器（自包含）
-        ├── index.ts          # provider 装配与启动（路由注册）
-        ├── openai.ts         # 内部统一管线 + OpenAI Chat 门面
-        ├── anthropic.ts      # Anthropic /v1/messages 协议适配
-        ├── responses.ts      # OpenAI Responses /v1/responses 协议适配
-        ├── snap.ts           # 加密通道（key-exchange + SM4-GCM SSE）
-        ├── refresher.ts      # STS 自动刷新（DPoP + refresh_token 轮换回写）
-        ├── signer.ts         # 华为云双签名器（sl.sign / signSimple）
-        ├── sm4.ts            # SM4-GCM（内核逐字语义，含 GHASH 块边界行为）
-        ├── config.ts         # 凭证加载 + 模型池
-        ├── telemetry.ts      # OTLP 最小仿真
-        └── protocol-spec.md  # 内核协议权威规格
+    ├── codearts/             # 码道适配器（自包含）
+    │   ├── index.ts          # provider 装配（createHandler / start）
+    │   ├── openai.ts         # 内部统一管线 + OpenAI Chat 门面
+    │   ├── anthropic.ts      # Anthropic /v1/messages 协议适配
+    │   ├── responses.ts      # OpenAI Responses /v1/responses 协议适配
+    │   ├── snap.ts           # 加密通道（key-exchange + SM4-GCM SSE）
+    │   ├── refresher.ts      # STS 自动刷新（DPoP + refresh_token 轮换回写）
+    │   ├── signer.ts         # 华为云双签名器（sl.sign / signSimple）
+    │   ├── sm4.ts            # SM4-GCM（内核逐字语义，含 GHASH 块边界行为）
+    │   ├── config.ts         # 凭证加载 + 模型池
+    │   ├── telemetry.ts      # OTLP 最小仿真
+    │   └── protocol-spec.md  # 内核协议权威规格
+    └── codebuddy/            # CodeBuddy CN 适配器（自包含）
+        ├── index.ts          # provider 装配与路由
+        ├── openai.ts         # OpenAI Chat 门面（models + chat）
+        ├── client.ts         # 头集合 / gzip / 401 刷新
+        ├── envelope.ts       # OpenAI ↔ CodeBuddy 请求体映射
+        ├── sse.ts            # SSE → chat.completion 聚合
+        ├── config.ts         # 凭证（Keychain safeStorage）+ 模型/提示词
+        ├── ids.ts            # 32hex ID + 会话/轮次
+        ├── types.ts          # 公共类型
+        ├── protocol-spec.md  # 协议权威规格
+        └── *.test.ts         # bun test
 ```
 
 ## 生产启动（launchd，已配置）
@@ -54,6 +65,10 @@ bun src/index.ts
 | `OTLP_ENABLED` | `true` | OTLP 遥测仿真开关 |
 | `OTLP_SERVICE_NAME` | `codeagent-kernel` | 遥测 service.name |
 | `SNAP_ORIGIN` | 华为云生产地址 | snap-access 通道覆盖 |
+| `CODEBUDDY_AGENT` | `chat` | codebuddy 默认 profile：`chat` / `ask` / `craft` |
+| `CODEBUDDY_TOKEN` / `CODEBUDDY_UID` | 从 Keychain 提取 | codebuddy 凭证兜底（可配 `CODEBUDDY_REFRESH_TOKEN`） |
+| `CODEBUDDY_DEVICE_TOKEN` | 空 | codebuddy 可选的 TuringShield 设备令牌 |
+| `CODEBUDDY_GENIE_HOME` | 本机 CodeBuddy 安装路径 | codebuddy 产品配置/提示词来源 |
 
 ## 使用方式
 
@@ -89,6 +104,26 @@ curl -N http://127.0.0.1:8787/v1/chat/completions \
 
 当前模型池：启动时通过 Policy Center `POST /v1/policy/bundle`（Agent-Type: PromptCenter，商业版 x-auth-token 为空串、靠 provider 层 AKSK 签名认证）动态发现——这是 IDE 模型下拉的真实数据源，后端调整模型无需改代码；失败时回退观测池（`glm-5.3-flash`、`deepseek-v4.1-flash`）。
 
+### CodeBuddy（codebuddy provider）
+
+Base URL 用 `/codebuddy/v1`：
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://127.0.0.1:8787/codebuddy/v1", api_key="anything")
+resp = client.chat.completions.create(
+    model="hy4flash-free",
+    messages=[{"role": "user", "content": "你好"}],
+    stream=True,  # 上游只支持流式；非流式由代理聚合
+)
+```
+
+- `GET /codebuddy/v1/models` — 当前模型池（product.json + agent models + 观测模型）。
+- `POST /codebuddy/v1/chat/completions` — 流式/非流式、标准 OpenAI 工具调用往返。
+- `GET /codebuddy/healthz` — 凭证来源、模型数。
+- profile：请求头 `x-codebuddy-agent: chat|ask|craft`（默认 `chat`）；`ask`/`craft` 会注入 IDE 的系统提示词。
+- 凭证：自动从 Keychain + `state.vscdb` 提取（需登录过一次），也可用 `CODEBUDDY_TOKEN` / `CODEBUDDY_UID`。
+
 ## 凭证与续期行为
 
 - 前提：曾在码道 app 内登录过一次（凭证取自 app 的 SecretStorage：refresh_token、PKCE、DPoP 密钥对）
@@ -97,6 +132,12 @@ curl -N http://127.0.0.1:8787/v1/chat/completions \
 - app 与代理共享 lineage，任一方续期另一方自动获益
 - 若 lineage 意外失效（如续期成功但回写前进程崩溃），日志会提示重新登录一次
 
+### CodeBuddy
+
+- 凭证来自 macOS Keychain `CodeBuddy CN Safe Storage` + `state.vscdb` 的 `planning-genie.new.accessTokencn`（v10 safeStorage 解密）。
+- token 过期：401 时调用 `/v2/plugin/auth/token/refresh` 刷新并重试一次；失败提示重新登录。
+- 无需 IDE 在线；Keychain 授权只需一次。
+
 ## 已知限制
 
 - 服务无鉴权：默认只绑 `127.0.0.1`，仅本机可用；改 `HOST=0.0.0.0` 前请评估风险
@@ -104,3 +145,7 @@ curl -N http://127.0.0.1:8787/v1/chat/completions \
 - 协议适配边界：图像块被省略（占位 `[image omitted]`）；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）
 - 残余可识别特征：Bun 与内核（Node）的 TLS 指纹差异、OTLP service.name 为占位值
 - 明文回退为死路径：chat 后端硬性要求加密通道（实测 415 Unsupported Media Type），密钥协商失败即不可用（代理已实现换 key 重试）
+- codebuddy 首版只支持 OpenAI Chat + Models；Anthropic/Responses、遥测、消息中心轮询未做
+- codebuddy 模型池是启动时快照（本机 17 个）；云端 23 个模型的下发接口待确认
+- codebuddy 默认不发送 `X-Device-Token`（实测当前通道可省略），不伪造 TuringShield
+- codebuddy 的 ask/craft profile 只切换系统提示词；工具 schema 仅来自客户端 `tools`

@@ -459,3 +459,40 @@ Base URL 由 `product.json.endpoint` + `/v2` 组成；`product.json` 的 `stagin
 | 扩展入口与实现 | `.../genie/out/extension/index.js`（21MB bundle，待逐字核对） |
 | 凭证存储 | macOS Keychain `CodeBuddy CN Safe Storage`；`.../CodeBuddy CN/User/globalStorage/state.vscdb` |
 | 方法论先例 | [codearts protocol-spec](../../src/providers/codearts/protocol-spec.md) |
+
+---
+
+## 12. 实现校验（2026-11-20）
+
+首版实现后，对本方案的关键假设做了实测校验（逐字规格见 [protocol-spec](../../src/providers/codebuddy/protocol-spec.md)）。
+
+### 12.1 已确认
+
+- 推理端点 `POST {endpoint}/v2/chat/completions`，请求体 gzip，`Accept: text/event-stream`。
+- **只支持流式**：`stream:false` → 400 `code 11101`；代理始终向上游请求 `stream:true`，非流式客户端由代理聚合。
+- 鉴权：`Authorization: Bearer <JWT>` + `X-User-Id` + `X-Domain`；`POST /v2/plugin/auth/token/refresh` 可刷新。
+- 头集合：`X-IDE-Type/Name/Version`、`X-Product-Version`、`X-Product`、`X-Env-ID`、`X-Trace-ID`、`X-Request-ID`、`X-Conversation-ID`、`X-Conversation-Request-ID`、`X-Conversation-Message-ID`、`X-Agent-Intent`、`X-Model-ID`。
+- `User-Agent: CodeBuddy/<version>` 可接受；`/v3/config` 用它校验产品版本。
+- 响应为标准 OpenAI chunk：`reasoning_content`、`tool_calls`、`finish_reason`、末帧 `usage`、`[DONE]`。
+- `stream_options` 不发送；`max_tokens` 对 gpt-5*/o1/o3/o4/gpt-4.1 改为 `max_completion_tokens`。
+- `X-Device-Token` 在当前通道**可省略**；首版不伪造 TuringShield。
+- 凭证可从 Keychain + `state.vscdb` 提取（v10 safeStorage）；`auth.accessToken` 为裸 JWT。
+
+### 12.2 与原设计的差异
+
+- 原 §5.3 的「ask/craft profile 默认工具集」首版未实现：profile 只切换系统提示词，工具仅来自客户端 `tools`。理由：内置工具 JSON schema 尚未逐字还原，宁可少发也不发错误 schema。
+- 原 §5.8 的「旁路信号」首版只做模型发现；消息中心轮询、遥测未做。
+- 原 §5.2.1 的「模型目录 API」未确认：`/v3/config` 只返回 features；`/v2/agents` 不含 models。首版模型池 = product.json + agent models + 观测模型（17 个）。
+
+### 12.3 实现状态
+
+- CHG-0001 状态：开发中；`bun test src/providers/codebuddy/` → 29 pass / 0 fail。
+- 真实上游非流式/流式/工具调用/craft 实测成功；codearts 回归通过。
+- 未做：7 天稳定性、真实 401 演练、抓包 diff、Anthropic/Responses 适配。
+
+### 12.4 仍未决
+
+- 23 个模型的真实下发接口。
+- `X-Device-Token` 的长期必要性。
+- `ResultPresentationPrompt` 等占位符的取值。
+- 排队协议与 429 细节。

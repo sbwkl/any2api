@@ -44,7 +44,8 @@ async function resolveInitialCredentials() {
   return creds;
 }
 
-export async function start(): Promise<void> {
+// 装配 codearts provider，返回 fetch handler（供顶层路由复用；start() 保留单 provider 启动方式）
+export async function createHandler(): Promise<(req: Request) => Promise<Response>> {
   const creds = await resolveInitialCredentials();
   console.log(`[codearts] 凭证就绪 ak=${creds.ak.slice(0, 8)}... 有效期至 ${creds.expiresAt ?? "(env 静态凭证)"}`);
 
@@ -69,25 +70,30 @@ export async function start(): Promise<void> {
 
   const facade = new OpenAIFacade(snap, gw, telemetry);
 
+  return async (req) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/v1/models" && req.method === "GET")
+      return Response.json(facade.modelsPayload());
+    if (url.pathname === "/v1/chat/completions" && req.method === "POST")
+      return facade.handleChat(req);
+    if (url.pathname === "/v1/messages" && req.method === "POST")
+      return handleAnthropicMessages(facade, req);
+    if (url.pathname === "/v1/responses" && req.method === "POST")
+      return handleResponses(facade, req);
+    if (url.pathname === "/healthz")
+      return new Response("ok");
+    return new Response("not found", { status: 404 });
+  };
+}
+
+export async function start(): Promise<void> {
+  const handler = await createHandler();
   const server = Bun.serve({
     port: PORT,
     // 生产默认只监听本机回环；需要局域网访问时设 HOST=0.0.0.0（注意：服务无鉴权，勿暴露公网）
     hostname: process.env.HOST ?? "127.0.0.1",
     idleTimeout: 255,
-    fetch: async (req) => {
-      const url = new URL(req.url);
-      if (url.pathname === "/v1/models" && req.method === "GET")
-        return Response.json(facade.modelsPayload());
-      if (url.pathname === "/v1/chat/completions" && req.method === "POST")
-        return facade.handleChat(req);
-      if (url.pathname === "/v1/messages" && req.method === "POST")
-        return handleAnthropicMessages(facade, req);
-      if (url.pathname === "/v1/responses" && req.method === "POST")
-        return handleResponses(facade, req);
-      if (url.pathname === "/healthz")
-        return new Response("ok");
-      return new Response("not found", { status: 404 });
-    },
+    fetch: handler,
   });
   console.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/v1 (POST /v1/chat/completions, GET /v1/models)`);
   console.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/v1  api-key=任意非空串`);

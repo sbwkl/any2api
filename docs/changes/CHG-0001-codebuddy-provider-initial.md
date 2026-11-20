@@ -1,7 +1,7 @@
 # CHG-0001 CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat）
 
 类型：CHG
-状态：提议
+状态：开发中
 Owner：wayne
 所属模块/入口：`src/providers/codebuddy/`、`src/index.ts`
 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
@@ -57,6 +57,7 @@ Owner：wayne
 **本次明确不做**
 
 - 不在代理侧执行工具；不解析/改写工具结果。
+- 不为 ask/craft profile 发送内置默认工具 schema（首版工具仅来自客户端 `tools`；profile 只影响系统提示词）。
 - 不实现 Anthropic Messages / Responses 协议。
 - 不实现 IDE 专属遥测（TracingService/Aegis）与消息中心以外的旁路信号；这些先写入 protocol-spec 的残余差异清单。
 - 不做 TLS 指纹伪装（先接受 Bun 与 Electron 的差异，记录在案）。
@@ -86,6 +87,12 @@ Owner：wayne
 - 启动日志、每请求日志（不含 token）：provider、model、profile、step、上游状态码、耗时、usage。
 - `/healthz`：凭证状态、模型池来源、上游可达性（可选）。
 - 证据链接：测试结果、抓包 diff、7 天运行记录（实现后补）。
+- 结果与证据（2026-11-20，本机）：
+  - `bun test src/providers/codebuddy/` → **29 pass / 0 fail / 142 expect() calls**（6 个测试文件）。
+  - `bun build src/index.ts --target=bun` → 成功（19 modules）。
+  - 真实上游：非流式 → 200（content `OK`，含 usage）；流式 → 200 `text/event-stream`；工具调用 → `finish_reason: tool_calls`；craft profile → `prompt_tokens≈1550`。
+  - 服务端：`/healthz` ok；`/codebuddy/healthz` ok（17 models，credentialSource=keychain）；`/codebuddy/v1/models` 返回 17 个；`/codebuddy/v1/chat/completions` 非流式/流式成功；codearts `/v1/chat/completions` 回归成功（`glm-5.3-flash`）。
+  - 未做：7 天稳定性、真实 401 刷新演练、抓包 diff、Anthropic/Responses 适配。
 
 ## 6. 回滚方案
 
@@ -103,6 +110,8 @@ Owner：wayne
 | 工具 schema 与 OpenAI 不完全等价（`code_mode`） | 部分客户端工具调用失败 | RFC-0001 §5.5 定义映射与降级；测试覆盖常见客户端（Cline/Cherry Studio） |
 | 多 provider 端口/路由冲突 | codearts 与 codebuddy 不能同时占 `/v1` | 采用路径前缀隔离（`/codebuddy/v1`），codearts 保持 `/v1` |
 | 协议漂移 | CodeBuddy 升级导致请求被拒 | protocol-spec 记录扩展版本；建立 diff 脚本；升级后按需新 CHG |
+| X-Device-Token（TuringShield） | 服务端未来可能强制校验 | 实测当前可省略；保留 `CODEBUDDY_DEVICE_TOKEN` 注入位；不伪造 SDK |
+| 模型目录 | 23 个模型的真实下发端点未确认 | 首版用 product.json + agent models + 观测模型（17 个）；未知模型透传上游 |
 
 ## 8. 关联与证据
 
@@ -117,3 +126,4 @@ Owner：wayne
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
 | 提议 | wayne | 本 CHG + 本机实测证据（2026-11-20）；待用户审核 RFC-0001 后转「就绪」 |
+| 开发中 | wayne | 首版实现：`config/ids/envelope/client/sse/openai/index` + 6 个测试文件；29 tests 全绿；真实上游非流式/流式/工具调用/craft 实测成功；codearts 回归通过 |
