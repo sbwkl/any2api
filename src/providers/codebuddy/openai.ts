@@ -1,4 +1,5 @@
-// OpenAI 兼容门面 — /v1/models + /v1/chat/completions（stream / 非 stream）
+// OpenAI 兼容门面 — /v1/models、/v1/chat/completions
+// 内部 respond() 是跨协议（OpenAI Chat / Anthropic Messages / Responses）的共享管线。
 import { newId, SessionRegistry } from "./ids";
 import { buildHeaders, postChat, readUpstreamError, refreshAccessToken } from "./client";
 import { buildAgentPrompt, resolveModel } from "./config";
@@ -50,8 +51,17 @@ export class CodeBuddyFacade {
     };
   }
 
+  getCredentials(): Credentials {
+    return this.credentials;
+  }
+
   async handleModels(): Promise<Response> {
     return Response.json(this.modelsPayload());
+  }
+
+  profileFor(req: Request): Profile {
+    const raw = (req.headers.get("x-codebuddy-agent") || process.env.CODEBUDDY_AGENT || "chat").toLowerCase();
+    return (PROFILES.has(raw as Profile) ? raw : "chat") as Profile;
   }
 
   async handleChat(req: Request): Promise<Response> {
@@ -70,15 +80,31 @@ export class CodeBuddyFacade {
       return jsonError(400, e?.message ?? "invalid messages");
     }
 
-    const model = resolveModel(this.config.models, typeof body.model === "string" ? body.model : undefined);
-    const profile = this.resolveProfile(req);
     const sessionKey = (
       req.headers.get("x-codebuddy-session") ||
       (typeof body.user === "string" ? body.user : "") ||
       "default"
     ).slice(0, 128);
+
+    return this.respond(
+      { ...body, messages },
+      body.stream === true,
+      sessionKey,
+      this.profileFor(req),
+    );
+  }
+
+  // 跨协议共享管线：body 为 OpenAI chat 形态；wantStream 决定响应格式（上游始终流式）。
+  async respond(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
+    let messages: any[];
+    try {
+      messages = normalizeMessages(body.messages ?? []);
+    } catch (e: any) {
+      return jsonError(400, e?.message ?? "invalid messages");
+    }
+    const model = resolveModel(this.config.models, typeof body.model === "string" ? body.model : undefined);
     const conversationId = this.sessions.conversationFor(sessionKey);
-    const { requestId } = this.sessions.requestIdFor(conversationId, body.messages);
+    const { requestId } = this.sessions.requestIdFor(conversationId, messages);
     const messageId = newId();
     const traceId = newId();
 
@@ -119,16 +145,18 @@ export class CodeBuddyFacade {
       headers: makeHeaders(this.credentials),
       body: requestBody,
       fetchImpl: this.opts.fetchImpl,
-      onUnauthorized: async () => {
-        const next = await refreshAccessToken({
-          config: this.config,
-          credentials: this.credentials,
-          fetchImpl: this.opts.fetchImpl,
-        });
-        if (!next) return null;
-        this.credentials = next;
-        return makeHeaders(next);
-      },
+      onUnauthorized: process.env.CODEBUDDY_AUTO_REFRESH === "0"
+        ? undefined
+        : async () => {
+          const next = await refreshAccessToken({
+            config: this.config,
+            credentials: this.credentials,
+            fetchImpl: this.opts.fetchImpl,
+          });
+          if (!next) return null;
+          this.credentials = next;
+          return makeHeaders(next);
+        },
     });
 
     if (!resp.ok) {
@@ -141,7 +169,7 @@ export class CodeBuddyFacade {
       return jsonError(502, err.message, err.code);
     }
 
-    if (body.stream === true) {
+    if (wantStream) {
       return new Response(resp.body, {
         status: 200,
         headers: {
@@ -158,10 +186,5 @@ export class CodeBuddyFacade {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  }
-
-  private resolveProfile(req: Request): Profile {
-    const raw = (req.headers.get("x-codebuddy-agent") || process.env.CODEBUDDY_AGENT || "chat").toLowerCase();
-    return (PROFILES.has(raw as Profile) ? raw : "chat") as Profile;
   }
 }

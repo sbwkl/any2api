@@ -130,6 +130,29 @@ describe("openai facade", () => {
     expect(resp.status).toBe(200);
   });
 
+  test("auto refresh can be disabled", async () => {
+    const old = process.env.CODEBUDDY_AUTO_REFRESH;
+    process.env.CODEBUDDY_AUTO_REFRESH = "0";
+    try {
+      const urls: string[] = [];
+      const fetchImpl = (async (url: string | URL | Request) => {
+        urls.push(String(url));
+        return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+      }) as typeof fetch;
+      const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
+      const resp = await facade.handleChat(chatRequest({
+        model: "hy4flash-free",
+        messages: [{ role: "user", content: "hi" }],
+        stream: false,
+      }));
+      expect(resp.status).toBe(401);
+      expect(urls.some((u) => u.includes("/auth/token/refresh"))).toBe(false);
+    } finally {
+      if (old === undefined) delete process.env.CODEBUDDY_AUTO_REFRESH;
+      else process.env.CODEBUDDY_AUTO_REFRESH = old;
+    }
+  });
+
   test("maps a non-stream upstream rejection to an OpenAI error", async () => {
     const fetchImpl = (async () =>
       Response.json(

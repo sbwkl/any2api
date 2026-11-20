@@ -28,10 +28,13 @@ src/
     │   └── protocol-spec.md  # 内核协议权威规格
     └── codebuddy/            # CodeBuddy CN 适配器（自包含）
         ├── index.ts          # provider 装配与路由
-        ├── openai.ts         # OpenAI Chat 门面（models + chat）
+        ├── openai.ts         # OpenAI Chat 门面 + 跨协议 respond 管线
+        ├── anthropic.ts      # Anthropic Messages 协议适配
+        ├── responses.ts      # OpenAI Responses 协议适配
         ├── client.ts         # 头集合 / gzip / 401 刷新
         ├── envelope.ts       # OpenAI ↔ CodeBuddy 请求体映射
         ├── sse.ts            # SSE → chat.completion 聚合
+        ├── msgcenter.ts      # 可选消息中心轮询（30s）
         ├── config.ts         # 凭证（Keychain safeStorage）+ 模型/提示词
         ├── ids.ts            # 32hex ID + 会话/轮次
         ├── types.ts          # 公共类型
@@ -66,9 +69,13 @@ bun src/index.ts
 | `OTLP_SERVICE_NAME` | `codeagent-kernel` | 遥测 service.name |
 | `SNAP_ORIGIN` | 华为云生产地址 | snap-access 通道覆盖 |
 | `CODEBUDDY_AGENT` | `chat` | codebuddy 默认 profile：`chat` / `ask` / `craft` |
+| `CODEBUDDY_AUTO_REFRESH` | `1` | codebuddy 401 时是否自动刷新 token 并重试（`0` 关闭） |
+| `CODEBUDDY_MSG_CENTER` | `0` | codebuddy 是否开启消息中心 30s 轮询（`1` 开启） |
 | `CODEBUDDY_TOKEN` / `CODEBUDDY_UID` | 从 Keychain 提取 | codebuddy 凭证兜底（可配 `CODEBUDDY_REFRESH_TOKEN`） |
 | `CODEBUDDY_DEVICE_TOKEN` | 空 | codebuddy 可选的 TuringShield 设备令牌 |
 | `CODEBUDDY_GENIE_HOME` | 本机 CodeBuddy 安装路径 | codebuddy 产品配置/提示词来源 |
+| `CODEBUDDY_STATE_DB` | CodeBuddy 的 `state.vscdb` | 凭证与云端产品缓存来源（测试或自定义路径） |
+| `CODEBUDDY_PRODUCT_CACHE` | `1` | codebuddy 是否读取云端产品缓存（`0` 关闭，回退 product.json） |
 
 ## 使用方式
 
@@ -118,8 +125,10 @@ resp = client.chat.completions.create(
 )
 ```
 
-- `GET /codebuddy/v1/models` — 当前模型池（product.json + agent models + 观测模型）。
+- `GET /codebuddy/v1/models` — 当前模型池（云端产品缓存优先，回退 product.json + agent models + 观测模型）。
 - `POST /codebuddy/v1/chat/completions` — 流式/非流式、标准 OpenAI 工具调用往返。
+- `POST /codebuddy/v1/messages` — Anthropic Messages（Claude Code / Claude Desktop），text/thinking/tool_use/tool_result 块。
+- `POST /codebuddy/v1/responses` — OpenAI Responses（Codex CLI），instructions/input items、function_call 往返、reasoning summary。
 - `GET /codebuddy/healthz` — 凭证来源、模型数。
 - profile：请求头 `x-codebuddy-agent: chat|ask|craft`（默认 `chat`）；`ask`/`craft` 会注入 IDE 的系统提示词。
 - 凭证：自动从 Keychain + `state.vscdb` 提取（需登录过一次），也可用 `CODEBUDDY_TOKEN` / `CODEBUDDY_UID`。
@@ -145,7 +154,7 @@ resp = client.chat.completions.create(
 - 协议适配边界：图像块被省略（占位 `[image omitted]`）；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）
 - 残余可识别特征：Bun 与内核（Node）的 TLS 指纹差异、OTLP service.name 为占位值
 - 明文回退为死路径：chat 后端硬性要求加密通道（实测 415 Unsupported Media Type），密钥协商失败即不可用（代理已实现换 key 重试）
-- codebuddy 首版只支持 OpenAI Chat + Models；Anthropic/Responses、遥测、消息中心轮询未做
-- codebuddy 模型池是启动时快照（本机 17 个）；云端 23 个模型的下发接口待确认
+- codebuddy 支持 OpenAI Chat + Anthropic Messages + OpenAI Responses；遥测（`/v2/report`、`/llm/data/report`、`/v1/traces`）未做，消息中心轮询需 `CODEBUDDY_MSG_CENTER=1` 显式开启
+- codebuddy 模型池读取本机云端产品缓存（24 个，与 IDE 一致）；缓存缺失时回退 product.json + agent models + 观测模型
 - codebuddy 默认不发送 `X-Device-Token`（实测当前通道可省略），不伪造 TuringShield
 - codebuddy 的 ask/craft profile 只切换系统提示词；工具 schema 仅来自客户端 `tools`

@@ -1,7 +1,7 @@
 # REQ-0001 CodeBuddy provider（CodeBuddy CN → OpenAI 兼容 API）
 
 类型：REQ
-状态：探索
+状态：活跃
 Owner：wayne
 关联：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)、[CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md)
 
@@ -77,15 +77,19 @@ Owner：wayne
 - **R2**：When 收到 `POST /v1/chat/completions`, the system shall 向 `POST {endpoint}/v2/chat/completions` 发送 gzip 压缩的 JSON 请求体，请求头集合与 RFC-0001 §5.2 定义的清单一致（该清单在研究报告/抓包确认后补全；补全前以 protocol-spec 的实测清单为准）。
 - **R3**：The system shall 生成 32 位小写 hex 的 `conversationId` / `requestId` / `messageId` / trace，并按「会话内复用 conversationId、每轮用户消息新 requestId、每次上游调用新 messageId」的语义使用。
 - **R4**：The system shall 按目标模型选择匹配的 IDE 提示词模板（craft/ask/chat 中适用者），填充运行时变量后作为 system 消息发送；客户端自带 system 消息时按 RFC-0001 §5.3 合并。
-- **R5**：Where 客户端请求包含 `tools`, the system shall 将其转换为 CodeBuddy 工具 schema 随请求发送，且不改变工具语义；where 客户端未指定 tools, the system shall 使用所选 profile 的默认工具集。
+- **R5**：Where 客户端请求包含 `tools`, the system shall 将其转换为 CodeBuddy 工具 schema 随请求发送，且不改变工具语义；where 客户端未指定 tools, the system shall 不发送 tools（首版不包含内置默认工具集，profile 只影响系统提示词）。
 - **R6**：When `stream=true`, the system shall 把上游事件流转换为 OpenAI chunk（content / reasoning / tool_calls / usage）；when `stream=false`, the system shall 聚合为单个 `chat.completion`。
 - **R7**：If 上游返回 4xx/5xx, then the system shall 归一为 OpenAI 错误结构（状态码 + 可诊断的 code/message），且日志与响应中不得包含 token 明文。
 - **R8**：If 上游返回 401, then the system shall 按 RFC-0001 §5.7 刷新 token 并重试一次；刷新失败时返回 401 与重新登录指引。
 - **R9**：When 服务启动, the system shall 从本机 CodeBuddy 的 safeStorage/SecretStorage 提取 token 与 uid；提取失败时给出可操作的错误信息，不静默以空凭证启动。
 - **R10**：The system shall 不执行任何客户端工具；tool_calls 原样返回给客户端，tool 结果消息原样转发给上游。
 - **R11**：The system shall 默认只监听 `127.0.0.1`；日志不得记录 `Authorization` / token 明文。
+- **R12**：When 收到 `POST /codebuddy/v1/messages`, the system shall 将 Anthropic Messages 请求转换为 OpenAI chat 请求（system、text/thinking/tool_use/tool_result 块、tools、tool_choice、max_tokens、stop_sequences），并把响应转换回 Anthropic message（非流式）或 Anthropic SSE（流式）。
+- **R13**：When 收到 `POST /codebuddy/v1/responses`, the system shall 将 Responses 请求转换为 OpenAI chat 请求（instructions、input 的 message/function_call/function_call_output、tools、reasoning.effort、max_output_tokens），并把响应转换回 Responses object（非流式）或 Responses SSE（流式）。
+- **R14**：Where `CODEBUDDY_MSG_CENTER=1`, the system shall 每 30s 调用 `/v2/msg-center/message/summary`，使用当前凭证；失败静默，不影响 chat。
+- **R15**：Where `CODEBUDDY_AUTO_REFRESH=0`, the system shall 不在 401 时自动刷新 token（默认仍自动刷新并重试一次）。
 
-每条 R 的验证位置见 CHG-0001 §5；测试映射在 CHG-0001 的 `tests/` 清单中维护。
+每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
 ## 8. 风险与兔子洞
 
@@ -103,15 +107,16 @@ Owner：wayne
 | 决策 | 结论 | 理由 | 记录 |
 |---|---|---|---|
 | 仿真架构 | 信封仿真 + 客户端驱动循环 | 工具执行必须在客户端；服务端 agent 循环无法访问用户工作区，且超出 any2api 定位 | RFC-0001 §6 |
-| 默认 profile | ask/chat（只读工具）保证通用客户端可用；craft 作为可选 profile | 通用聊天客户端不需要写文件工具；默认给全量工具会导致模型对普通问题也尝试工具调用 | RFC-0001 §5.3 |
+| 默认 profile | `chat`（无工具）为默认；ask/craft 可选，只切换系统提示词 | 通用聊天客户端即插即用；内置工具 schema 尚未逐字还原，宁可少发也不发错误 schema | RFC-0001 §5.3 |
 | 实现基线 | 复用 codearts provider 的目录结构与协议适配层，独立目录不共享凭证代码 | codearts 已在生产验证；独立目录隔离协议差异，避免相互影响 | CHG-0001 §4 |
-| 首版范围 | 只交付 OpenAI Chat + Models；Anthropic/Responses 适配与遥测仿真放后续 CHG | 首版先验证传输与信封拟真；协议适配层是独立可验收的增量 | CHG-0001 §4 |
+| 首版范围 | 首版 OpenAI Chat + Models（CHG-0001），随后补 Anthropic Messages + Responses + 可选消息中心（CHG-0002） | 先验证传输与信封拟真，再补协议面；每个 CHG 独立可验收 | CHG-0001 / CHG-0002 |
 
 ## 10. 变更索引
 
 | CHG ID | 标题 | 状态 | 链接 |
 |---|---|---|---|
 | CHG-0001 | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 开发中 | [CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md) |
+| CHG-0002 | CodeBuddy 协议适配层（Anthropic Messages + Responses）与旁路信号 | 开发中 | [CHG-0002](../changes/CHG-0002-codebuddy-protocol-adapters.md) |
 
 ## 11. 链接
 

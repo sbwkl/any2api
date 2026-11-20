@@ -111,7 +111,7 @@ Owner：wayne
 | 多 provider 端口/路由冲突 | codearts 与 codebuddy 不能同时占 `/v1` | 采用路径前缀隔离（`/codebuddy/v1`），codearts 保持 `/v1` |
 | 协议漂移 | CodeBuddy 升级导致请求被拒 | protocol-spec 记录扩展版本；建立 diff 脚本；升级后按需新 CHG |
 | X-Device-Token（TuringShield） | 服务端未来可能强制校验 | 实测当前可省略；保留 `CODEBUDDY_DEVICE_TOKEN` 注入位；不伪造 SDK |
-| 模型目录 | 23 个模型的真实下发端点未确认 | 首版用 product.json + agent models + 观测模型（17 个）；未知模型透传上游 |
+| 模型目录 | 云端模型列表来源 | 已从 `state.vscdb` 的 `cloud_product_config_cache` 读取（24 个，CHG-0002）；缺失时回退 product.json + agent models + 观测模型 |
 
 ## 8. 关联与证据
 

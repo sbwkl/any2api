@@ -1,10 +1,13 @@
 // codebuddy 2Api provider 装配 — 路由：/codebuddy/v1/*、/codebuddy/healthz
 import { loadCredentials, loadProductConfig } from "./config";
 import { CodeBuddyFacade } from "./openai";
+import { handleAnthropicMessages } from "./anthropic";
+import { handleResponses } from "./responses";
+import { MsgCenterPoller } from "./msgcenter";
 
 export async function createHandler(): Promise<(req: Request) => Promise<Response>> {
   const credentials = loadCredentials();
-  const config = loadProductConfig();
+  const config = loadProductConfig(credentials.uid);
   const facade = new CodeBuddyFacade(config, credentials, {
     deviceToken: process.env.CODEBUDDY_DEVICE_TOKEN || undefined,
   });
@@ -13,12 +16,22 @@ export async function createHandler(): Promise<(req: Request) => Promise<Respons
   console.log(`[codebuddy] 模型池: ${config.models.map((m) => m.id).join(", ")}`);
   console.log(`[codebuddy] 提示词: ${config.prompts.length} 个，agent: ${config.agents.map((a) => a.name).join(", ") || "(无)"}`);
 
+  if (process.env.CODEBUDDY_MSG_CENTER === "1") {
+    const poller = new MsgCenterPoller({ config, getCredentials: () => facade.getCredentials() });
+    poller.start();
+    console.log("[codebuddy] msg-center 轮询已开启（30s）");
+  }
+
   return async (req: Request) => {
     const path = new URL(req.url).pathname;
     if (path === "/codebuddy/v1/models" && req.method === "GET") return facade.handleModels();
     if (path === "/codebuddy/v1/models" && req.method !== "GET") return new Response("method not allowed", { status: 405 });
     if (path === "/codebuddy/v1/chat/completions" && req.method === "POST") return facade.handleChat(req);
     if (path === "/codebuddy/v1/chat/completions") return new Response("method not allowed", { status: 405 });
+    if (path === "/codebuddy/v1/messages" && req.method === "POST") return handleAnthropicMessages(facade, req);
+    if (path === "/codebuddy/v1/messages") return new Response("method not allowed", { status: 405 });
+    if (path === "/codebuddy/v1/responses" && req.method === "POST") return handleResponses(facade, req);
+    if (path === "/codebuddy/v1/responses") return new Response("method not allowed", { status: 405 });
     if (path === "/codebuddy/healthz") return Response.json(facade.healthPayload());
     return new Response("not found", { status: 404 });
   };

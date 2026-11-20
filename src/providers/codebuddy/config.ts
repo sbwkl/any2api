@@ -182,23 +182,72 @@ function mapModels(rawModels: any[], agents: AgentEntry[]): ModelInfo[] {
   return [...out.values()];
 }
 
-export function loadProductConfig(): ProductConfig {
+// 云端产品配置缓存（非密钥）：state.vscdb 的 Tencent-Cloud.coding-copilot 行，
+// cloud_product_config_cache 为 [{userId,data,ts}]，data 含 models/agents。
+function readCloudProductCache(dbPath: string, uid?: string): any | null {
+  if (process.env.CODEBUDDY_PRODUCT_CACHE === "0") return null;
+  if (!existsSync(dbPath)) return null;
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    const row = db.query("SELECT value FROM ItemTable WHERE key=?").get("Tencent-Cloud.coding-copilot") as { value: string } | undefined;
+    if (!row?.value) return null;
+    const outer = JSON.parse(row.value);
+    const raw = outer?.cloud_product_config_cache;
+    const cache = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!Array.isArray(cache) || !cache.length) return null;
+    const entry = (uid ? cache.find((e: any) => e?.userId === uid) : null)
+      ?? cache.reduce((a: any, b: any) => ((b?.ts ?? 0) > (a?.ts ?? 0) ? b : a));
+    return entry?.data ?? null;
+  } catch {
+    return null;
+  } finally {
+    db.close();
+  }
+}
+
+function mapCloudModels(rawModels: any[]): ModelInfo[] {
+  const out = new Map<string, ModelInfo>();
+  for (const m of rawModels ?? []) {
+    if (!m?.id) continue;
+    const cw = m.contextWindow ?? {};
+    const input = m.maxInputTokens ?? cw.defaultLength ?? cw.max;
+    out.set(m.id, {
+      id: m.id,
+      name: m.name || m.id,
+      vendor: m.vendor,
+      maxOutputTokens: m.maxOutputTokens,
+      maxInputTokens: input,
+      supportsToolCall: m.supportsToolCall,
+      supportsReasoning: m.supportsReasoning ?? m.onlyReasoning,
+      contextLength: input,
+      temperature: m.temperature,
+      tags: m.tags,
+    });
+  }
+  return [...out.values()];
+}
+
+function mapCloudAgents(rawAgents: any[]): AgentEntry[] {
+  return (rawAgents ?? [])
+    .filter((a: any) => a?.name)
+    .map((a: any) => ({
+      name: a.name,
+      description: a.description,
+      instructions: a.instructions,
+      models: Array.isArray(a.models) ? a.models : undefined,
+      tools: Array.isArray(a.tools) ? a.tools : undefined,
+    }));
+}
+
+export function loadProductConfig(uid?: string): ProductConfig {
   const home = process.env.CODEBUDDY_GENIE_HOME ?? DEFAULT_GENIE_HOME;
   const raw = readJson(`${home}/product.json`);
   const pkg = readJson(`${home}/package.json`);
-  if (!raw) {
-    return {
-      endpoint: DEFAULT_ENDPOINT,
-      productName: "CodeBuddy",
-      platform: "CodeBuddyIDE",
-      deploymentType: "SaaS",
-      version: pkg?.version ?? "0.0.0",
-      models: FALLBACK_MODELS.slice(),
-      agents: [],
-      prompts: [],
-    };
-  }
-  const agents: AgentEntry[] = Array.isArray(raw.agents)
+  const dbPath = process.env.CODEBUDDY_STATE_DB
+    ?? `${homedir()}/Library/Application Support/CodeBuddy CN/User/globalStorage/state.vscdb`;
+  const cloud = readCloudProductCache(dbPath, uid);
+
+  const localAgents: AgentEntry[] = Array.isArray(raw?.agents)
     ? raw.agents.map((a: any) => ({
         name: a.name,
         description: a.description,
@@ -207,20 +256,37 @@ export function loadProductConfig(): ProductConfig {
         tools: Array.isArray(a.tools) ? a.tools : undefined,
       }))
     : [];
-  const prompts: PromptEntry[] = Array.isArray(raw.prompts)
+  const prompts: PromptEntry[] = Array.isArray(raw?.prompts)
     ? raw.prompts.filter((p: any) => typeof p?.template === "string").map((p: any) => ({
         name: p.name,
         template: p.template,
         tags: Array.isArray(p.tags) ? p.tags : undefined,
       }))
     : [];
+  const localModels = mapModels(raw?.models, localAgents);
+  const cloudModels = cloud?.models?.length ? mapCloudModels(cloud.models) : [];
+  const models = cloudModels.length ? cloudModels : localModels;
+  const agents = cloud?.agents?.length ? mapCloudAgents(cloud.agents) : localAgents;
+
+  if (!raw) {
+    return {
+      endpoint: DEFAULT_ENDPOINT,
+      productName: "CodeBuddy",
+      platform: "CodeBuddyIDE",
+      deploymentType: "SaaS",
+      version: pkg?.version ?? "0.0.0",
+      models: models.length ? models : FALLBACK_MODELS.slice(),
+      agents,
+      prompts,
+    };
+  }
   return {
     endpoint: raw.endpoint ?? DEFAULT_ENDPOINT,
     productName: raw.productName ?? "CodeBuddy",
     platform: raw.platform ?? "CodeBuddyIDE",
     deploymentType: raw.deploymentType ?? "SaaS",
     version: pkg?.version ?? "0.0.0",
-    models: mapModels(raw.models, agents),
+    models: models.length ? models : localModels,
     agents,
     prompts,
     authentication: raw.authentication,

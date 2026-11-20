@@ -6,13 +6,14 @@
 
 | ID | 标题 | 状态 |
 |---|---|---|
-| [REQ-0001](requirements/REQ-0001-codebuddy-provider.md) | CodeBuddy provider（CodeBuddy CN → OpenAI 兼容 API） | 探索 |
+| [REQ-0001](requirements/REQ-0001-codebuddy-provider.md) | CodeBuddy provider（CodeBuddy CN → OpenAI 兼容 API） | 活跃 |
 
 ## 变更文档（changes）
 
 | ID | 标题 | 状态 | 功能卡 |
 |---|---|---|---|
 | [CHG-0001](changes/CHG-0001-codebuddy-provider-initial.md) | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 开发中 | REQ-0001 |
+| [CHG-0002](changes/CHG-0002-codebuddy-protocol-adapters.md) | CodeBuddy 协议适配层（Anthropic Messages + Responses）、旁路信号与模型目录 | 开发中 | REQ-0001 |
 
 ## RFC（rfcs）
 

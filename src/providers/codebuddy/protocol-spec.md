@@ -199,11 +199,15 @@ data: [DONE]
 
 ## 8. 模型目录
 
-- 本地 `product.json.models` 是基础池；`agents[].models` 会补充 agent 绑定模型。
-- 本机产品.json 未包含 `hy4flash-free`；它来自云端/账号配置（日志 `Preparing model` 可观测）。
-- `/v3/config` 实测只返回 `enterpriseId/productFeatures/productFeaturesConfig`；`/v2/agents` 返回 4 个 agent 配置，不含 models。
-- 【待验证】23 个模型的真实下发端点（可能在 webview 的 ACP 通道或另一个产品配置接口）。
-- 首版模型池 = product.json models + agent models + 观测模型 `hy4flash-free`（17 个）；未知模型名透传给上游，由上游校验。
+- 真实客户端的数据源是 `product.json` 与云端产品配置合并；本机 `state.vscdb` 的 `ItemTable` 行
+  `Tencent-Cloud.coding-copilot` 中，`cloud_product_config_cache`（非密钥，按 `userId` 分组）保存了
+  云端下发的 `models` / `agents`，本机实测 **24 个模型**（`auto`、`hy4std`、`hy4flash`、
+  `hy4flash-free`、`deepseek-v4.1-flash`、`glm-5.3`、…），与 IDE 的模型下拉一致。
+- `/v3/config` 实测只返回 `enterpriseId/productFeatures/productFeaturesConfig`；`/v2/agents` 返回
+  agent 配置但不含 models；因此模型目录以云端产品缓存为主。
+- 代理加载顺序：`cloud_product_config_cache`（按 uid，缺失取最新）→ 失败回退 `product.json.models`
+  + agent models + 观测模型。`CODEBUDDY_PRODUCT_CACHE=0` 可强制回退。
+- 未知模型名仍透传给上游，由上游校验。
 
 ## 9. 错误与重试
 
@@ -233,7 +237,7 @@ data: [DONE]
 
 ## 11. 未决问题
 
-1. 模型目录（23 个）的真实下发接口；`/v3/config` 不含 models。
+1. ~~模型目录（23 个）的真实下发接口~~：已从本机 `cloud_product_config_cache` 读取（24 个）；云端独立 HTTP 列表端点仍未发现。
 2. `X-Device-Token` 的生成与是否长期必需；TuringShield 原生 SDK 无法在 Bun 直接复用。
 3. `ResultPresentationPrompt` / `ToolResultPresentationPrompt` / `AgentsArtifactsPrompt` 的取值。
 4. 请求头完整顺序与 `X-Request-Trace-Id` 的关系（HTTP/2 hpack 层不可见）。

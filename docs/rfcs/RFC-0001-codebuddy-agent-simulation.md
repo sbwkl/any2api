@@ -482,13 +482,15 @@ Base URL 由 `product.json.endpoint` + `/v2` 组成；`product.json` 的 `stagin
 
 - 原 §5.3 的「ask/craft profile 默认工具集」首版未实现：profile 只切换系统提示词，工具仅来自客户端 `tools`。理由：内置工具 JSON schema 尚未逐字还原，宁可少发也不发错误 schema。
 - 原 §5.8 的「旁路信号」首版只做模型发现；消息中心轮询、遥测未做。
-- 原 §5.2.1 的「模型目录 API」未确认：`/v3/config` 只返回 features；`/v2/agents` 不含 models。首版模型池 = product.json + agent models + 观测模型（17 个）。
+- 原 §5.2.1 的「模型目录 API」：`/v3/config` 只返回 features、`/v2/agents` 不含 models；最终从本机 `state.vscdb` 的 `cloud_product_config_cache` 读取（24 个，按 uid 匹配），缺失时回退 product.json + agent models + 观测模型。
 
 ### 12.3 实现状态
 
 - CHG-0001 状态：开发中；`bun test src/providers/codebuddy/` → 29 pass / 0 fail。
 - 真实上游非流式/流式/工具调用/craft 实测成功；codearts 回归通过。
 - 未做：7 天稳定性、真实 401 演练、抓包 diff、Anthropic/Responses 适配。
+- CHG-0002 状态：开发中；新增 `/codebuddy/v1/messages`（Anthropic）与 `/codebuddy/v1/responses`（Responses），可选消息中心轮询（`CODEBUDDY_MSG_CENTER=1`），`CODEBUDDY_AUTO_REFRESH=0` 可关闭自动刷新；模型目录从本机云端产品缓存读取（24 个，缺失回退）；`bun test` → 47 pass / 0 fail；真实上游 Anthropic/Responses 非流式与流式、`hy4std` 均实测通过。
+- 仍未部署、未重启服务（用户要求保持当前服务运行）。
 
 ### 12.4 仍未决
 

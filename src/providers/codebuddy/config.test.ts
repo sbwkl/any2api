@@ -1,7 +1,8 @@
 import { test, expect, describe, afterEach } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Database } from "bun:sqlite";
 import {
   buildAgentPrompt,
   loadCredentials,
@@ -69,10 +70,49 @@ describe("config", () => {
       }));
       writeFileSync(join(dir, "package.json"), JSON.stringify({ version: "9.9.9" }));
       process.env.CODEBUDDY_GENIE_HOME = dir;
+      process.env.CODEBUDDY_STATE_DB = join(dir, "missing.vscdb");
       const cfg = loadProductConfig();
       expect(cfg.version).toBe("9.9.9");
       expect(cfg.models.map((m) => m.id)).toEqual(expect.arrayContaining(["m1", "m2", "hy4flash-free"]));
       expect(cfg.models.find((m) => m.id === "m1")?.maxOutputTokens).toBe(100);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("loadProductConfig merges the cloud product cache", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cb-cache-"));
+    try {
+      const genie = join(dir, "genie");
+      mkdirSync(genie);
+      writeFileSync(join(genie, "product.json"), JSON.stringify({
+        endpoint: "https://copilot.tencent.com", models: [], agents: [], prompts: [],
+      }));
+      writeFileSync(join(genie, "package.json"), JSON.stringify({ version: "3.10.0" }));
+      const dbPath = join(dir, "state.vscdb");
+      const db = new Database(dbPath);
+      db.run("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)");
+      db.run("INSERT INTO ItemTable (key, value) VALUES (?, ?)", [
+        "Tencent-Cloud.coding-copilot",
+        JSON.stringify({
+          cloud_product_config_cache: [{
+            userId: "u1",
+            ts: 1,
+            data: {
+              models: [{ id: "cloud-model", name: "Cloud", maxOutputTokens: 100, supportsToolCall: true }],
+              agents: [{ name: "craft", models: ["cloud-model"] }],
+            },
+          }],
+        }),
+      ]);
+      db.close();
+
+      process.env.CODEBUDDY_GENIE_HOME = genie;
+      process.env.CODEBUDDY_STATE_DB = dbPath;
+      delete process.env.CODEBUDDY_PRODUCT_CACHE;
+      const cfg = loadProductConfig("u1");
+      expect(cfg.models.map((m) => m.id)).toContain("cloud-model");
+      expect(cfg.agents.find((a) => a.name === "craft")?.models).toContain("cloud-model");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
