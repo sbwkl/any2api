@@ -1,0 +1,84 @@
+// codearts 2Api 适配器 — 码道 CodeArts Agent → OpenAI 兼容 API
+// 协议规格见 protocol-spec.md（真实头全息样本 §0、双签名器 §2、SM4-GCM §3…）
+import { loadCredentials, discoverModels, setCredentials } from "./config";
+import { SnapClient } from "./snap";
+import { OpenAIFacade } from "./openai";
+import { TelemetrySimulator } from "./telemetry";
+import { signSh } from "./signer";
+import {
+  credentialsFromSecretSession,
+  refreshNow,
+  startCredentialMaintainer,
+} from "./refresher";
+import { handleAnthropicMessages } from "./anthropic";
+import { handleResponses } from "./responses";
+
+const PORT = Number(process.env.PORT ?? 8787);
+
+async function resolveInitialCredentials() {
+  const bootstrap = loadCredentials();
+  // 择优：SecretStorage（authentication 扩展 lineage，带 refresh_token）vs snap 键，取更新鲜者
+  const secretCreds = credentialsFromSecretSession();
+  let creds = bootstrap;
+  if (secretCreds) {
+    const s = secretCreds.expiresAt ? Date.parse(secretCreds.expiresAt) : Infinity;
+    const b = bootstrap.expiresAt ? Date.parse(bootstrap.expiresAt) : -1;
+    if (s >= b) creds = secretCreds;
+  }
+  setCredentials(creds);
+  // 启动时过期 → 立即刷新（若 SecretStorage lineage 可用）
+  if (!creds.expiresAt || Date.parse(creds.expiresAt) <= Date.now()) {
+    console.log("[codearts] STS 已过期，尝试自动刷新…");
+    creds = await refreshNow();
+  }
+  return creds;
+}
+
+export async function start(): Promise<void> {
+  const creds = await resolveInitialCredentials();
+  console.log(`[codearts] 凭证就绪 ak=${creds.ak.slice(0, 8)}... 有效期至 ${creds.expiresAt ?? "(env 静态凭证)"}`);
+
+  startCredentialMaintainer(); // 每 60s：采纳 app 续期 / 余量 <30min 时自动续期
+
+  // 模型发现（§7.4 步骤 2）：policy/bundle 动态下发，失败回退观测池
+  const gw = await discoverModels(creds);
+  console.log(`[codearts] 模型池: ${gw.models.map((m) => m.modelId).join(", ")} endpoint=${gw.endpoint}`);
+
+  const snapOrigin = creds.origin ?? process.env.SNAP_ORIGIN ?? "https://snap-access.cn-north-4.myhuaweicloud.com";
+  const snap = new SnapClient(snapOrigin);
+  const telemetry = new TelemetrySimulator(process.env.OTLP_ENABLED !== "false", process.env.OTLP_SERVICE_NAME ?? "codeagent-kernel");
+
+  // 启动旁路信号：statistics/plugin（真实客户端启动/git-ai 判定时调用）
+  fetch(`${snapOrigin}/snap-manager/v1/statistics/plugin`, {
+    method: "GET",
+    headers: signSh(
+      { method: "GET", endpoint: `${snapOrigin}/snap-manager/v1/statistics/plugin`, headers: { "Content-Type": "application/json" } },
+      creds,
+    ),
+  }).then((r) => console.log(`[codearts] statistics/plugin -> ${r.status}`)).catch(() => {});
+
+  const facade = new OpenAIFacade(snap, gw, telemetry);
+
+  const server = Bun.serve({
+    port: PORT,
+    // 生产默认只监听本机回环；需要局域网访问时设 HOST=0.0.0.0（注意：服务无鉴权，勿暴露公网）
+    hostname: process.env.HOST ?? "127.0.0.1",
+    idleTimeout: 255,
+    fetch: async (req) => {
+      const url = new URL(req.url);
+      if (url.pathname === "/v1/models" && req.method === "GET")
+        return Response.json(facade.modelsPayload());
+      if (url.pathname === "/v1/chat/completions" && req.method === "POST")
+        return facade.handleChat(req);
+      if (url.pathname === "/v1/messages" && req.method === "POST")
+        return handleAnthropicMessages(facade, req);
+      if (url.pathname === "/v1/responses" && req.method === "POST")
+        return handleResponses(facade, req);
+      if (url.pathname === "/healthz")
+        return new Response("ok");
+      return new Response("not found", { status: 404 });
+    },
+  });
+  console.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/v1 (POST /v1/chat/completions, GET /v1/models)`);
+  console.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/v1  api-key=任意非空串`);
+}
