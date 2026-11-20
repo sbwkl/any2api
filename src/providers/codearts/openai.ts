@@ -97,9 +97,13 @@ export class OpenAIFacade {
   }
 
   private mapBody(body: any, model: ModelInfo): any {
+    // role 归一化：developer ≡ system（OpenAI 新命名）；上游仅认 system/user/assistant/tool
+    const messages = (body.messages ?? []).map((m: any) =>
+      m?.role === "developer" ? { ...m, role: "system" } : m,
+    );
     const out: any = {
       model: model.modelId,
-      messages: body.messages,
+      messages,
     };
     if (body.stream === true) {
       out.stream = true;
