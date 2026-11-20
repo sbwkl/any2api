@@ -1,6 +1,6 @@
 // codearts 2Api 适配器 — 码道 CodeArts Agent → OpenAI 兼容 API
 // 协议规格见 protocol-spec.md（真实头全息样本 §0、双签名器 §2、SM4-GCM §3…）
-import { loadCredentials, discoverModels, setCredentials } from "./config";
+import { loadCredentials, discoverModels, setCredentials, type Credentials } from "./config";
 import { SnapClient } from "./snap";
 import { OpenAIFacade } from "./openai";
 import { TelemetrySimulator } from "./telemetry";
@@ -16,18 +16,28 @@ import { handleResponses } from "./responses";
 const PORT = Number(process.env.PORT ?? 8787);
 
 async function resolveInitialCredentials() {
-  const bootstrap = loadCredentials();
-  // 择优：SecretStorage（authentication 扩展 lineage，带 refresh_token）vs snap 键，取更新鲜者
+  // snap 键过期/缺失不阻断启动：SecretStorage lineage（refresh_token）仍可续期恢复
+  let bootstrap: Credentials | null = null;
+  try {
+    bootstrap = loadCredentials();
+  } catch (e: any) {
+    console.warn(`[codearts] snap 键凭证不可用：${e?.message ?? e}`);
+  }
   const secretCreds = credentialsFromSecretSession();
-  let creds = bootstrap;
-  if (secretCreds) {
+  if (!bootstrap && !secretCreds)
+    throw new Error("未找到凭证：请先打开码道 CodeArts Agent 登录一次（代理会自动提取 STS 与刷新凭据）");
+  let creds = (bootstrap ?? secretCreds)!;
+  // 择优：取更新鲜者
+  if (bootstrap && secretCreds) {
     const s = secretCreds.expiresAt ? Date.parse(secretCreds.expiresAt) : Infinity;
     const b = bootstrap.expiresAt ? Date.parse(bootstrap.expiresAt) : -1;
     if (s >= b) creds = secretCreds;
   }
   setCredentials(creds);
-  // 启动时过期 → 立即刷新（若 SecretStorage lineage 可用）
+  // 启动时过期 → 立即刷新（需 SecretStorage lineage 可用）
   if (!creds.expiresAt || Date.parse(creds.expiresAt) <= Date.now()) {
+    if (!secretCreds?.refreshToken)
+      throw new Error("STS 已过期且无刷新凭据：请打开码道 CodeArts Agent 重新登录");
     console.log("[codearts] STS 已过期，尝试自动刷新…");
     creds = await refreshNow();
   }

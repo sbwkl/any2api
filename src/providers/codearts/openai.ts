@@ -66,7 +66,11 @@ export class OpenAIFacade {
   modelsPayload(): any {
     return {
       object: "list",
-      data: this.gw.models.map((m) => ({ id: m.modelId, object: "model", created: 0, owned_by: "codearts" })),
+      data: this.gw.models.map((m) => ({
+        id: m.modelId, object: "model", created: 0, owned_by: "codearts",
+        // OpenRouter 风格上下文长度（policy/bundle input_length），Codex 模型目录直接可用
+        ...(m.inputLength ? { context_length: m.inputLength } : {}),
+      })),
     };
   }
 
@@ -242,7 +246,7 @@ async function aggregateSseToCompletion(stream: ReadableStream<Uint8Array>): Pro
   let completion: any = null;
   let usage: any = null;
   let finish: string | null = null;
-  const slots = new Map<number, { content: string; reasoning: string; toolCalls: any[] }>();
+  const slots = new Map<number, { content: string; reasoning: string; toolCalls: (any | undefined)[] }>();
   for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
     if (!line.startsWith("data:")) continue;
@@ -259,7 +263,20 @@ async function aggregateSseToCompletion(stream: ReadableStream<Uint8Array>): Pro
       const d = c.delta ?? c.message ?? {};
       if (typeof d.content === "string") slot.content += d.content;
       if (typeof d.reasoning_content === "string") slot.reasoning += d.reasoning_content;
-      if (Array.isArray(d.tool_calls)) slot.toolCalls.push(...d.tool_calls);
+      // tool_calls 分片按 index 合并（name/id 就近填充，arguments 串联）
+      if (Array.isArray(d.tool_calls)) {
+        for (const tc of d.tool_calls) {
+          const ti = tc.index ?? 0;
+          let merged = slot.toolCalls[ti];
+          if (!merged) {
+            merged = { id: tc.id, type: "function", function: { name: "", arguments: "" } };
+            slot.toolCalls[ti] = merged;
+          }
+          if (tc.id) merged.id = tc.id;
+          if (tc.function?.name) merged.function.name = tc.function.name;
+          if (typeof tc.function?.arguments === "string") merged.function.arguments += tc.function.arguments;
+        }
+      }
       if (c.finish_reason) finish = c.finish_reason;
       slots.set(idx, slot);
     }
@@ -269,7 +286,13 @@ async function aggregateSseToCompletion(stream: ReadableStream<Uint8Array>): Pro
     const s = slots.get(idx)!;
     const message: any = { role: "assistant", content: s.content };
     if (s.reasoning) message.reasoning_content = s.reasoning;
-    if (s.toolCalls.length) message.tool_calls = s.toolCalls;
+    const toolCalls = s.toolCalls.filter(Boolean);
+    if (toolCalls.length) {
+      message.tool_calls = toolCalls.map((tc: any, i: number) => ({
+        id: tc.id ?? `call_${idx}_${i}`, type: "function",
+        function: { name: tc.function?.name ?? "", arguments: tc.function?.arguments ?? "" },
+      }));
+    }
     return { index: idx, message, finish_reason: finish ?? "stop" };
   });
   return { ...completion, choices, usage };

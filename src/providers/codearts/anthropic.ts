@@ -26,9 +26,13 @@ function contentToOpenAi(role: string, content: any): any[] {
       case "text": text += (text ? "\n" : "") + (block.text ?? ""); break;
       case "tool_use":
         flushText();
+        // input 含 _raw 时为无效 JSON 的原始分片，直接透传字符串，避免二次序列化污染工具历史
         toolCalls.push({
           id: block.id, type: "function",
-          function: { name: block.name, arguments: JSON.stringify(block.input ?? {}) },
+          function: {
+            name: block.name,
+            arguments: typeof block.input?._raw === "string" ? block.input._raw : JSON.stringify(block.input ?? {}),
+          },
         });
         break;
       case "tool_result":

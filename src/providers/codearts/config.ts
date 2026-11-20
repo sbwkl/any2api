@@ -4,7 +4,7 @@ import { homedir } from "os";
 import { signSl, signSh, type Credentials } from "./signer";
 import { uuid32 } from "../../shared/ids";
 
-export interface ModelInfo { modelId: string; modelName: string; endpoint: string }
+export interface ModelInfo { modelId: string; modelName: string; endpoint: string; inputLength?: number }
 export interface GatewayConfig { endpoint: string; models: ModelInfo[] }
 
 const OPENGW_BASE = "https://opengw.developer.huaweicloud.com";
@@ -135,7 +135,7 @@ export async function fetchPolicyModels(creds: Credentials): Promise<ModelInfo[]
       const models: ModelInfo[] = [];
       for (const m of seg.user_model_list) {
         if (!m?.model_id) continue;
-        models.push({ modelId: m.model_id, modelName: m.model_name || m.model_id, endpoint: "" });
+        models.push({ modelId: m.model_id, modelName: m.model_name || m.model_id, endpoint: "", inputLength: m.input_length });
       }
       if (models.length) return models;
     }

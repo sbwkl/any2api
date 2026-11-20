@@ -167,12 +167,14 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
             if (!msgItemId) {
               outIndex += 1;
               msgItemId = `msg_${rid()}`;
-              const item = { type: "message", id: msgItemId, role: "assistant", status: "in_progress", content: [] };
+              const item = { type: "message", id: msgItemId, role: "assistant", status: "in_progress", content: [], _text: "" };
               outputItems.push(item);
               ev(ctrl, "response.output_item.added", { type: "response.output_item.added", output_index: outIndex, item });
               ev(ctrl, "response.content_part.added", { type: "response.content_part.added", item_id: msgItemId, output_index: outIndex, content_index: 0, part: { type: "output_text", text: "", annotations: [] } });
             }
             const oi = outputItems.findIndex((i) => i.id === msgItemId);
+            const item = outputItems[oi] as any;
+            item._text += delta.content;
             ev(ctrl, "response.output_text.delta", { type: "response.output_text.delta", item_id: msgItemId, output_index: oi, content_index: 0, delta: delta.content });
           }
           // 工具调用
@@ -194,19 +196,27 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
           }
           if (choice?.finish_reason) finish = choice.finish_reason;
         }
-        // 收尾：output_item.done × N → response.completed
-        outputItems.forEach((item, oi) => {
-          const publicItem: any = { ...item };
-          delete publicItem._key; delete publicItem._text;
-          if (item.type === "message") {
-            ev(ctrl, "response.content_part.done", { type: "response.content_part.done", item_id: item.id, output_index: oi, content_index: 0, part: { type: "output_text", text: "", annotations: [] } });
-            publicItem.status = "completed";
-          }
-          if (item.type === "function_call") publicItem.status = "completed";
-          ev(ctrl, "response.output_item.done", { type: "response.output_item.done", output_index: oi, item: publicItem });
+        // 收尾：回填最终内容 → output_item.done × N → response.completed（Codex 依赖最后的 output 组装消息）
+        const finalItems = outputItems.map((item: any) => {
+          if (item.type === "reasoning")
+            return { type: "reasoning", id: item.id, summary: item._text ? [{ type: "summary_text", text: item._text }] : [] };
+          if (item.type === "message")
+            return { type: "message", id: item.id, role: "assistant", status: "completed", content: [{ type: "output_text", text: item._text ?? "", annotations: [] }] };
+          return { type: "function_call", id: item.id, call_id: item.call_id, name: item.name, arguments: item.arguments, status: "completed" };
         });
-        (skeleton() as any).status = "completed";
-        ev(ctrl, "response.completed", { type: "response.completed", response: skeleton() });
+        outputItems.forEach((item: any, oi: number) => {
+          if (item.type === "message") {
+            ev(ctrl, "response.content_part.done", { type: "response.content_part.done", item_id: item.id, output_index: oi, content_index: 0, part: { type: "output_text", text: item._text ?? "", annotations: [] } });
+          }
+          if (item.type === "function_call") {
+            ev(ctrl, "response.function_call_arguments.done", { type: "response.function_call_arguments.done", item_id: item.id, output_index: oi, arguments: item.arguments });
+          }
+          ev(ctrl, "response.output_item.done", { type: "response.output_item.done", output_index: oi, item: finalItems[oi] });
+        });
+        ev(ctrl, "response.completed", {
+          type: "response.completed",
+          response: { ...skeleton(), status: "completed", output: finalItems },
+        });
       } catch (e: any) {
         ev(ctrl, "error", { type: "error", code: "api_error", message: e?.message ?? String(e), param: null, sequence_number: seq++ });
       } finally {
