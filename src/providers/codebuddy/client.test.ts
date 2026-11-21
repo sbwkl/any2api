@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test";
 import { gunzipSync } from "node:zlib";
-import { buildHeaders, gzipBody, postChat, readUpstreamError, refreshAccessToken, type HeaderContext } from "./client";
+import { buildHeaders, fetchQueueStatus, gzipBody, postChat, readUpstreamError, refreshAccessToken, type HeaderContext } from "./client";
 import type { Credentials, ProductConfig } from "./types";
 
 const config: ProductConfig = {
@@ -128,5 +128,63 @@ describe("client", () => {
     expect(err.status).toBe(400);
     expect(err.code).toBe(11101);
     expect(err.message).toBe("No stream");
+  });
+
+  test("fetchQueueStatus posts model + request id and parses retry_after", async () => {
+    let seen: { url: string; headers: Headers; body: any } | null = null;
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      seen = {
+        url: String(url),
+        headers: new Headers(init?.headers),
+        body: JSON.parse(String(init?.body ?? "{}")),
+      };
+      return Response.json({ data: { retry_after: 3, queue_position: 2, queue_size: 5 } });
+    }) as typeof fetch;
+    const status = await fetchQueueStatus({ config, credentials, model: "m", requestId: "r1", fetchImpl });
+    expect(seen!.url).toBe("https://example.test/v2/chat/queue/status");
+    expect(seen!.headers.get("x-conversation-request-id")).toBe("r1");
+    expect(seen!.headers.get("authorization")).toBe("Bearer tok");
+    expect(seen!.body).toEqual({ model: "m" });
+    expect(status?.retryAfterMs).toBe(3000);
+    expect(status?.queuePosition).toBe(2);
+    expect(status?.queueSize).toBe(5);
+  });
+
+  test("postChat retries once after a 6020 queue response", async () => {
+    let calls = 0;
+    let queued = false;
+    const fetchImpl = (async () => {
+      calls++;
+      if (calls === 1) return Response.json({ code: 6020, data: { retry_after: 0 } });
+      return new Response("data: {}\n\n", { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as typeof fetch;
+    const resp = await postChat({
+      url: "https://example.test/v2/chat/completions",
+      headers: {},
+      body: { model: "m" },
+      fetchImpl,
+      onQueue: async () => { queued = true; return true; },
+    });
+    expect(resp.status).toBe(200);
+    expect(queued).toBe(true);
+    expect(calls).toBe(2);
+  });
+
+  test("postChat does not retry when onQueue declines", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      return Response.json({ code: 6020, data: { retry_after: 3 } });
+    }) as typeof fetch;
+    const resp = await postChat({
+      url: "https://example.test/v2/chat/completions",
+      headers: {},
+      body: { model: "m" },
+      fetchImpl,
+      onQueue: async () => false,
+    });
+    expect(resp.status).toBe(200);
+    expect(calls).toBe(1);
+    expect((await resp.json() as any).code).toBe(6020);
   });
 });

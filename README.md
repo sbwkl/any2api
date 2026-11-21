@@ -77,6 +77,7 @@ bun src/index.ts
 | `CODEBUDDY_AGENT` | `chat` | codebuddy 默认 profile：`chat` / `ask` / `craft` |
 | `CODEBUDDY_AUTO_REFRESH` | `1` | codebuddy 401 时是否自动刷新 token 并重试（`0` 关闭） |
 | `CODEBUDDY_MSG_CENTER` | `0` | codebuddy 是否开启消息中心 30s 轮询（`1` 开启） |
+| `CODEBUDDY_QUEUE_TIMEOUT_MS` | `120000` | codebuddy 排队等待上限（ms） |
 | `CODEBUDDY_TOKEN` / `CODEBUDDY_UID` | 从 Keychain 提取 | codebuddy 凭证兜底（可配 `CODEBUDDY_REFRESH_TOKEN`） |
 | `CODEBUDDY_DEVICE_TOKEN` | 空 | codebuddy 可选的 TuringShield 设备令牌 |
 | `CODEBUDDY_GENIE_HOME` | 本机 CodeBuddy 安装路径 | codebuddy 产品配置/提示词来源 |

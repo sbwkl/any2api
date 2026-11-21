@@ -49,12 +49,56 @@ export function gzipBody(body: any): Uint8Array {
   return gzipSync(JSON.stringify(body));
 }
 
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// 排队状态：POST /v2/chat/queue/status（model + X-Conversation-Request-ID）
+export async function fetchQueueStatus(opts: {
+  config: ProductConfig;
+  credentials: Credentials;
+  model: string;
+  requestId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{ retryAfterMs: number; queuePosition?: number; queueSize?: number } | null> {
+  const version = opts.config.version || "3.10.0";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${opts.credentials.accessToken}`,
+    "X-User-Id": opts.credentials.uid,
+    "X-Product": opts.config.deploymentType || "SaaS",
+    "X-Product-Version": version,
+    "User-Agent": `CodeBuddy/${version}`,
+    "X-Conversation-Request-ID": opts.requestId,
+  };
+  if (opts.credentials.domain) headers["X-Domain"] = opts.credentials.domain;
+  const resp = await (opts.fetchImpl ?? fetch)(`${opts.config.endpoint}/v2/chat/queue/status`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ model: opts.model }),
+  });
+  if (!resp.ok) {
+    await resp.text().catch(() => {});
+    return null;
+  }
+  const json: any = await resp.json().catch(() => null);
+  const data = json?.data ?? {};
+  const retryAfter = Number(data.retry_after ?? data.retryAfter ?? json?.retry_after ?? 5);
+  return {
+    retryAfterMs: Math.max(0, retryAfter * 1000),
+    queuePosition: data.queue_position,
+    queueSize: data.queue_size,
+  };
+}
+
 export async function postChat(opts: {
   url: string;
   headers: Record<string, string>;
   body: any;
   fetchImpl?: typeof fetch;
   onUnauthorized?: () => Promise<Record<string, string> | null>;
+  /** 收到 6020 排队中时调用；返回 true 表示已等待并允许重试一次 */
+  onQueue?: (peek: any) => Promise<boolean>;
 }): Promise<Response> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const payload = gzipBody(opts.body);
@@ -65,6 +109,18 @@ export async function postChat(opts: {
     if (refreshed) {
       headers = { ...refreshed, "Content-Encoding": "gzip" };
       resp = await fetchImpl(opts.url, { method: "POST", headers, body: payload });
+    }
+  }
+  if (opts.onQueue && resp.ok) {
+    const ct = resp.headers.get("content-type") ?? "";
+    if (ct.includes("application/json")) {
+      const peek = await resp.clone().json().catch(() => null);
+      if (peek?.code === 6020) {
+        const retry = await opts.onQueue(peek);
+        if (retry) {
+          resp = await fetchImpl(opts.url, { method: "POST", headers, body: payload });
+        }
+      }
     }
   }
   return resp;

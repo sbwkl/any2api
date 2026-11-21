@@ -153,6 +153,39 @@ describe("openai facade", () => {
     }
   });
 
+  test("6020 queue is waited and retried", async () => {
+    let chatCalls = 0;
+    const fetchImpl = (async (url: string | URL | Request) => {
+      if (String(url).includes("/v2/chat/queue/status")) {
+        return Response.json({ data: { retry_after: 0 } });
+      }
+      chatCalls++;
+      if (chatCalls === 1) return Response.json({ code: 6020, data: { retry_after: 0 } });
+      return sseResponse();
+    }) as typeof fetch;
+    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
+    const resp = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    }));
+    expect(resp.status).toBe(200);
+    expect(chatCalls).toBe(2);
+  });
+
+  test("6021 queue full maps to 429", async () => {
+    const fetchImpl = (async () => Response.json({ code: 6021, msg: "queue full" })) as typeof fetch;
+    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
+    const resp = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    }));
+    expect(resp.status).toBe(429);
+    const j: any = await resp.json();
+    expect(j.error.code).toBe(6021);
+  });
+
   test("maps a non-stream upstream rejection to an OpenAI error", async () => {
     const fetchImpl = (async () =>
       Response.json(

@@ -48,7 +48,7 @@ Owner：wayne
 
 - 遥测 `/v2/report`、`/llm/data/report`、`/v1/traces`（payload 未完全还原，伪造反而增加风险）。
 - TLS/JA3 指纹伪装（Bun vs Electron 残余差异）。
-- 排队协议 `/v2/chat/queue/status`（6020/6021/6022 首版返回错误）。
+- 排队协议见 [CHG-0004](CHG-0004-codebuddy-queue.md)（本轮不做）。
 - 内置工具 schema（工具仍只来自客户端 `tools`）。
 
 ## 5. 验证与观测

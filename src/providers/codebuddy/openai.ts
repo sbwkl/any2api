@@ -1,7 +1,7 @@
 // OpenAI 兼容门面 — /v1/models、/v1/chat/completions
 // 内部 respond() 是跨协议（OpenAI Chat / Anthropic Messages / Responses）的共享管线。
 import { newId, SessionRegistry } from "./ids";
-import { buildHeaders, postChat, readUpstreamError, refreshAccessToken } from "./client";
+import { buildHeaders, postChat, readUpstreamError, refreshAccessToken, fetchQueueStatus, sleep } from "./client";
 import { buildAgentPrompt, resolveModel } from "./config";
 import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from "./envelope";
 import { aggregateSseToCompletion } from "../../shared/sse";
@@ -157,7 +157,30 @@ export class CodeBuddyFacade {
           this.credentials = next;
           return makeHeaders(next);
         },
+      onQueue: async (peek) => {
+        const timeout = Number(process.env.CODEBUDDY_QUEUE_TIMEOUT_MS ?? 120000);
+        const retryAfterMs = Number(peek?.data?.retry_after ?? peek?.retry_after ?? 5) * 1000;
+        const status = await fetchQueueStatus({
+          config: this.config,
+          credentials: this.credentials,
+          model: model.id,
+          requestId,
+          fetchImpl: this.opts.fetchImpl,
+        });
+        const waitMs = Math.min(status?.retryAfterMs ?? retryAfterMs, timeout);
+        if (waitMs >= timeout) return false;
+        await sleep(waitMs);
+        return true;
+      },
     });
+
+    if (resp.ok && (resp.headers.get("content-type") ?? "").includes("application/json")) {
+      const peek = await resp.clone().json().catch(() => null);
+      if (peek?.code === 6020) return jsonError(429, "queue wait timeout", 6020);
+      if (peek?.code === 6021) return jsonError(429, peek.msg ?? "queue full", 6021);
+      if (peek?.code === 6022) return jsonError(429, peek.msg ?? "user limit", 6022);
+      if (peek?.code === 14003) return jsonError(429, peek.msg ?? "model resource limit", 14003);
+    }
 
     if (!resp.ok) {
       const err = await readUpstreamError(resp);
