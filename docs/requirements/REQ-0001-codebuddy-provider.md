@@ -98,6 +98,7 @@ Owner：wayne
 - **R23**：When provider prefix 重复、出现多个空 prefix、或格式不合法（不以 `/` 开头、以 `/` 结尾、为 `/`）, the system shall 启动失败并给出明确错误。
 - **R24**：When 服务启动, the system shall 为每个 provider 使用 `/<name>/v1` 前缀（codearts `/codearts/v1`、codebuddy `/codebuddy/v1`）；不再保留无前缀的 `/v1`。
 - **R25**：When Responses `input` 项不是 message（如 `reasoning`）, the system shall 不因 `content` 校验拒绝该请求；当 message 项的 `content` 存在且非 `null` 时，须为 string 或 array。
+- **R26**：When Responses `input` 含连续 `function_call` 项, the system shall 将其合并为一条 assistant 消息的 `tool_calls` 数组，并在对应 `function_call_output` 前 flush；`reasoning`/未知项不得打断该分组。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -133,6 +134,7 @@ Owner：wayne
 | CHG-0005 | 评审修复：错误边界、空流、类型校验、normalizeErrors、共享 SSE、前缀校验 | 开发中 | [CHG-0005](../changes/CHG-0005-review-fixes.md) |
 | CHG-0006 | 统一 provider 前缀为 `/<name>/v1` | 开发中 | [CHG-0006](../changes/CHG-0006-unify-prefixes.md) |
 | CHG-0007 | 修复 Responses reasoning 项 `content: null` 导致 400 | 开发中 | [CHG-0007](../changes/CHG-0007-responses-null-content.md) |
+| CHG-0008 | 修复 Responses 并行 function_call 拆成多条 assistant 导致 11148 | 开发中 | [CHG-0008](../changes/CHG-0008-responses-parallel-tool-calls.md) |
 
 ## 11. 链接
 

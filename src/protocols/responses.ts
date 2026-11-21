@@ -8,8 +8,33 @@ import { sseData } from "../shared/sse";
 function inputItemsToMessages(input: any): any[] {
   if (typeof input === "string") return [{ role: "user", content: input }];
   const out: any[] = [];
+  let pending: any[] = [];
+  const flush = () => {
+    if (!pending.length) return;
+    out.push({ role: "assistant", tool_calls: pending });
+    pending = [];
+  };
   for (const item of input ?? []) {
+    if (item?.type === "function_call") {
+      // 连续的 function_call 合并为一条 assistant 消息的 tool_calls 数组（OpenAI chat 语义）
+      pending.push({
+        id: item.call_id ?? item.id ?? `call_${pending.length}`,
+        type: "function",
+        function: { name: item.name, arguments: item.arguments ?? "{}" },
+      });
+      continue;
+    }
+    if (item?.type === "function_call_output") {
+      flush();
+      out.push({
+        role: "tool",
+        tool_call_id: item.call_id,
+        content: typeof item.output === "string" ? item.output : JSON.stringify(item.output ?? ""),
+      });
+      continue;
+    }
     if (item?.type === "message" || (!item?.type && item?.role)) {
+      flush();
       const c = item.content;
       const text = typeof c === "string"
         ? c
@@ -17,19 +42,11 @@ function inputItemsToMessages(input: any): any[] {
           ? c.map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join("")
           : "";
       if (text) out.push({ role: item.role ?? "user", content: text });
-    } else if (item?.type === "function_call") {
-      out.push({
-        role: "assistant",
-        tool_calls: [{ id: item.call_id ?? item.id ?? "call_0", type: "function", function: { name: item.name, arguments: item.arguments ?? "{}" } }],
-      });
-    } else if (item?.type === "function_call_output") {
-      out.push({
-        role: "tool",
-        tool_call_id: item.call_id,
-        content: typeof item.output === "string" ? item.output : JSON.stringify(item.output ?? ""),
-      });
+      continue;
     }
+    // reasoning / 其他类型：忽略，不打断连续 function_call 分组
   }
+  flush();
   return out;
 }
 
