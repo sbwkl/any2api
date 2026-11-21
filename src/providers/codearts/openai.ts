@@ -8,6 +8,8 @@ import { getCredentials } from "./config";
 import { refreshNow } from "./refresher";
 import type { GatewayConfig, ModelInfo, Credentials } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
+import { aggregateSseToCompletion } from "../../shared/sse";
+import { errorTypeForStatus } from "../../shared/errors";
 
 const CLIENT_TYPE = "IDE";
 const CLIENT_VERSION = "26.11.200";
@@ -236,7 +238,12 @@ export class OpenAIFacade {
     // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对非 stream 请求也回 SSE）
     const ct = resp.headers.get("content-type") ?? "";
     if (ct.includes("text/event-stream")) {
-      const completion = await aggregateSseToCompletion(resp.body!);
+      let completion: any;
+      try {
+        completion = await aggregateSseToCompletion(resp.body!);
+      } catch (e: any) {
+        return jsonError(502, `upstream_error: ${e?.message ?? String(e)}`);
+      }
       return new Response(JSON.stringify(completion), { status: 200, headers: { "Content-Type": "application/json" } });
     }
     const text = await resp.text();
@@ -244,66 +251,8 @@ export class OpenAIFacade {
   }
 }
 
-// SSE → OpenAI chat.completion 聚合（兼容 delta 与 message 两种帧形态）
-async function aggregateSseToCompletion(stream: ReadableStream<Uint8Array>): Promise<any> {
-  const text = await new Response(stream).text();
-  let completion: any = null;
-  let usage: any = null;
-  let finish: string | null = null;
-  const slots = new Map<number, { content: string; reasoning: string; toolCalls: (any | undefined)[] }>();
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line.startsWith("data:")) continue;
-    const payload = line.slice(5).trim();
-    if (!payload || payload === "[DONE]") continue;
-    let chunk: any;
-    try { chunk = JSON.parse(payload); } catch { continue; }
-    if (!completion)
-      completion = { id: chunk.id, created: chunk.created, model: chunk.model, object: "chat.completion" };
-    if (chunk.usage) usage = chunk.usage;
-    for (const c of chunk.choices ?? []) {
-      const idx = c.index ?? 0;
-      const slot = slots.get(idx) ?? { content: "", reasoning: "", toolCalls: [] };
-      const d = c.delta ?? c.message ?? {};
-      if (typeof d.content === "string") slot.content += d.content;
-      if (typeof d.reasoning_content === "string") slot.reasoning += d.reasoning_content;
-      // tool_calls 分片按 index 合并（name/id 就近填充，arguments 串联）
-      if (Array.isArray(d.tool_calls)) {
-        for (const tc of d.tool_calls) {
-          const ti = tc.index ?? 0;
-          let merged = slot.toolCalls[ti];
-          if (!merged) {
-            merged = { id: tc.id, type: "function", function: { name: "", arguments: "" } };
-            slot.toolCalls[ti] = merged;
-          }
-          if (tc.id) merged.id = tc.id;
-          if (tc.function?.name) merged.function.name = tc.function.name;
-          if (typeof tc.function?.arguments === "string") merged.function.arguments += tc.function.arguments;
-        }
-      }
-      if (c.finish_reason) finish = c.finish_reason;
-      slots.set(idx, slot);
-    }
-  }
-  if (!completion) throw new Error("no completion frame in upstream SSE");
-  const choices = [...slots.keys()].sort((a, b) => a - b).map((idx) => {
-    const s = slots.get(idx)!;
-    const message: any = { role: "assistant", content: s.content };
-    if (s.reasoning) message.reasoning_content = s.reasoning;
-    const toolCalls = s.toolCalls.filter(Boolean);
-    if (toolCalls.length) {
-      message.tool_calls = toolCalls.map((tc: any, i: number) => ({
-        id: tc.id ?? `call_${idx}_${i}`, type: "function",
-        function: { name: tc.function?.name ?? "", arguments: tc.function?.arguments ?? "" },
-      }));
-    }
-    return { index: idx, message, finish_reason: finish ?? "stop" };
-  });
-  return { ...completion, choices, usage };
-}
-
 function jsonError(status: number, message: string): Response {
-  return new Response(JSON.stringify({ error: { message, type: "invalid_request_error", code: null } }), {
+  return new Response(JSON.stringify({ error: { message, type: errorTypeForStatus(status), code: null } }), {
     status,
     headers: { "Content-Type": "application/json" },
   });

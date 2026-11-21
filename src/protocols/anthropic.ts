@@ -1,9 +1,10 @@
-// Anthropic Messages API 适配 — /v1/messages ↔ 内部 OpenAI chat 管线
-// 覆盖 Claude Code / Claude Desktop 所需子集：system、text/thinking/tool_use/tool_result 块、
-// tools、tool_choice、流式 SSE（message_start/content_block_*/message_delta/message_stop）。
-import type { OpenAIFacade } from "./openai";
+// Anthropic Messages API 适配 — 共享协议层
+// 依赖 ChatBackend.respond（OpenAI chat 形态）；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
+import type { ChatBackend, ProtocolCapabilities } from "./types";
+import { safeRespond } from "./util";
+import { errorTypeForStatus } from "../shared/errors";
+import { sseData } from "../shared/sse";
 
-// ---- 请求翻译：Anthropic → OpenAI chat ----
 function systemToMessage(system: any): any | null {
   if (!system) return null;
   if (typeof system === "string") return { role: "system", content: system };
@@ -13,7 +14,6 @@ function systemToMessage(system: any): any | null {
 }
 
 function contentToOpenAi(role: string, content: any): any[] {
-  // 返回 0..n 条 OpenAI 消息（tool_result 会被拆成独立 tool 消息）
   if (typeof content === "string") return [{ role, content }];
   const out: any[] = [];
   let text = "";
@@ -26,7 +26,6 @@ function contentToOpenAi(role: string, content: any): any[] {
       case "text": text += (text ? "\n" : "") + (block.text ?? ""); break;
       case "tool_use":
         flushText();
-        // input 含 _raw 时为无效 JSON 的原始分片，直接透传字符串，避免二次序列化污染工具历史
         toolCalls.push({
           id: block.id, type: "function",
           function: {
@@ -37,7 +36,7 @@ function contentToOpenAi(role: string, content: any): any[] {
         break;
       case "tool_result":
         flushText();
-        if (toolCalls.length) { out.push({ role: "assistant", tool_calls: toolCalls.splice(0) }); }
+        if (toolCalls.length) out.push({ role: "assistant", tool_calls: toolCalls.splice(0) });
         out.push({
           role: "tool",
           tool_call_id: block.tool_use_id,
@@ -47,7 +46,7 @@ function contentToOpenAi(role: string, content: any): any[] {
         });
         break;
       case "image": text += (text ? "\n" : "") + "[image omitted]"; break;
-      case "thinking": break; // 上游自行产生推理，不回注
+      case "thinking": break;
       default: break;
     }
   }
@@ -56,7 +55,7 @@ function contentToOpenAi(role: string, content: any): any[] {
   return out;
 }
 
-export function anthropicToOpenAi(body: any): any {
+export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): any {
   const messages: any[] = [];
   const sys = systemToMessage(body.system);
   if (sys) messages.push(sys);
@@ -71,69 +70,98 @@ export function anthropicToOpenAi(body: any): any {
     out.tools = body.tools
       .filter((t) => t?.type === "custom" || (!t?.type && t?.name))
       .map((t) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.input_schema ?? { type: "object" } } }));
+
   const tc = body.tool_choice;
-  if (tc?.type === "any") out.tool_choice = "required";
-  else if (tc?.type === "tool") out.tool_choice = { type: "function", function: { name: tc.name } };
-  else if (tc?.type === "auto") out.tool_choice = "auto";
+  if (caps.toolChoice === "auto-only") {
+    if (tc?.type === "any" || tc?.type === "tool" || tc?.type === "auto") out.tool_choice = "auto";
+    else if (tc?.type === "none") out.tool_choice = "none";
+  } else {
+    if (tc?.type === "any") out.tool_choice = "required";
+    else if (tc?.type === "tool") out.tool_choice = { type: "function", function: { name: tc.name } };
+    else if (tc?.type === "auto") out.tool_choice = "auto";
+    else if (tc?.type === "none") out.tool_choice = "none";
+  }
   return out;
 }
 
-// ---- SSE 读取：逐帧产出 data payload ----
-async function* sseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<any> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, idx).trim();
-      buf = buf.slice(idx + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try { yield JSON.parse(payload); } catch { /* 忽略坏帧 */ }
-    }
-  }
-}
-
 const STOP_REASON: Record<string, string> = {
-  stop: "end_turn", tool_calls: "tool_use", length: "max_tokens",
+  stop: "end_turn", tool_calls: "tool_use", length: "max_tokens", content_filter: "end_turn",
 };
 
-export async function handleAnthropicMessages(facade: OpenAIFacade, req: Request): Promise<Response> {
+function validateAnthropic(body: any): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "body must be an object";
+  if (!Array.isArray(body.messages)) return "messages must be an array";
+  if (body.system !== undefined && typeof body.system !== "string" && !Array.isArray(body.system))
+    return "system must be a string or array";
+  for (const m of body.messages) {
+    if (!m || typeof m !== "object" || Array.isArray(m)) return "message must be an object";
+    if (typeof m.role !== "string") return "message.role must be a string";
+    if (typeof m.content !== "string" && !Array.isArray(m.content))
+      return "message.content must be a string or array";
+    if (Array.isArray(m.content)) {
+      for (const block of m.content) {
+        if (!block || typeof block !== "object" || Array.isArray(block)) return "content block must be an object";
+      }
+    }
+  }
+  if (body.metadata !== undefined) {
+    if (!body.metadata || typeof body.metadata !== "object" || Array.isArray(body.metadata))
+      return "metadata must be an object";
+    if (body.metadata.user_id !== undefined && typeof body.metadata.user_id !== "string")
+      return "metadata.user_id must be a string";
+  }
+  if (body.tools !== undefined && !Array.isArray(body.tools)) return "tools must be an array";
+  return null;
+}
+
+export async function handleAnthropicMessages(
+  backend: ChatBackend,
+  req: Request,
+  caps: ProtocolCapabilities = {},
+): Promise<Response> {
   const body = await req.json().catch(() => null);
   if (!body) return anthroError(400, "invalid JSON body");
-  const sessionKey = (req.headers.get("x-anthropic-session") || body.metadata?.user_id || "default").slice(0, 128);
-  const openaiBody = anthropicToOpenAi(body);
-  const thinking = body.thinking?.type === "enabled";
+  const invalid = validateAnthropic(body);
+  if (invalid) return anthroError(400, `invalid request: ${invalid}`);
+  const sessionKey = (
+    req.headers.get("x-codebuddy-session") ||
+    req.headers.get("x-anthropic-session") ||
+    body.metadata?.user_id ||
+    "default"
+  ).slice(0, 128);
+  const profile = backend.profileFor?.(req);
+  const openaiBody = anthropicToOpenAi(body, caps);
+  const thinking = caps.thinking !== false && body.thinking?.type === "enabled";
   const model = body.model ?? undefined;
 
   if (body.stream !== true) {
-    const resp = await facade.respond(openaiBody, false, sessionKey);
-    if (!okJson(resp)) return resp;
-    return Response.json(completionToAnthropic(await resp.json(), model));
+    const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile });
+    if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
+    return Response.json(completionToAnthropic(await resp.json(), model, thinking));
   }
 
-  const resp = await facade.respond({ ...openaiBody, stream: true }, true, sessionKey);
-  if (!resp.ok || !resp.body) return resp;
-  const sse = await anthropicSse(resp.body!, thinking, model);
+  const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
+  if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
+  const sse = await anthropicSse(resp.body, thinking, model);
   return new Response(sse, {
     status: 200,
     headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
   });
 }
 
-async function okJson(resp: Response): Promise<boolean> {
-  if (!resp.ok) return false;
-  return !(resp.headers.get("content-type") ?? "").includes("text/event-stream");
+async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
+  if (caps.normalizeErrors === false) return resp;
+  let message = `upstream ${resp.status}`;
+  try {
+    const j: any = await resp.clone().json();
+    message = j?.error?.message ?? j?.message ?? message;
+  } catch { /* ignore */ }
+  return anthroError(resp.status, message, errorTypeForStatus(resp.status));
 }
 
-function completionToAnthropic(c: any, model?: string): any {
+function completionToAnthropic(c: any, model?: string, thinking = false): any {
   const content: any[] = [];
-  if (c?.choices?.[0]?.message?.reasoning_content)
+  if (thinking && c?.choices?.[0]?.message?.reasoning_content)
     content.push({ type: "thinking", thinking: c.choices[0].message.reasoning_content });
   const text = c?.choices?.[0]?.message?.content ?? "";
   if (text) content.push({ type: "text", text });
@@ -142,6 +170,7 @@ function completionToAnthropic(c: any, model?: string): any {
       type: "tool_use", id: tc.id, name: tc.function?.name,
       input: safeParse(tc.function?.arguments),
     });
+  const usage = c?.usage ?? {};
   return {
     id: `msg_${c?.id ?? crypto.randomUUID().replaceAll("-", "")}`,
     type: "message", role: "assistant",
@@ -150,8 +179,10 @@ function completionToAnthropic(c: any, model?: string): any {
     stop_reason: STOP_REASON[c?.choices?.[0]?.finish_reason ?? "stop"] ?? "end_turn",
     stop_sequence: null,
     usage: {
-      input_tokens: c?.usage?.prompt_tokens ?? 0,
-      output_tokens: c?.usage?.completion_tokens ?? 0,
+      input_tokens: usage.prompt_tokens ?? 0,
+      output_tokens: usage.completion_tokens ?? 0,
+      cache_read_input_tokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+      cache_creation_input_tokens: usage.prompt_tokens_details?.cache_creation_tokens ?? 0,
     },
   };
 }
@@ -161,25 +192,27 @@ function safeParse(s: string | undefined): any {
   try { return JSON.parse(s); } catch { return { _raw: s }; }
 }
 
-function anthroError(status: number, message: string): Response {
-  return Response.json({ type: "error", error: { type: "invalid_request_error", message } }, { status });
+function anthroError(status: number, message: string, type = "invalid_request_error"): Response {
+  return Response.json({ type: "error", error: { type, message } }, { status });
 }
 
-// ---- 流式翻译：OpenAI chunk SSE → Anthropic message SSE ----
 async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: boolean, model?: string): Promise<ReadableStream<Uint8Array>> {
   const enc = new TextEncoder();
-  let id = `msg_${crypto.randomUUID().replaceAll("-", "")}`;
+  const id = `msg_${crypto.randomUUID().replaceAll("-", "")}`;
   let outModel = model ?? "";
   let blockIdx = -1;
   let curBlock: "text" | "thinking" | "tool_use" | null = null;
-  let inputTokens = 0, outputTokens = 0;
-  const toolCalls = new Map<number, { id: string; name: string; opened: boolean }>();
+  let outputTokens = 0;
+  const toolCalls = new Map<number, { id: string; name: string }>();
   let stopReason: string | null = null;
 
   const startBlock = (ctrl: ReadableStreamDefaultController, type: "text" | "thinking" | "tool_use", extra?: any) => {
     blockIdx += 1;
     curBlock = type;
-    const start: any = { type: "content_block_start", index: blockIdx, content_block: { type, ...(type === "text" ? { text: "" } : type === "thinking" ? { thinking: "" } : extra) } };
+    const start: any = {
+      type: "content_block_start", index: blockIdx,
+      content_block: { type, ...(type === "text" ? { text: "" } : type === "thinking" ? { thinking: "" } : extra) },
+    };
     ctrl.enqueue(enc.encode(`event: content_block_start\ndata: ${JSON.stringify(start)}\n\n`));
   };
   const stopBlock = (ctrl: ReadableStreamDefaultController) => {
@@ -201,19 +234,17 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
             usage: { input_tokens: 0, output_tokens: 0 },
           },
         });
-        for await (const chunk of sseData(upstream)) {
+        for await (const data of sseData(upstream)) {
+        if (!data || data === "[DONE]") continue;
+        let chunk: any;
+        try { chunk = JSON.parse(data); } catch { continue; }
           if (chunk.model && !outModel) outModel = chunk.model;
-          if (chunk.usage) {
-            inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
-            outputTokens = chunk.usage.completion_tokens ?? outputTokens;
-          }
+          if (chunk.usage) outputTokens = chunk.usage.completion_tokens ?? outputTokens;
           const choice = chunk.choices?.[0];
           const delta = choice?.delta ?? {};
-          // 推理增量（客户端开启 thinking 时输出 thinking 块）
-          if (typeof delta.reasoning_content === "string" && delta.reasoning_content) {
-            if (thinking && curBlock !== "thinking") { stopBlock(ctrl); startBlock(ctrl, "thinking"); }
-            if (thinking)
-              ev(ctrl, "content_block_delta", { type: "content_block_delta", index: blockIdx, delta: { type: "thinking_delta", thinking: delta.reasoning_content } });
+          if (thinking && typeof delta.reasoning_content === "string" && delta.reasoning_content) {
+            if (curBlock !== "thinking") { stopBlock(ctrl); startBlock(ctrl, "thinking"); }
+            ev(ctrl, "content_block_delta", { type: "content_block_delta", index: blockIdx, delta: { type: "thinking_delta", thinking: delta.reasoning_content } });
           }
           if (typeof delta.content === "string" && delta.content) {
             if (curBlock !== "text") { stopBlock(ctrl); startBlock(ctrl, "text"); }
@@ -224,7 +255,7 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
             let slot = toolCalls.get(idx);
             if (!slot) {
               stopBlock(ctrl);
-              slot = { id: tc.id ?? `toolu_${crypto.randomUUID().replaceAll("-", "")}`, name: tc.function?.name ?? "", opened: true };
+              slot = { id: tc.id ?? `toolu_${crypto.randomUUID().replaceAll("-", "")}`, name: tc.function?.name ?? "" };
               toolCalls.set(idx, slot);
               startBlock(ctrl, "tool_use", { id: slot.id, name: slot.name, input: "" });
             } else if (tc.function?.name && !slot.name) {

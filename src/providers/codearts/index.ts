@@ -10,8 +10,8 @@ import {
   refreshNow,
   startCredentialMaintainer,
 } from "./refresher";
-import { handleAnthropicMessages } from "./anthropic";
-import { handleResponses } from "./responses";
+import { createProtocolRoutes, type ChatBackend } from "../../protocols";
+import { mountProviders, type ProviderModule, type ProviderInstance } from "../../registry";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -44,7 +44,8 @@ async function resolveInitialCredentials() {
   return creds;
 }
 
-export async function start(): Promise<void> {
+// 装配 codearts provider；路由路径相对挂载点，由注册表负责前缀分发。
+export async function createProvider(): Promise<ProviderInstance> {
   const creds = await resolveInitialCredentials();
   console.log(`[codearts] 凭证就绪 ak=${creds.ak.slice(0, 8)}... 有效期至 ${creds.expiresAt ?? "(env 静态凭证)"}`);
 
@@ -69,26 +70,33 @@ export async function start(): Promise<void> {
 
   const facade = new OpenAIFacade(snap, gw, telemetry);
 
+  const backend: ChatBackend = {
+    models: () => facade.modelsPayload().data,
+    health: () => ({ ok: true }),
+    handleChat: (req) => facade.handleChat(req),
+    respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey),
+  };
+  // codearts：full tool_choice（支持 required/forced function），错误透传上游响应。
+  const routes = createProtocolRoutes(backend, { toolChoice: "full", normalizeErrors: false });
+  return { routes, health: () => ({ ok: true }) };
+}
+
+export const codeartsProvider: ProviderModule = {
+  name: "codearts",
+  prefix: "/codearts",
+  required: true,
+  create: createProvider,
+};
+
+export async function start(): Promise<void> {
+  const handler = await mountProviders([codeartsProvider]);
   const server = Bun.serve({
     port: PORT,
     // 生产默认只监听本机回环；需要局域网访问时设 HOST=0.0.0.0（注意：服务无鉴权，勿暴露公网）
     hostname: process.env.HOST ?? "127.0.0.1",
     idleTimeout: 255,
-    fetch: async (req) => {
-      const url = new URL(req.url);
-      if (url.pathname === "/v1/models" && req.method === "GET")
-        return Response.json(facade.modelsPayload());
-      if (url.pathname === "/v1/chat/completions" && req.method === "POST")
-        return facade.handleChat(req);
-      if (url.pathname === "/v1/messages" && req.method === "POST")
-        return handleAnthropicMessages(facade, req);
-      if (url.pathname === "/v1/responses" && req.method === "POST")
-        return handleResponses(facade, req);
-      if (url.pathname === "/healthz")
-        return new Response("ok");
-      return new Response("not found", { status: 404 });
-    },
+    fetch: handler,
   });
-  console.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/v1 (POST /v1/chat/completions, GET /v1/models)`);
-  console.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/v1  api-key=任意非空串`);
+  console.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/codearts/v1 (POST /codearts/v1/chat/completions, GET /codearts/v1/models)`);
+  console.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/codearts/v1  api-key=任意非空串`);
 }
