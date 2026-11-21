@@ -16,7 +16,7 @@ Owner：wayne
 3. **共享协议层**：Anthropic Messages / Responses 适配抽到 `src/protocols/`，只依赖 `ChatBackend`；provider 差异用 `ProtocolCapabilities` 表达（`toolChoice`、`errorShape`、`thinking`），共享层不出现 `provider.name` 判断。
 4. **共享 SSE**：`sseData` / `aggregateSseToCompletion` 抽到 `src/shared/sse.ts`。
 
-本轮 **codebuddy 先切共享协议层**；codearts 的路由接入注册表，但其 Anthropic/Responses 适配器保留原私有实现（生产路径不动），全量迁移留待后续。
+本轮 **codebuddy 与 codearts 均切到共享协议层**；codearts 的私有 anthropic/responses/SSE 副本已删除，协议差异通过 capabilities 表达。
 
 ## 2. 变更理由与证据
 
@@ -44,23 +44,25 @@ Owner：wayne
 - 新增 `src/protocols/{index,types,anthropic,responses}.ts`。
 - 新增 `src/shared/sse.ts`；移动 `sse.test.ts` 到 `src/shared/`。
 - 修改 `src/index.ts`：注册表启动。
-- 修改 `src/providers/codearts/index.ts`：改为 `codeartsProvider`（prefix=""、required），路由相对；`start()` 用注册表。
+- 修改 `src/providers/codearts/index.ts`：改为 `codeartsProvider`（prefix=""、required），路由来自 `createProtocolRoutes`；`start()` 用注册表。
+- 修改 `src/providers/codearts/openai.ts`：SSE 聚合改 import 共享实现。
+- 删除 `src/providers/codearts/{anthropic,responses}.ts`（已由共享层替代）。
 - 修改 `src/providers/codebuddy/index.ts`：改为 `codebuddyProvider`（prefix="/codebuddy"、required=false），路由来自 `createProtocolRoutes`。
 - 修改 `src/providers/codebuddy/openai.ts`：SSE 聚合改 import 共享实现。
 - 修改 `src/providers/codebuddy/envelope.ts`：`mapUsage`/`mapFinishReason` 改为从共享 SSE 模块 re-export。
 - 删除 `src/providers/codebuddy/{anthropic,responses,sse}.ts`（已由共享层替代）。
+- 新增 `src/protocols/protocols.test.ts`（codearts full/passthrough 能力契约）。
 - 修改 `README.md`：结构与新增 provider 说明、`/healthz` 语义。
 
 **本次明确不做**
 
-- codearts 的 Anthropic/Responses 适配器迁移到共享层（保留私有副本；避免动生产协议路径）。
-- codearts 的 SSE 聚合切换（保留原实现）。
+- 无（本轮完成 codebuddy 与 codearts 的协议层迁移）。
 - Hono / 自动发现 / 独立进程（评审结论：不急）。
 - 遥测、TLS 指纹、排队协议（沿用 CHG-0002 的非目标）。
 
 ## 5. 验证与观测
 
-- 自动化：`bun test` → **58 pass / 0 fail / 237 expect() calls**（10 个测试文件）。
+- 自动化：`bun test` → **64 pass / 0 fail / 251 expect() calls**（11 个测试文件）。
 - 构建：`bun build src/index.ts --target=bun` → 成功。
 - 注册表实测（脚本直调 `mountProviders`，不启动服务）：
   - `/healthz` → 200，`codearts:true, codebuddy:true`；
@@ -68,8 +70,10 @@ Owner：wayne
   - `/codebuddy/v1/chat/completions` → 200，content `OK`；
   - `/codebuddy/v1/messages` → 200，Anthropic message；
   - `/codebuddy/v1/responses` → 200，Responses object；
-  - `/v1/models` → 200，12 个 codearts 模型。
-- 临时集成分支 `tmp/integration-codebuddy`（从 main 合入 feat）→ **58 pass / 0 fail**，`bun build` 通过，分支已删除。
+  - `/v1/models` → 200，12 个 codearts 模型；
+  - `/v1/messages` → 200，Anthropic message（glm-5.3-flash）；
+  - `/v1/responses` → 200，Responses object（glm-5.3-flash）。
+- 临时集成分支 `tmp/integration-codebuddy`（从 main 合入 feat）→ **64 pass / 0 fail**，`bun build` 通过，分支已删除。
 - 未做：服务端重启/部署、7 天稳定性。
 
 ## 6. 回滚方案
@@ -82,7 +86,7 @@ Owner：wayne
 
 | 风险 / 未决 | 影响 | 处理 |
 |---|---|---|
-| codearts 适配器仍重复 | 未完全消除协议重复 | 评审允许的收敛策略：新 provider 走共享层，codearts 原地不动；全量迁移后续 CHG |
+| codearts 协议路径迁移 | 共享层改变工具选择与错误透传 | 用 full/passthrough 契约测试 + 真实 codearts e2e（`/v1/messages`、`/v1/responses`）回归 |
 | `/healthz` 响应格式变化 | 依赖纯文本 `ok` 的脚本可能失败 | 返回 JSON 仍含 `ok` 字段；README 已说明；调用方应解析 JSON |
 | 注册表路径边界 | `/codebuddyx` 误命中 | 最长前缀 + `prefix + "/"` 边界匹配，已有测试 |
 | required provider 失败 | 进程退出 | codearts `required: true`（保持原行为）；codebuddy `required: false`（503） |
@@ -100,4 +104,4 @@ Owner：wayne
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 开发中 | wayne | 注册表 + 相对路由 + 聚合 health + 共享 SSE + codebuddy 共享协议层；58 tests 全绿；真实上游 registry e2e 通过；临时集成分支通过；未部署 |
+| 开发中 | wayne | 注册表 + 相对路由 + 聚合 health + 共享 SSE + codebuddy/codearts 共享协议层；64 tests 全绿；真实上游 registry e2e（含 codearts `/v1/messages`、`/v1/responses`）通过；临时集成分支通过；未部署 |

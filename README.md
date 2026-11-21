@@ -21,11 +21,9 @@ src/
 │   ├── anthropic.ts          # Anthropic Messages 适配
 │   └── responses.ts          # OpenAI Responses 适配
 └── providers/
-    ├── codearts/             # 码道适配器（自包含；协议适配暂保留私有副本）
+    ├── codearts/             # 码道适配器（自包含；协议适配复用共享 protocols/）
     │   ├── index.ts          # provider 模块（prefix=""，required）
     │   ├── openai.ts         # 内部统一管线 + OpenAI Chat 门面
-    │   ├── anthropic.ts      # Anthropic /v1/messages 协议适配
-    │   ├── responses.ts      # OpenAI Responses /v1/responses 协议适配
     │   ├── snap.ts           # 加密通道（key-exchange + SM4-GCM SSE）
     │   ├── refresher.ts      # STS 自动刷新（DPoP + refresh_token 轮换回写）
     │   ├── signer.ts         # 华为云双签名器（sl.sign / signSimple）

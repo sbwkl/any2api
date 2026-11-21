@@ -10,9 +10,8 @@ import {
   refreshNow,
   startCredentialMaintainer,
 } from "./refresher";
-import { handleAnthropicMessages } from "./anthropic";
-import { handleResponses } from "./responses";
-import { mountProviders, type ProviderModule, type ProviderInstance, type Route } from "../../registry";
+import { createProtocolRoutes, type ChatBackend } from "../../protocols";
+import { mountProviders, type ProviderModule, type ProviderInstance } from "../../registry";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -71,12 +70,14 @@ export async function createProvider(): Promise<ProviderInstance> {
 
   const facade = new OpenAIFacade(snap, gw, telemetry);
 
-  const routes: Route[] = [
-    { method: "GET", path: "/v1/models", handle: () => Response.json(facade.modelsPayload()) },
-    { method: "POST", path: "/v1/chat/completions", handle: (req) => facade.handleChat(req) },
-    { method: "POST", path: "/v1/messages", handle: (req) => handleAnthropicMessages(facade, req) },
-    { method: "POST", path: "/v1/responses", handle: (req) => handleResponses(facade, req) },
-  ];
+  const backend: ChatBackend = {
+    models: () => facade.modelsPayload().data,
+    health: () => ({ ok: true }),
+    handleChat: (req) => facade.handleChat(req),
+    respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey),
+  };
+  // codearts：full tool_choice（支持 required/forced function），错误透传上游响应。
+  const routes = createProtocolRoutes(backend, { toolChoice: "full", errorShape: "passthrough" });
   return { routes, health: () => ({ ok: true }) };
 }
 

@@ -113,7 +113,7 @@ Owner：wayne
 | 默认 profile | `chat`（无工具）为默认；ask/craft 可选，只切换系统提示词 | 通用聊天客户端即插即用；内置工具 schema 尚未逐字还原，宁可少发也不发错误 schema | RFC-0001 §5.3 |
 | 实现基线 | 复用 codearts provider 的目录结构与协议适配层，独立目录不共享凭证代码 | codearts 已在生产验证；独立目录隔离协议差异，避免相互影响 | CHG-0001 §4 |
 | 首版范围 | 首版 OpenAI Chat + Models（CHG-0001），随后补 Anthropic Messages + Responses + 可选消息中心（CHG-0002） | 先验证传输与信封拟真，再补协议面；每个 CHG 独立可验收 | CHG-0001 / CHG-0002 |
-| provider 边界 | 静态注册表 + 相对路由；codebuddy 先切共享协议层，codearts 保留私有适配器 | 架构评审建议；降低新增 provider 边际成本，同时不改 codearts 生产协议路径 | CHG-0003 |
+| provider 边界 | 静态注册表 + 相对路由；codebuddy 与 codearts 均切共享协议层 | 架构评审建议；消除入口/provider/协议层耦合，新增 provider 只加一行注册 | CHG-0003 |
 
 ## 10. 变更索引
 
