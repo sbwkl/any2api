@@ -159,6 +159,31 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect((await s.json() as any).error.type).toBe("upstream_error");
   });
 
+  test("Responses accepts reasoning content null and ignores non-message content", async () => {
+    const local = createProtocolRoutes(makeBackend(), { normalizeErrors: true });
+
+    const reasoning = await dispatch(local, "/v1/responses", "POST", {
+      model: "m",
+      input: [
+        { type: "reasoning", id: "rs_1", summary: [{ type: "summary_text", text: "think" }], content: null, encrypted_content: null },
+        { type: "message", role: "user", content: "hi" },
+      ],
+    });
+    expect(reasoning.status).toBe(200);
+
+    const messageNull = await dispatch(local, "/v1/responses", "POST", {
+      model: "m",
+      input: [{ type: "message", role: "user", content: null }],
+    });
+    expect(messageNull.status).toBe(200);
+
+    const nonMessageBad = await dispatch(local, "/v1/responses", "POST", {
+      model: "m",
+      input: [{ type: "reasoning", content: 123 }],
+    });
+    expect(nonMessageBad.status).toBe(200);
+  });
+
   test("Anthropic streaming handles a final chunk without a newline", async () => {
     const sse = 'data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}';
     const local = createProtocolRoutes(makeBackend({

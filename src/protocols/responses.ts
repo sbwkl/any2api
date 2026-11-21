@@ -67,7 +67,9 @@ function validateResponses(body: any): string | null {
   if (Array.isArray(body.input)) {
     for (const item of body.input) {
       if (!item || typeof item !== "object" || Array.isArray(item)) return "input item must be an object";
-      if (item.content !== undefined) {
+      // 只有 message 项需要校验 content；reasoning 等项的 content 可为 null/任意值，直接忽略。
+      const isMessage = item.type === "message" || (!item.type && item.role);
+      if (isMessage && item.content !== undefined && item.content !== null) {
         if (typeof item.content !== "string" && !Array.isArray(item.content))
           return "input.content must be a string or array";
         if (Array.isArray(item.content)) {
