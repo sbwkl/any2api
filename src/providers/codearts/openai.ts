@@ -237,7 +237,12 @@ export class OpenAIFacade {
     // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对非 stream 请求也回 SSE）
     const ct = resp.headers.get("content-type") ?? "";
     if (ct.includes("text/event-stream")) {
-      const completion = await aggregateSseToCompletion(resp.body!);
+      let completion: any;
+      try {
+        completion = await aggregateSseToCompletion(resp.body!);
+      } catch (e: any) {
+        return jsonError(502, `upstream_error: ${e?.message ?? String(e)}`);
+      }
       return new Response(JSON.stringify(completion), { status: 200, headers: { "Content-Type": "application/json" } });
     }
     const text = await resp.text();

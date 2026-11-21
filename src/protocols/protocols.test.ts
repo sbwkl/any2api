@@ -131,6 +131,14 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect(r1.status).toBe(400);
     const r2 = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi", session_id: 123 });
     expect(r2.status).toBe(400);
+    const r3 = await dispatch(local, "/v1/responses", "POST", {
+      model: "m", input: [{ type: "message", role: "user", content: 123 }],
+    });
+    expect(r3.status).toBe(400);
+    const r4 = await dispatch(local, "/v1/responses", "POST", {
+      model: "m", input: [{ type: "message", role: "user", content: [123] }],
+    });
+    expect(r4.status).toBe(400);
   });
 
   test("Anthropic streaming handles a final chunk without a newline", async () => {

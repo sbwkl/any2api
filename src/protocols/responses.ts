@@ -12,7 +12,9 @@ function inputItemsToMessages(input: any): any[] {
       const c = item.content;
       const text = typeof c === "string"
         ? c
-        : (c ?? []).map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join("");
+        : Array.isArray(c)
+          ? c.map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join("")
+          : "";
       if (text) out.push({ role: item.role ?? "user", content: text });
     } else if (item?.type === "function_call") {
       out.push({
@@ -64,6 +66,16 @@ function validateResponses(body: any): string | null {
   if (Array.isArray(body.input)) {
     for (const item of body.input) {
       if (!item || typeof item !== "object" || Array.isArray(item)) return "input item must be an object";
+      if (item.content !== undefined) {
+        if (typeof item.content !== "string" && !Array.isArray(item.content))
+          return "input.content must be a string or array";
+        if (Array.isArray(item.content)) {
+          for (const part of item.content) {
+            if (typeof part !== "string" && (!part || typeof part !== "object" || Array.isArray(part)))
+              return "input.content[] must be strings or objects";
+          }
+        }
+      }
     }
   }
   if (body.session_id !== undefined && typeof body.session_id !== "string") return "session_id must be a string";

@@ -13,7 +13,7 @@ Owner：wayne
 
 - **P0-1 错误边界**：`CodeBuddyFacade.respond` 捕获 `postChat`/SSE 聚合异常 → 502 OpenAI 错误；共享协议层用 `safeRespond` 捕获 backend 异常 → 502；注册表在 `route.handle` 外加兜底 → JSON 500（不再裸 500 文本）。
 - **P0-2 空流**：`aggregateSseToCompletion` 在没有 choices 时抛错，调用方转 502，不再把空流当成功。
-- **P1-3 类型校验**：Anthropic `messages`/`content`/`metadata.user_id`、Responses `input`/`session_id`/`user`、OpenAI `messages`/`tools` 非法类型 → 400。
+- **P1-3 类型校验**：Anthropic `messages`/`content`/`metadata.user_id`、Responses `input`/`input[].content`/`session_id`/`user`、OpenAI `messages`/`tools` 非法类型 → 400。
 - **P1-4 能力契约**：`errorShape` 改为布尔 `normalizeErrors`（CodeBuddy=true，codearts=false），Anthropic/Responses 路由使用同一语义。
 - **P1-5 共享 SSE**：协议层改用 `shared/sse.ts` 的 `sseData`，覆盖 `[DONE]` 与末帧无换行。
 - **P1-6 前缀校验**：注册表启动时校验 prefix 非空、唯一、最多一个空 prefix、以 `/` 开头且不以 `/` 结尾。
@@ -28,7 +28,7 @@ Owner：wayne
 
 - **新增 R20**：When 上游请求或 SSE 聚合抛出异常, the system shall 返回 502 的 OpenAI 错误结构；注册表对未捕获的 provider 异常返回 JSON 500。
 - **新增 R21**：When 上游 SSE 没有任何 choices, the system shall 返回 502，不得返回成功空回答。
-- **新增 R22**：When Anthropic/Responses/OpenAI 请求体字段类型不合法（`messages`/`input`/`content`/`metadata.user_id`/`session_id`/`user`/`tools`）, the system shall 返回 400 协议错误。
+- **新增 R22**：When Anthropic/Responses/OpenAI 请求体字段类型不合法（`messages`/`input`/`input[].content`/`content`/`metadata.user_id`/`session_id`/`user`/`tools`）, the system shall 返回 400 协议错误。
 - **新增 R23**：When provider prefix 重复、出现多个空 prefix、或格式不合法（不以 `/` 开头、以 `/` 结尾、为 `/`）, the system shall 启动失败并给出明确错误。
 - **修改 R17**：`ProtocolCapabilities` 的错误契约字段由 `errorShape` 改为布尔 `normalizeErrors`。
 - **不改变**：正常流式/非流式响应、工具调用、usage、队列协议。
@@ -53,15 +53,15 @@ Owner：wayne
 
 ## 5. 验证与观测
 
-- `bun test` → **82 pass / 0 fail / 292 expect() calls**（11 个测试文件）。
+- `bun test` → **83 pass / 0 fail / 296 expect() calls**（12 个测试文件）。
 - 新增回归：
   - fetch reject → OpenAI 502；Anthropic/Responses backend 异常 → 502；注册表 route 抛错 → JSON 500。
-  - 空 SSE / 只有 error 事件的流 → 502。
-  - `messages:{}`、`content:123`、`metadata.user_id:123`、`input:{}`、`session_id:123`、OpenAI `tools:{}` → 400。
+  - 空 SSE / 只有 error 事件的流 → 502（CodeBuddy 与 CodeArts 均覆盖；CodeArts 见 `providers/codearts/openai.test.ts`）。
+  - `messages:{}`、`content:123`、`metadata.user_id:123`、`input:{}`、`input[].content:123`、`input[].content:[123]`、`session_id:123`、OpenAI `tools:{}` → 400。
   - 末帧无换行 → Anthropic 流式正常输出。
   - 重复 prefix / 两个空 prefix / `codebuddy` / `/codebuddy/` → 启动失败。
 - 构建：`bun build src/index.ts --target=bun` → 成功。
-- 临时集成分支 `tmp/integration-codebuddy`（main + feat）→ **82 pass / 0 fail**，build 通过，已删除。
+- 临时集成分支 `tmp/integration-codebuddy`（main + feat）→ **83 pass / 0 fail**，build 通过，已删除。
 
 ## 6. 回滚方案
 
@@ -84,10 +84,10 @@ Owner：wayne
 - 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
 - 前置：[CHG-0003](CHG-0003-provider-registry-protocols.md)
 - 代码：`src/protocols/`、`src/registry.ts`、`src/shared/sse.ts`、`src/providers/codebuddy/openai.ts`
-- 测试：`registry.test.ts`、`protocols/protocols.test.ts`、`shared/sse.test.ts`、`openai.test.ts`
+- 测试：`registry.test.ts`、`protocols/protocols.test.ts`、`shared/sse.test.ts`、`providers/codebuddy/openai.test.ts`、`providers/codearts/openai.test.ts`
 
 ## 9. 变更记录
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 开发中 | wayne | P0/P1 修复；82 tests 全绿；新增回归覆盖网络 reject、空 SSE、畸形 body、重复 prefix、末帧无换行；临时集成分支通过；未部署 |
+| 开发中 | wayne | P0/P1 修复；83 tests 全绿；新增回归覆盖网络 reject、空 SSE（CodeBuddy + CodeArts）、畸形 body（含 Responses 嵌套 content）、重复 prefix、末帧无换行；临时集成分支通过；未部署 |

@@ -94,7 +94,7 @@ Owner：wayne
 - **R19**：When 上游返回 `code 6020`, the system shall 读取 `retry_after`（或调用 `/v2/chat/queue/status` 获取），等待后重试一次；若等待超过 `CODEBUDDY_QUEUE_TIMEOUT_MS`（默认 120000）或重试仍为 6020，返回 429；`code 6021/6022/14003` 映射为 429 并保留上游 message。
 - **R20**：When 上游请求或 SSE 聚合抛出异常, the system shall 返回 502 的 OpenAI 错误结构；注册表对未捕获的 provider 异常返回 JSON 500。
 - **R21**：When 上游 SSE 没有任何 choices, the system shall 返回 502，不得返回成功空回答。
-- **R22**：When Anthropic/Responses/OpenAI 请求体字段类型不合法（`messages`/`input`/`content`/`metadata.user_id`/`session_id`/`user`/`tools`）, the system shall 返回 400 协议错误。
+- **R22**：When Anthropic/Responses/OpenAI 请求体字段类型不合法（`messages`/`input`/`input[].content`/`content`/`metadata.user_id`/`session_id`/`user`/`tools`）, the system shall 返回 400 协议错误。
 - **R23**：When provider prefix 重复、出现多个空 prefix、或格式不合法（不以 `/` 开头、以 `/` 结尾、为 `/`）, the system shall 启动失败并给出明确错误。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
