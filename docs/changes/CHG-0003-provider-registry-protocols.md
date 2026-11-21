@@ -13,7 +13,7 @@ Owner：wayne
 
 1. **静态注册表 + 相对路由**：provider 不再知道自己的公开前缀；`src/index.ts` 不再硬编码 if/else；新增 provider 只加一行注册。
 2. **统一 404/405/503 + 聚合 health**：最长前缀 + 路径边界匹配，`/healthz` 聚合各 provider 状态。
-3. **共享协议层**：Anthropic Messages / Responses 适配抽到 `src/protocols/`，只依赖 `ChatBackend`；provider 差异用 `ProtocolCapabilities` 表达（`toolChoice`、`errorShape`、`thinking`），共享层不出现 `provider.name` 判断。
+3. **共享协议层**：Anthropic Messages / Responses 适配抽到 `src/protocols/`，只依赖 `ChatBackend`；provider 差异用 `ProtocolCapabilities` 表达（`toolChoice`、`normalizeErrors`、`thinking`），共享层不出现 `provider.name` 判断。
 4. **共享 SSE**：`sseData` / `aggregateSseToCompletion` 抽到 `src/shared/sse.ts`。
 
 本轮 **codebuddy 与 codearts 均切到共享协议层**；codearts 的私有 anthropic/responses/SSE 副本已删除，协议差异通过 capabilities 表达。
@@ -31,7 +31,7 @@ Owner：wayne
 ## 3. 行为 / AC delta
 
 - **新增 R16**：When 服务启动, the system shall 通过注册表按 provider 前缀分发路由；匹配使用最长前缀 + 路径边界（`prefix` 或 `prefix + "/"`），未知路径返回 404，已知路径错误方法返回 405，可选 provider 不可用时其前缀返回 503，`required` provider 创建失败时进程退出。
-- **新增 R17**：The system shall 通过共享协议层（`src/protocols/`）提供 Anthropic Messages 与 Responses 路由；provider 差异通过 `ProtocolCapabilities`（`toolChoice`、`errorShape`、`thinking`）表达，共享层不得按 provider 名称分支。
+- **新增 R17**：The system shall 通过共享协议层（`src/protocols/`）提供 Anthropic Messages 与 Responses 路由；provider 差异通过 `ProtocolCapabilities`（`toolChoice`、`normalizeErrors`、`thinking`）表达，共享层不得按 provider 名称分支。
 - **新增 R18**：When 收到 `GET /healthz`, the system shall 返回聚合 JSON（`{ok, providers:[...]}`），其中每个 provider 报告 `ok` 与可选详情。
 - **修改**：`/healthz` 由 codearts 的纯文本 `ok` 改为聚合 JSON（调用方应使用 JSON 解析）。
 - **不改变**：`/v1/*`（codearts）与 `/codebuddy/v1/*`（codebuddy）的路径、请求/响应语义；codebuddy 的模型目录、Anthropic/Responses 行为。

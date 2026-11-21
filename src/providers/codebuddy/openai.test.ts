@@ -173,6 +173,47 @@ describe("openai facade", () => {
     expect(chatCalls).toBe(2);
   });
 
+  test("network failure becomes a 502 OpenAI error", async () => {
+    const fetchImpl = (async () => { throw new Error("network down"); }) as typeof fetch;
+    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
+    const resp = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    }));
+    expect(resp.status).toBe(502);
+    const j: any = await resp.json();
+    expect(j.error.message).toContain("network down");
+  });
+
+  test("empty upstream stream becomes a 502", async () => {
+    const fetchImpl = (async () => new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } })) as typeof fetch;
+    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
+    const resp = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    }));
+    expect(resp.status).toBe(502);
+  });
+
+  test("malformed messages/tools return 400", async () => {
+    const facade = new CodeBuddyFacade(config, credentials);
+    const r1 = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{}],
+      stream: false,
+    }));
+    expect(r1.status).toBe(400);
+    const r2 = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      tools: {},
+      stream: false,
+    }));
+    expect(r2.status).toBe(400);
+  });
+
   test("6021 queue full maps to 429", async () => {
     const fetchImpl = (async () => Response.json({ code: 6021, msg: "queue full" })) as typeof fetch;
     const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });

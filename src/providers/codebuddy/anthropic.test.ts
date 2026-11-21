@@ -4,7 +4,7 @@ import type { ChatBackend, ProtocolCapabilities } from "../../protocols/types";
 import { CodeBuddyFacade } from "./openai";
 import type { Credentials, ProductConfig } from "./types";
 
-const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", errorShape: "anthropic" };
+const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", normalizeErrors: true };
 
 const config: ProductConfig = {
   endpoint: "https://example.test",
@@ -208,7 +208,7 @@ describe("anthropic adapter", () => {
       model: "hy4flash-free",
       max_tokens: 64,
       messages: [{ role: "user", content: "hi" }],
-    }), { toolChoice: "auto-only", errorShape: "passthrough" });
+    }), { toolChoice: "auto-only", normalizeErrors: false });
     expect(resp.status).toBe(400);
     const j: any = await resp.json();
     // passthrough：保留 provider 的 OpenAI 错误结构，不包 Anthropic 的 {type:"error"} 信封

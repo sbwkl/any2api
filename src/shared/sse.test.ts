@@ -52,4 +52,20 @@ describe("sse aggregation", () => {
     expect(out.choices[0].message.content).toBe("ok");
     expect(out.choices[0].finish_reason).toBe("stop");
   });
+
+  test("handles a final data line without a trailing newline", async () => {
+    const text = 'data: {"id":"3","model":"m","created":3,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}';
+    const out = await aggregateSseToCompletion(streamOf(text));
+    expect(out.choices[0].message.content).toBe("ok");
+    expect(out.choices[0].finish_reason).toBe("stop");
+  });
+
+  test("empty stream is an error, not a successful empty completion", async () => {
+    await expect(aggregateSseToCompletion(streamOf(""))).rejects.toThrow("no choices");
+  });
+
+  test("error-only stream is an error", async () => {
+    const text = 'data: {"error":{"message":"bad","code":1}}\n\n';
+    await expect(aggregateSseToCompletion(streamOf(text))).rejects.toThrow("no choices");
+  });
 });

@@ -101,4 +101,42 @@ describe("provider registry", () => {
     };
     await expect(mountProviders([requiredBad])).rejects.toThrow("fatal");
   });
+
+  test("rejects duplicate prefixes", async () => {
+    const a: ProviderModule = { ...cbProvider, name: "cb1" };
+    const b: ProviderModule = { ...cbProvider, name: "cb2" };
+    await expect(mountProviders([a, b])).rejects.toThrow("duplicate provider prefix");
+  });
+
+  test("rejects more than one empty prefix", async () => {
+    await expect(mountProviders([defaultProvider, { ...cbProvider, prefix: "" }]))
+      .rejects.toThrow("empty prefix");
+  });
+
+  test("rejects invalid prefix formats", async () => {
+    await expect(mountProviders([{ ...cbProvider, prefix: "codebuddy" }]))
+      .rejects.toThrow('start with "/"');
+    await expect(mountProviders([{ ...cbProvider, prefix: "/codebuddy/" }]))
+      .rejects.toThrow('end with "/"');
+  });
+
+  test("route exceptions become JSON 500 instead of a bare 500", async () => {
+    const boom: ProviderModule = {
+      name: "boom",
+      prefix: "/boom",
+      create: async () => ({
+        routes: [{
+          method: "GET",
+          path: "/x",
+          handle: () => { throw new Error("boom"); },
+        }],
+      }),
+    };
+    const handler = await mountProviders([boom]);
+    const resp = await handler(req("/boom/x"));
+    expect(resp.status).toBe(500);
+    const j: any = await resp.json();
+    expect(j.error.type).toBe("internal_error");
+    expect(j.error.message).toContain("boom");
+  });
 });

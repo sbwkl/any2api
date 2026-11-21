@@ -17,8 +17,8 @@ export interface ChatBackend {
 export interface ProtocolCapabilities {
   /** full：支持 required/forced function；auto-only：上游只接受 auto */
   toolChoice?: "full" | "auto-only";
-  /** 上游错误如何呈现：passthrough 保留 provider 原样；anthropic/responses 归一为对应协议 */
-  errorShape?: "passthrough" | "anthropic" | "responses";
+  /** 是否把上游错误归一为对应协议错误（默认 true）；false = 透传 provider 原样响应 */
+  normalizeErrors?: boolean;
   /** 是否输出 thinking 块（默认 true） */
   thinking?: boolean;
 }

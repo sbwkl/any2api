@@ -65,6 +65,36 @@ async function healthResponse(mounted: MountedProvider[]): Promise<Response> {
 }
 
 export async function mountProviders(modules: ProviderModule[]): Promise<(req: Request) => Promise<Response>> {
+  // 启动时校验前缀：非空、唯一、最多一个空 prefix、格式规范。
+  const seen = new Set<string>();
+  let defaultCount = 0;
+  for (const module of modules) {
+    if (!module.name || typeof module.name !== "string") {
+      throw new Error("[any2api] provider name is required");
+    }
+    if (typeof module.prefix !== "string") {
+      throw new Error(`[any2api] provider ${module.name} prefix must be a string`);
+    }
+    if (module.prefix !== "") {
+      if (!module.prefix.startsWith("/")) {
+        throw new Error(`[any2api] provider ${module.name} prefix must start with "/"`);
+      }
+      if (module.prefix === "/" || module.prefix.endsWith("/")) {
+        throw new Error(`[any2api] provider ${module.name} prefix must not be "/" or end with "/"`);
+      }
+    }
+    if (module.prefix === "") {
+      defaultCount++;
+      if (defaultCount > 1) {
+        throw new Error("[any2api] at most one provider with an empty prefix is allowed");
+      }
+    }
+    if (seen.has(module.prefix)) {
+      throw new Error(`[any2api] duplicate provider prefix "${module.prefix}"`);
+    }
+    seen.add(module.prefix);
+  }
+
   const mounted: MountedProvider[] = [];
   for (const module of modules) {
     try {
@@ -97,7 +127,16 @@ export async function mountProviders(modules: ProviderModule[]): Promise<(req: R
       const rel = stripPrefix(path, prefix);
       if (!m.instance) return providerUnavailable(m.module.name, m.error);
       const route = m.instance.routes.find((r) => r.path === rel && r.method === req.method);
-      if (route) return route.handle(req);
+      if (route) {
+        try {
+          return await route.handle(req);
+        } catch (e: any) {
+          return Response.json(
+            { error: { message: `provider ${m.module.name} error: ${e?.message ?? String(e)}`, type: "internal_error", code: null } },
+            { status: 500 },
+          );
+        }
+      }
       const pathExists = m.instance.routes.some((r) => r.path === rel);
       if (pathExists) return new Response("method not allowed", { status: 405 });
       return new Response("not found", { status: 404 });

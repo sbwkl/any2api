@@ -4,7 +4,7 @@ import type { ChatBackend, ProtocolCapabilities } from "../../protocols/types";
 import { CodeBuddyFacade } from "./openai";
 import type { Credentials, ProductConfig } from "./types";
 
-const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", errorShape: "responses" };
+const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", normalizeErrors: true };
 
 const config: ProductConfig = {
   endpoint: "https://example.test",
@@ -153,7 +153,7 @@ describe("responses adapter", () => {
   test("passthrough error shape returns the provider response unchanged", async () => {
     const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as typeof fetch;
     const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
-    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), { toolChoice: "auto-only", errorShape: "passthrough" });
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), { toolChoice: "auto-only", normalizeErrors: false });
     expect(resp.status).toBe(400);
     const j: any = await resp.json();
     // passthrough：保留 provider 的 OpenAI 错误结构，不包 Responses 的错误信封

@@ -1,6 +1,8 @@
 // Anthropic Messages API 适配 — 共享协议层
 // 依赖 ChatBackend.respond（OpenAI chat 形态）；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
+import { safeRespond } from "./util";
+import { sseData } from "../shared/sse";
 
 function systemToMessage(system: any): any | null {
   if (!system) return null;
@@ -81,29 +83,35 @@ export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   return out;
 }
 
-async function* sseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<any> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, idx).trim();
-      buf = buf.slice(idx + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try { yield JSON.parse(payload); } catch { /* ignore */ }
-    }
-  }
-}
-
 const STOP_REASON: Record<string, string> = {
   stop: "end_turn", tool_calls: "tool_use", length: "max_tokens", content_filter: "end_turn",
 };
+
+function validateAnthropic(body: any): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "body must be an object";
+  if (!Array.isArray(body.messages)) return "messages must be an array";
+  if (body.system !== undefined && typeof body.system !== "string" && !Array.isArray(body.system))
+    return "system must be a string or array";
+  for (const m of body.messages) {
+    if (!m || typeof m !== "object" || Array.isArray(m)) return "message must be an object";
+    if (typeof m.role !== "string") return "message.role must be a string";
+    if (typeof m.content !== "string" && !Array.isArray(m.content))
+      return "message.content must be a string or array";
+    if (Array.isArray(m.content)) {
+      for (const block of m.content) {
+        if (!block || typeof block !== "object" || Array.isArray(block)) return "content block must be an object";
+      }
+    }
+  }
+  if (body.metadata !== undefined) {
+    if (!body.metadata || typeof body.metadata !== "object" || Array.isArray(body.metadata))
+      return "metadata must be an object";
+    if (body.metadata.user_id !== undefined && typeof body.metadata.user_id !== "string")
+      return "metadata.user_id must be a string";
+  }
+  if (body.tools !== undefined && !Array.isArray(body.tools)) return "tools must be an array";
+  return null;
+}
 
 export async function handleAnthropicMessages(
   backend: ChatBackend,
@@ -112,6 +120,8 @@ export async function handleAnthropicMessages(
 ): Promise<Response> {
   const body = await req.json().catch(() => null);
   if (!body) return anthroError(400, "invalid JSON body");
+  const invalid = validateAnthropic(body);
+  if (invalid) return anthroError(400, `invalid request: ${invalid}`);
   const sessionKey = (
     req.headers.get("x-codebuddy-session") ||
     req.headers.get("x-anthropic-session") ||
@@ -124,12 +134,12 @@ export async function handleAnthropicMessages(
   const model = body.model ?? undefined;
 
   if (body.stream !== true) {
-    const resp = await backend.respond(openaiBody, { stream: false, sessionKey, profile });
+    const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile });
     if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
     return Response.json(completionToAnthropic(await resp.json(), model, thinking));
   }
 
-  const resp = await backend.respond({ ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
+  const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
   if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
   const sse = await anthropicSse(resp.body, thinking, model);
   return new Response(sse, {
@@ -139,7 +149,7 @@ export async function handleAnthropicMessages(
 }
 
 async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
-  if (caps.errorShape === "passthrough") return resp;
+  if (caps.normalizeErrors === false) return resp;
   let message = `upstream ${resp.status}`;
   let type = "api_error";
   try {
@@ -228,7 +238,10 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
             usage: { input_tokens: 0, output_tokens: 0 },
           },
         });
-        for await (const chunk of sseData(upstream)) {
+        for await (const data of sseData(upstream)) {
+        if (!data || data === "[DONE]") continue;
+        let chunk: any;
+        try { chunk = JSON.parse(data); } catch { continue; }
           if (chunk.model && !outModel) outModel = chunk.model;
           if (chunk.usage) outputTokens = chunk.usage.completion_tokens ?? outputTokens;
           const choice = chunk.choices?.[0];

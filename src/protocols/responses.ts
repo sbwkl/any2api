@@ -1,6 +1,8 @@
 // OpenAI Responses API 适配 — 共享协议层
 // 依赖 ChatBackend.respond；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
+import { safeRespond } from "./util";
+import { sseData } from "../shared/sse";
 
 function inputItemsToMessages(input: any): any[] {
   if (typeof input === "string") return [{ role: "user", content: input }];
@@ -55,24 +57,20 @@ export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   return out;
 }
 
-async function* sseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<any> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, idx).trim();
-      buf = buf.slice(idx + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try { yield JSON.parse(payload); } catch { /* ignore */ }
+function validateResponses(body: any): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "body must be an object";
+  if (body.input !== undefined && typeof body.input !== "string" && !Array.isArray(body.input))
+    return "input must be a string or array";
+  if (Array.isArray(body.input)) {
+    for (const item of body.input) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return "input item must be an object";
     }
   }
+  if (body.session_id !== undefined && typeof body.session_id !== "string") return "session_id must be a string";
+  if (body.user !== undefined && typeof body.user !== "string") return "user must be a string";
+  if (body.instructions !== undefined && typeof body.instructions !== "string") return "instructions must be a string";
+  if (body.tools !== undefined && !Array.isArray(body.tools)) return "tools must be an array";
+  return null;
 }
 
 export async function handleResponses(
@@ -82,6 +80,10 @@ export async function handleResponses(
 ): Promise<Response> {
   const body = await req.json().catch(() => null);
   if (!body) return Response.json({ error: { message: "invalid JSON body", type: "invalid_request_error" } }, { status: 400 });
+  const invalid = validateResponses(body);
+  if (invalid) {
+    return Response.json({ error: { message: `invalid request: ${invalid}`, type: "invalid_request_error" } }, { status: 400 });
+  }
   const sessionKey = (
     req.headers.get("x-codebuddy-session") ||
     req.headers.get("x-responses-session") ||
@@ -93,12 +95,12 @@ export async function handleResponses(
   const openaiBody = responsesToOpenAi(body, caps);
 
   if (body.stream !== true) {
-    const resp = await backend.respond(openaiBody, { stream: false, sessionKey, profile });
+    const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile });
     if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
     return Response.json(completionToResponse(await resp.json(), body.model));
   }
 
-  const resp = await backend.respond({ ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
+  const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
   if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
   const sse = await responsesSse(resp.body, body.model);
   return new Response(sse, {
@@ -108,7 +110,7 @@ export async function handleResponses(
 }
 
 async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
-  if (caps.errorShape === "passthrough") return resp;
+  if (caps.normalizeErrors === false) return resp;
   let message = `upstream ${resp.status}`;
   let code: any = resp.status;
   try {
@@ -171,7 +173,10 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
       });
       try {
         ev(ctrl, "response.created", { type: "response.created", response: skeleton() });
-        for await (const chunk of sseData(upstream)) {
+        for await (const data of sseData(upstream)) {
+        if (!data || data === "[DONE]") continue;
+        let chunk: any;
+        try { chunk = JSON.parse(data); } catch { continue; }
           if (chunk.model && !outModel) outModel = chunk.model;
           if (chunk.usage)
             usage = {

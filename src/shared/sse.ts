@@ -94,6 +94,9 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
     }
   }
 
+  // 空流 / 只有错误事件的流不是成功响应
+  if (slots.size === 0) throw new Error("no choices in upstream SSE");
+
   const choices = [...slots.keys()].sort((a, b) => a - b).map((idx) => {
     const s = slots.get(idx)!;
     const message: any = { role: "assistant", content: s.content };

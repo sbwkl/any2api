@@ -30,7 +30,7 @@ function dispatch(routes: ReturnType<typeof createProtocolRoutes>, path: string,
 }
 
 describe("shared protocol routes (codearts capabilities)", () => {
-  const routes = createProtocolRoutes(makeBackend(), { toolChoice: "full", errorShape: "passthrough" });
+  const routes = createProtocolRoutes(makeBackend(), { toolChoice: "full", normalizeErrors: false });
 
   test("GET /v1/models returns the backend model list", async () => {
     const resp = await dispatch(routes, "/v1/models", "GET");
@@ -43,7 +43,7 @@ describe("shared protocol routes (codearts capabilities)", () => {
     let seen: any;
     const local = createProtocolRoutes(makeBackend({
       respond: async (body) => { seen = body; return Response.json(completion); },
-    }), { toolChoice: "full", errorShape: "passthrough" });
+    }), { toolChoice: "full", normalizeErrors: false });
     const resp = await dispatch(local, "/v1/messages", "POST", {
       model: "m",
       max_tokens: 10,
@@ -60,7 +60,7 @@ describe("shared protocol routes (codearts capabilities)", () => {
   test("Anthropic passthrough returns the provider error unchanged", async () => {
     const local = createProtocolRoutes(makeBackend({
       respond: async () => Response.json({ code: 123, msg: "bad" }, { status: 400 }),
-    }), { toolChoice: "full", errorShape: "passthrough" });
+    }), { toolChoice: "full", normalizeErrors: false });
     const resp = await dispatch(local, "/v1/messages", "POST", {
       model: "m", max_tokens: 10, messages: [{ role: "user", content: "hi" }],
     });
@@ -73,7 +73,7 @@ describe("shared protocol routes (codearts capabilities)", () => {
     let seen: any;
     const local = createProtocolRoutes(makeBackend({
       respond: async (body) => { seen = body; return Response.json(completion); },
-    }), { toolChoice: "full", errorShape: "passthrough" });
+    }), { toolChoice: "full", normalizeErrors: false });
     const resp = await dispatch(local, "/v1/responses", "POST", {
       model: "m",
       input: "hi",
@@ -89,7 +89,7 @@ describe("shared protocol routes (codearts capabilities)", () => {
   test("Responses passthrough returns the provider error unchanged", async () => {
     const local = createProtocolRoutes(makeBackend({
       respond: async () => Response.json({ code: 123, msg: "bad" }, { status: 400 }),
-    }), { toolChoice: "full", errorShape: "passthrough" });
+    }), { toolChoice: "full", normalizeErrors: false });
     const resp = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi" });
     expect(resp.status).toBe(400);
     const j: any = await resp.json();
@@ -101,5 +101,47 @@ describe("shared protocol routes (codearts capabilities)", () => {
     const j: any = await resp.json();
     expect(j.ok).toBe(true);
     expect(j.custom).toBe(1);
+  });
+
+  test("backend exceptions become 502 on Anthropic and Responses", async () => {
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => { throw new Error("network down"); },
+    }), { toolChoice: "full", normalizeErrors: true });
+    const a = await dispatch(local, "/v1/messages", "POST", {
+      model: "m", max_tokens: 10, messages: [{ role: "user", content: "hi" }],
+    });
+    expect(a.status).toBe(502);
+    const r = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi" });
+    expect(r.status).toBe(502);
+  });
+
+  test("malformed Anthropic and Responses bodies return 400", async () => {
+    const local = createProtocolRoutes(makeBackend(), { normalizeErrors: true });
+    const a1 = await dispatch(local, "/v1/messages", "POST", { model: "m", max_tokens: 1, messages: {} });
+    expect(a1.status).toBe(400);
+    const a2 = await dispatch(local, "/v1/messages", "POST", {
+      model: "m", max_tokens: 1, messages: [{ role: "user", content: 123 }],
+    });
+    expect(a2.status).toBe(400);
+    const a3 = await dispatch(local, "/v1/messages", "POST", {
+      model: "m", max_tokens: 1, messages: [{ role: "user", content: "hi" }], metadata: { user_id: 123 },
+    });
+    expect(a3.status).toBe(400);
+    const r1 = await dispatch(local, "/v1/responses", "POST", { model: "m", input: {} });
+    expect(r1.status).toBe(400);
+    const r2 = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi", session_id: 123 });
+    expect(r2.status).toBe(400);
+  });
+
+  test("Anthropic streaming handles a final chunk without a newline", async () => {
+    const sse = 'data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}';
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+    }), { normalizeErrors: true });
+    const resp = await dispatch(local, "/v1/messages", "POST", {
+      model: "m", max_tokens: 10, stream: true, messages: [{ role: "user", content: "hi" }],
+    });
+    const text = await resp.text();
+    expect(text).toContain("hi");
   });
 });

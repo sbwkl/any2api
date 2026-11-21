@@ -72,6 +72,12 @@ export class CodeBuddyFacade {
       return jsonError(400, "invalid JSON body");
     }
     if (!body || !Array.isArray(body.messages)) return jsonError(400, "messages is required");
+    for (const m of body.messages) {
+      if (!m || typeof m !== "object" || Array.isArray(m) || typeof m.role !== "string") {
+        return jsonError(400, "invalid message");
+      }
+    }
+    if (body.tools !== undefined && !Array.isArray(body.tools)) return jsonError(400, "tools must be an array");
 
     let messages: any[];
     try {
@@ -96,6 +102,14 @@ export class CodeBuddyFacade {
 
   // 跨协议共享管线：body 为 OpenAI chat 形态；wantStream 决定响应格式（上游始终流式）。
   async respond(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
+    try {
+      return await this.respondInner(body, wantStream, sessionKey, profile);
+    } catch (e: any) {
+      return jsonError(502, `upstream_error: ${e?.message ?? String(e)}`);
+    }
+  }
+
+  private async respondInner(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
     let messages: any[];
     try {
       messages = normalizeMessages(body.messages ?? []);
