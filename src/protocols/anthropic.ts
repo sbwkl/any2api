@@ -1,9 +1,7 @@
-// Anthropic Messages API 适配 — /codebuddy/v1/messages ↔ 内部 OpenAI chat 管线
-// 覆盖 Claude Code / Claude Desktop 所需子集：system、text/thinking/tool_use/tool_result 块、
-// tools、tool_choice、流式 SSE（message_start/content_block_*/message_delta/message_stop）。
-import type { CodeBuddyFacade } from "./openai";
+// Anthropic Messages API 适配 — 共享协议层
+// 依赖 ChatBackend.respond（OpenAI chat 形态）；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
+import type { ChatBackend, ProtocolCapabilities } from "./types";
 
-// ---- 请求翻译：Anthropic → OpenAI chat ----
 function systemToMessage(system: any): any | null {
   if (!system) return null;
   if (typeof system === "string") return { role: "system", content: system };
@@ -45,7 +43,7 @@ function contentToOpenAi(role: string, content: any): any[] {
         });
         break;
       case "image": text += (text ? "\n" : "") + "[image omitted]"; break;
-      case "thinking": break; // 上游自行产生推理，不回注
+      case "thinking": break;
       default: break;
     }
   }
@@ -54,7 +52,7 @@ function contentToOpenAi(role: string, content: any): any[] {
   return out;
 }
 
-export function anthropicToOpenAi(body: any): any {
+export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): any {
   const messages: any[] = [];
   const sys = systemToMessage(body.system);
   if (sys) messages.push(sys);
@@ -69,14 +67,20 @@ export function anthropicToOpenAi(body: any): any {
     out.tools = body.tools
       .filter((t) => t?.type === "custom" || (!t?.type && t?.name))
       .map((t) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.input_schema ?? { type: "object" } } }));
-  // CodeBuddy 上游只支持 auto；any/tool 映射为 auto，避免上游拒绝。
+
   const tc = body.tool_choice;
-  if (tc?.type === "any" || tc?.type === "tool" || tc?.type === "auto") out.tool_choice = "auto";
-  else if (tc?.type === "none") out.tool_choice = "none";
+  if (caps.toolChoice === "auto-only") {
+    if (tc?.type === "any" || tc?.type === "tool" || tc?.type === "auto") out.tool_choice = "auto";
+    else if (tc?.type === "none") out.tool_choice = "none";
+  } else {
+    if (tc?.type === "any") out.tool_choice = "required";
+    else if (tc?.type === "tool") out.tool_choice = { type: "function", function: { name: tc.name } };
+    else if (tc?.type === "auto") out.tool_choice = "auto";
+    else if (tc?.type === "none") out.tool_choice = "none";
+  }
   return out;
 }
 
-// ---- SSE 读取 ----
 async function* sseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<any> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -92,7 +96,7 @@ async function* sseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<any>
       if (!line.startsWith("data:")) continue;
       const payload = line.slice(5).trim();
       if (!payload || payload === "[DONE]") continue;
-      try { yield JSON.parse(payload); } catch { /* 忽略坏帧 */ }
+      try { yield JSON.parse(payload); } catch { /* ignore */ }
     }
   }
 }
@@ -101,7 +105,11 @@ const STOP_REASON: Record<string, string> = {
   stop: "end_turn", tool_calls: "tool_use", length: "max_tokens", content_filter: "end_turn",
 };
 
-export async function handleAnthropicMessages(facade: CodeBuddyFacade, req: Request): Promise<Response> {
+export async function handleAnthropicMessages(
+  backend: ChatBackend,
+  req: Request,
+  caps: ProtocolCapabilities = {},
+): Promise<Response> {
   const body = await req.json().catch(() => null);
   if (!body) return anthroError(400, "invalid JSON body");
   const sessionKey = (
@@ -110,32 +118,33 @@ export async function handleAnthropicMessages(facade: CodeBuddyFacade, req: Requ
     body.metadata?.user_id ||
     "default"
   ).slice(0, 128);
-  const openaiBody = anthropicToOpenAi(body);
-  const profile = facade.profileFor(req);
-  const thinking = body.thinking?.type === "enabled";
+  const profile = backend.profileFor?.(req);
+  const openaiBody = anthropicToOpenAi(body, caps);
+  const thinking = caps.thinking !== false && body.thinking?.type === "enabled";
   const model = body.model ?? undefined;
 
   if (body.stream !== true) {
-    const resp = await facade.respond(openaiBody, false, sessionKey, profile);
-    if (!resp.ok) return await relayError(resp);
+    const resp = await backend.respond(openaiBody, { stream: false, sessionKey, profile });
+    if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
     return Response.json(completionToAnthropic(await resp.json(), model, thinking));
   }
 
-  const resp = await facade.respond({ ...openaiBody, stream: true }, true, sessionKey, profile);
-  if (!resp.ok || !resp.body) return await relayError(resp);
-  const sse = await anthropicSse(resp.body!, thinking, model);
+  const resp = await backend.respond({ ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
+  if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
+  const sse = await anthropicSse(resp.body, thinking, model);
   return new Response(sse, {
     status: 200,
     headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
   });
 }
 
-async function relayError(resp: Response): Promise<Response> {
+async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
+  if (caps.errorShape === "passthrough") return resp;
   let message = `upstream ${resp.status}`;
   let type = "api_error";
   try {
     const j: any = await resp.clone().json();
-    message = j?.error?.message ?? j?.error?.code ?? j?.message ?? message;
+    message = j?.error?.message ?? j?.message ?? message;
     type = j?.error?.type ?? type;
   } catch { /* ignore */ }
   if (resp.status === 401) type = "authentication_error";
@@ -181,15 +190,14 @@ function anthroError(status: number, message: string, type = "invalid_request_er
   return Response.json({ type: "error", error: { type, message } }, { status });
 }
 
-// ---- 流式翻译：OpenAI chunk SSE → Anthropic message SSE ----
 async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: boolean, model?: string): Promise<ReadableStream<Uint8Array>> {
   const enc = new TextEncoder();
-  let id = `msg_${crypto.randomUUID().replaceAll("-", "")}`;
+  const id = `msg_${crypto.randomUUID().replaceAll("-", "")}`;
   let outModel = model ?? "";
   let blockIdx = -1;
   let curBlock: "text" | "thinking" | "tool_use" | null = null;
-  let inputTokens = 0, outputTokens = 0;
-  const toolCalls = new Map<number, { id: string; name: string; opened: boolean }>();
+  let outputTokens = 0;
+  const toolCalls = new Map<number, { id: string; name: string }>();
   let stopReason: string | null = null;
 
   const startBlock = (ctrl: ReadableStreamDefaultController, type: "text" | "thinking" | "tool_use", extra?: any) => {
@@ -222,16 +230,12 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         });
         for await (const chunk of sseData(upstream)) {
           if (chunk.model && !outModel) outModel = chunk.model;
-          if (chunk.usage) {
-            inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
-            outputTokens = chunk.usage.completion_tokens ?? outputTokens;
-          }
+          if (chunk.usage) outputTokens = chunk.usage.completion_tokens ?? outputTokens;
           const choice = chunk.choices?.[0];
           const delta = choice?.delta ?? {};
-          if (typeof delta.reasoning_content === "string" && delta.reasoning_content) {
-            if (thinking && curBlock !== "thinking") { stopBlock(ctrl); startBlock(ctrl, "thinking"); }
-            if (thinking)
-              ev(ctrl, "content_block_delta", { type: "content_block_delta", index: blockIdx, delta: { type: "thinking_delta", thinking: delta.reasoning_content } });
+          if (thinking && typeof delta.reasoning_content === "string" && delta.reasoning_content) {
+            if (curBlock !== "thinking") { stopBlock(ctrl); startBlock(ctrl, "thinking"); }
+            ev(ctrl, "content_block_delta", { type: "content_block_delta", index: blockIdx, delta: { type: "thinking_delta", thinking: delta.reasoning_content } });
           }
           if (typeof delta.content === "string" && delta.content) {
             if (curBlock !== "text") { stopBlock(ctrl); startBlock(ctrl, "text"); }
@@ -242,7 +246,7 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
             let slot = toolCalls.get(idx);
             if (!slot) {
               stopBlock(ctrl);
-              slot = { id: tc.id ?? `toolu_${crypto.randomUUID().replaceAll("-", "")}`, name: tc.function?.name ?? "", opened: true };
+              slot = { id: tc.id ?? `toolu_${crypto.randomUUID().replaceAll("-", "")}`, name: tc.function?.name ?? "" };
               toolCalls.set(idx, slot);
               startBlock(ctrl, "tool_use", { id: slot.id, name: slot.name, input: "" });
             } else if (tc.function?.name && !slot.name) {

@@ -12,6 +12,7 @@ import {
 } from "./refresher";
 import { handleAnthropicMessages } from "./anthropic";
 import { handleResponses } from "./responses";
+import { mountProviders, type ProviderModule, type ProviderInstance, type Route } from "../../registry";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -44,8 +45,8 @@ async function resolveInitialCredentials() {
   return creds;
 }
 
-// 装配 codearts provider，返回 fetch handler（供顶层路由复用；start() 保留单 provider 启动方式）
-export async function createHandler(): Promise<(req: Request) => Promise<Response>> {
+// 装配 codearts provider；路由路径相对挂载点，由注册表负责前缀分发。
+export async function createProvider(): Promise<ProviderInstance> {
   const creds = await resolveInitialCredentials();
   console.log(`[codearts] 凭证就绪 ak=${creds.ak.slice(0, 8)}... 有效期至 ${creds.expiresAt ?? "(env 静态凭证)"}`);
 
@@ -70,24 +71,24 @@ export async function createHandler(): Promise<(req: Request) => Promise<Respons
 
   const facade = new OpenAIFacade(snap, gw, telemetry);
 
-  return async (req) => {
-    const url = new URL(req.url);
-    if (url.pathname === "/v1/models" && req.method === "GET")
-      return Response.json(facade.modelsPayload());
-    if (url.pathname === "/v1/chat/completions" && req.method === "POST")
-      return facade.handleChat(req);
-    if (url.pathname === "/v1/messages" && req.method === "POST")
-      return handleAnthropicMessages(facade, req);
-    if (url.pathname === "/v1/responses" && req.method === "POST")
-      return handleResponses(facade, req);
-    if (url.pathname === "/healthz")
-      return new Response("ok");
-    return new Response("not found", { status: 404 });
-  };
+  const routes: Route[] = [
+    { method: "GET", path: "/v1/models", handle: () => Response.json(facade.modelsPayload()) },
+    { method: "POST", path: "/v1/chat/completions", handle: (req) => facade.handleChat(req) },
+    { method: "POST", path: "/v1/messages", handle: (req) => handleAnthropicMessages(facade, req) },
+    { method: "POST", path: "/v1/responses", handle: (req) => handleResponses(facade, req) },
+  ];
+  return { routes, health: () => ({ ok: true }) };
 }
 
+export const codeartsProvider: ProviderModule = {
+  name: "codearts",
+  prefix: "",
+  required: true,
+  create: createProvider,
+};
+
 export async function start(): Promise<void> {
-  const handler = await createHandler();
+  const handler = await mountProviders([codeartsProvider]);
   const server = Bun.serve({
     port: PORT,
     // 生产默认只监听本机回环；需要局域网访问时设 HOST=0.0.0.0（注意：服务无鉴权，勿暴露公网）

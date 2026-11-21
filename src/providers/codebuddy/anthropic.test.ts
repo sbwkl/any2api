@@ -1,7 +1,10 @@
 import { test, expect, describe } from "bun:test";
-import { anthropicToOpenAi, handleAnthropicMessages } from "./anthropic";
+import { anthropicToOpenAi, handleAnthropicMessages } from "../../protocols/anthropic";
+import type { ChatBackend, ProtocolCapabilities } from "../../protocols/types";
 import { CodeBuddyFacade } from "./openai";
 import type { Credentials, ProductConfig } from "./types";
+
+const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", errorShape: "anthropic" };
 
 const config: ProductConfig = {
   endpoint: "https://example.test",
@@ -51,6 +54,16 @@ function facadeWith(sse: string): CodeBuddyFacade {
   return new CodeBuddyFacade(config, credentials, { fetchImpl });
 }
 
+function backendFor(facade: CodeBuddyFacade): ChatBackend {
+  return {
+    models: () => facade.modelsPayload().data,
+    health: () => facade.healthPayload(),
+    profileFor: (req) => facade.profileFor(req),
+    handleChat: (req) => facade.handleChat(req),
+    respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey, (opts.profile as any) ?? "chat"),
+  };
+}
+
 function anthroReq(body: any): Request {
   return new Request("http://localhost/codebuddy/v1/messages", {
     method: "POST",
@@ -72,7 +85,7 @@ describe("anthropic adapter", () => {
       ],
       tools: [{ name: "f", description: "d", input_schema: { type: "object" } }],
       tool_choice: { type: "any" },
-    });
+    }, CAPS);
     expect(out.messages[0]).toEqual({ role: "system", content: "sys" });
     expect(out.messages[1]).toEqual({ role: "user", content: "hi" });
     expect(out.messages[2]).toEqual({ role: "assistant", content: "hello" });
@@ -82,13 +95,25 @@ describe("anthropic adapter", () => {
     expect(out.tool_choice).toBe("auto");
   });
 
+  test("full tool_choice supports required and forced function", () => {
+    const base = {
+      model: "hy4flash-free",
+      max_tokens: 100,
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ name: "f", input_schema: { type: "object" } }],
+    };
+    expect(anthropicToOpenAi({ ...base, tool_choice: { type: "any" } }, { toolChoice: "full" }).tool_choice).toBe("required");
+    expect(anthropicToOpenAi({ ...base, tool_choice: { type: "tool", name: "f" } }, { toolChoice: "full" }).tool_choice)
+      .toEqual({ type: "function", function: { name: "f" } });
+  });
+
   test("non-stream text response becomes an Anthropic message", async () => {
-    const facade = facadeWith(SSE_TEXT);
-    const resp = await handleAnthropicMessages(facade, anthroReq({
+    const backend = backendFor(facadeWith(SSE_TEXT));
+    const resp = await handleAnthropicMessages(backend, anthroReq({
       model: "hy4flash-free",
       max_tokens: 64,
       messages: [{ role: "user", content: "hi" }],
-    }));
+    }), CAPS);
     expect(resp.status).toBe(200);
     const j: any = await resp.json();
     expect(j.type).toBe("message");
@@ -106,36 +131,37 @@ describe("anthropic adapter", () => {
       messages: [{ role: "user", content: "hi" }],
     });
 
-    const plain: any = await (await handleAnthropicMessages(facadeWith(SSE_THINK), req())).json();
+    const plain: any = await (await handleAnthropicMessages(backendFor(facadeWith(SSE_THINK)), req(), CAPS)).json();
     expect(plain.content.some((b: any) => b.type === "thinking")).toBe(false);
 
     const withThinking: any = await (await handleAnthropicMessages(
-      facadeWith(SSE_THINK),
+      backendFor(facadeWith(SSE_THINK)),
       req({ type: "enabled", budget_tokens: 1024 }),
+      CAPS,
     )).json();
     expect(withThinking.content.some((b: any) => b.type === "thinking" && b.thinking === "think")).toBe(true);
   });
 
   test("non-stream tool call becomes tool_use blocks", async () => {
-    const facade = facadeWith(SSE_TOOL);
-    const resp = await handleAnthropicMessages(facade, anthroReq({
+    const backend = backendFor(facadeWith(SSE_TOOL));
+    const resp = await handleAnthropicMessages(backend, anthroReq({
       model: "hy4flash-free",
       max_tokens: 64,
       messages: [{ role: "user", content: "weather?" }],
-    }));
+    }), CAPS);
     const j: any = await resp.json();
     expect(j.stop_reason).toBe("tool_use");
     expect(j.content[0]).toMatchObject({ type: "tool_use", id: "call_1", name: "get_weather", input: { city: "Paris" } });
   });
 
   test("streaming response emits Anthropic SSE events", async () => {
-    const facade = facadeWith(SSE_TEXT);
-    const resp = await handleAnthropicMessages(facade, anthroReq({
+    const backend = backendFor(facadeWith(SSE_TEXT));
+    const resp = await handleAnthropicMessages(backend, anthroReq({
       model: "hy4flash-free",
       max_tokens: 64,
       stream: true,
       messages: [{ role: "user", content: "hi" }],
-    }));
+    }), CAPS);
     expect(resp.status).toBe(200);
     const text = await resp.text();
     expect(text).toContain("event: message_start");
@@ -147,13 +173,13 @@ describe("anthropic adapter", () => {
   });
 
   test("streaming tool call emits input_json_delta", async () => {
-    const facade = facadeWith(SSE_TOOL);
-    const resp = await handleAnthropicMessages(facade, anthroReq({
+    const backend = backendFor(facadeWith(SSE_TOOL));
+    const resp = await handleAnthropicMessages(backend, anthroReq({
       model: "hy4flash-free",
       max_tokens: 64,
       stream: true,
       messages: [{ role: "user", content: "weather?" }],
-    }));
+    }), CAPS);
     const text = await resp.text();
     expect(text).toContain('"tool_use"');
     expect(text).toContain('"input_json_delta"');
@@ -162,16 +188,32 @@ describe("anthropic adapter", () => {
 
   test("upstream errors become Anthropic error envelopes", async () => {
     const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as typeof fetch;
-    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
-    const resp = await handleAnthropicMessages(facade, anthroReq({
+    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const resp = await handleAnthropicMessages(backend, anthroReq({
       model: "hy4flash-free",
       max_tokens: 64,
       messages: [{ role: "user", content: "hi" }],
-    }));
+    }), CAPS);
     expect(resp.status).toBe(400);
     const j: any = await resp.json();
     expect(j.type).toBe("error");
     expect(j.error.type).toBe("invalid_request_error");
+    expect(j.error.message).toBe("No stream");
+  });
+
+  test("passthrough error shape returns the provider response unchanged", async () => {
+    const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as typeof fetch;
+    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const resp = await handleAnthropicMessages(backend, anthroReq({
+      model: "hy4flash-free",
+      max_tokens: 64,
+      messages: [{ role: "user", content: "hi" }],
+    }), { toolChoice: "auto-only", errorShape: "passthrough" });
+    expect(resp.status).toBe(400);
+    const j: any = await resp.json();
+    // passthrough：保留 provider 的 OpenAI 错误结构，不包 Anthropic 的 {type:"error"} 信封
+    expect(j.type).toBeUndefined();
+    expect(j.error.code).toBe(11101);
     expect(j.error.message).toBe("No stream");
   });
 });

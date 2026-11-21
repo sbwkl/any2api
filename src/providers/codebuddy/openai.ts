@@ -4,7 +4,7 @@ import { newId, SessionRegistry } from "./ids";
 import { buildHeaders, postChat, readUpstreamError, refreshAccessToken } from "./client";
 import { buildAgentPrompt, resolveModel } from "./config";
 import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from "./envelope";
-import { aggregateSseToCompletion } from "./sse";
+import { aggregateSseToCompletion } from "../../shared/sse";
 import type { Credentials, ProductConfig, Profile } from "./types";
 
 const PROFILES = new Set<Profile>(["chat", "ask", "craft"]);

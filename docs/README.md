@@ -14,6 +14,7 @@
 |---|---|---|---|
 | [CHG-0001](changes/CHG-0001-codebuddy-provider-initial.md) | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 开发中 | REQ-0001 |
 | [CHG-0002](changes/CHG-0002-codebuddy-protocol-adapters.md) | CodeBuddy 协议适配层（Anthropic Messages + Responses）、旁路信号与模型目录 | 开发中 | REQ-0001 |
+| [CHG-0003](changes/CHG-0003-provider-registry-protocols.md) | any2api provider 注册表与共享协议层 | 开发中 | REQ-0001 |
 
 ## RFC（rfcs）
 

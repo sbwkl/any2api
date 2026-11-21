@@ -88,6 +88,9 @@ Owner：wayne
 - **R13**：When 收到 `POST /codebuddy/v1/responses`, the system shall 将 Responses 请求转换为 OpenAI chat 请求（instructions、input 的 message/function_call/function_call_output、tools、reasoning.effort、max_output_tokens），并把响应转换回 Responses object（非流式）或 Responses SSE（流式）。
 - **R14**：Where `CODEBUDDY_MSG_CENTER=1`, the system shall 每 30s 调用 `/v2/msg-center/message/summary`，使用当前凭证；失败静默，不影响 chat。
 - **R15**：Where `CODEBUDDY_AUTO_REFRESH=0`, the system shall 不在 401 时自动刷新 token（默认仍自动刷新并重试一次）。
+- **R16**：When 服务启动, the system shall 通过注册表按 provider 前缀分发路由；匹配使用最长前缀 + 路径边界（`prefix` 或 `prefix + "/"`），未知路径返回 404，已知路径错误方法返回 405，可选 provider 不可用时其前缀返回 503，`required` provider 创建失败时进程退出。
+- **R17**：The system shall 通过共享协议层（`src/protocols/`）提供 Anthropic Messages 与 Responses 路由；provider 差异通过 `ProtocolCapabilities`（`toolChoice`、`errorShape`、`thinking`）表达，共享层不得按 provider 名称分支。
+- **R18**：When 收到 `GET /healthz`, the system shall 返回聚合 JSON（`{ok, providers:[...]}`），其中每个 provider 报告 `ok` 与可选详情。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -110,6 +113,7 @@ Owner：wayne
 | 默认 profile | `chat`（无工具）为默认；ask/craft 可选，只切换系统提示词 | 通用聊天客户端即插即用；内置工具 schema 尚未逐字还原，宁可少发也不发错误 schema | RFC-0001 §5.3 |
 | 实现基线 | 复用 codearts provider 的目录结构与协议适配层，独立目录不共享凭证代码 | codearts 已在生产验证；独立目录隔离协议差异，避免相互影响 | CHG-0001 §4 |
 | 首版范围 | 首版 OpenAI Chat + Models（CHG-0001），随后补 Anthropic Messages + Responses + 可选消息中心（CHG-0002） | 先验证传输与信封拟真，再补协议面；每个 CHG 独立可验收 | CHG-0001 / CHG-0002 |
+| provider 边界 | 静态注册表 + 相对路由；codebuddy 先切共享协议层，codearts 保留私有适配器 | 架构评审建议；降低新增 provider 边际成本，同时不改 codearts 生产协议路径 | CHG-0003 |
 
 ## 10. 变更索引
 
@@ -117,6 +121,7 @@ Owner：wayne
 |---|---|---|---|
 | CHG-0001 | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 开发中 | [CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md) |
 | CHG-0002 | CodeBuddy 协议适配层（Anthropic Messages + Responses）与旁路信号 | 开发中 | [CHG-0002](../changes/CHG-0002-codebuddy-protocol-adapters.md) |
+| CHG-0003 | any2api provider 注册表与共享协议层 | 开发中 | [CHG-0003](../changes/CHG-0003-provider-registry-protocols.md) |
 
 ## 11. 链接
 

@@ -1,7 +1,10 @@
 import { test, expect, describe } from "bun:test";
-import { handleResponses, responsesToOpenAi } from "./responses";
+import { handleResponses, responsesToOpenAi } from "../../protocols/responses";
+import type { ChatBackend, ProtocolCapabilities } from "../../protocols/types";
 import { CodeBuddyFacade } from "./openai";
 import type { Credentials, ProductConfig } from "./types";
+
+const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", errorShape: "responses" };
 
 const config: ProductConfig = {
   endpoint: "https://example.test",
@@ -42,6 +45,16 @@ function facadeWith(sse: string): CodeBuddyFacade {
   return new CodeBuddyFacade(config, credentials, { fetchImpl });
 }
 
+function backendFor(facade: CodeBuddyFacade): ChatBackend {
+  return {
+    models: () => facade.modelsPayload().data,
+    health: () => facade.healthPayload(),
+    profileFor: (req) => facade.profileFor(req),
+    handleChat: (req) => facade.handleChat(req),
+    respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey, (opts.profile as any) ?? "chat"),
+  };
+}
+
 function respReq(body: any): Request {
   return new Request("http://localhost/codebuddy/v1/responses", {
     method: "POST",
@@ -64,7 +77,7 @@ describe("responses adapter", () => {
       max_output_tokens: 100,
       reasoning: { effort: "high" },
       tool_choice: "required",
-    });
+    }, CAPS);
     expect(out.messages[0]).toEqual({ role: "system", content: "sys" });
     expect(out.messages[1]).toEqual({ role: "user", content: "hi" });
     expect(out.messages[2].tool_calls[0].function.name).toBe("f");
@@ -75,9 +88,20 @@ describe("responses adapter", () => {
     expect(out.tool_choice).toBe("auto");
   });
 
+  test("full tool_choice supports required and forced function", () => {
+    const base = {
+      model: "hy4flash-free",
+      input: "hi",
+      tools: [{ type: "function", name: "f", parameters: { type: "object" } }],
+    };
+    expect(responsesToOpenAi({ ...base, tool_choice: "required" }, { toolChoice: "full" }).tool_choice).toBe("required");
+    expect(responsesToOpenAi({ ...base, tool_choice: { type: "function", name: "f" } }, { toolChoice: "full" }).tool_choice)
+      .toEqual({ type: "function", function: { name: "f" } });
+  });
+
   test("non-stream text response becomes a Responses object", async () => {
-    const facade = facadeWith(SSE_TEXT);
-    const resp = await handleResponses(facade, respReq({ model: "hy4flash-free", input: "hi" }));
+    const backend = backendFor(facadeWith(SSE_TEXT));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), CAPS);
     expect(resp.status).toBe(200);
     const j: any = await resp.json();
     expect(j.object).toBe("response");
@@ -88,8 +112,8 @@ describe("responses adapter", () => {
   });
 
   test("non-stream tool call becomes a function_call item", async () => {
-    const facade = facadeWith(SSE_TOOL);
-    const resp = await handleResponses(facade, respReq({ model: "hy4flash-free", input: "weather?" }));
+    const backend = backendFor(facadeWith(SSE_TOOL));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "weather?" }), CAPS);
     const j: any = await resp.json();
     const fc = j.output.find((o: any) => o.type === "function_call");
     expect(fc.name).toBe("get_weather");
@@ -97,8 +121,8 @@ describe("responses adapter", () => {
   });
 
   test("streaming response emits Responses SSE events", async () => {
-    const facade = facadeWith(SSE_TEXT);
-    const resp = await handleResponses(facade, respReq({ model: "hy4flash-free", input: "hi", stream: true }));
+    const backend = backendFor(facadeWith(SSE_TEXT));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi", stream: true }), CAPS);
     expect(resp.status).toBe(200);
     const text = await resp.text();
     expect(text).toContain("event: response.created");
@@ -109,8 +133,8 @@ describe("responses adapter", () => {
   });
 
   test("streaming tool call emits function_call_arguments.delta", async () => {
-    const facade = facadeWith(SSE_TOOL);
-    const resp = await handleResponses(facade, respReq({ model: "hy4flash-free", input: "weather?", stream: true }));
+    const backend = backendFor(facadeWith(SSE_TOOL));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "weather?", stream: true }), CAPS);
     const text = await resp.text();
     expect(text).toContain("event: response.function_call_arguments.delta");
     expect(text).toContain("Paris");
@@ -119,10 +143,21 @@ describe("responses adapter", () => {
 
   test("upstream errors become Responses error envelopes", async () => {
     const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as typeof fetch;
-    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
-    const resp = await handleResponses(facade, respReq({ model: "hy4flash-free", input: "hi" }));
+    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), CAPS);
     expect(resp.status).toBe(400);
     const j: any = await resp.json();
+    expect(j.error.message).toBe("No stream");
+  });
+
+  test("passthrough error shape returns the provider response unchanged", async () => {
+    const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as typeof fetch;
+    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), { toolChoice: "auto-only", errorShape: "passthrough" });
+    expect(resp.status).toBe(400);
+    const j: any = await resp.json();
+    // passthrough：保留 provider 的 OpenAI 错误结构，不包 Responses 的错误信封
+    expect(j.error.code).toBe(11101);
     expect(j.error.message).toBe("No stream");
   });
 });

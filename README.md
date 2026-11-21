@@ -10,12 +10,19 @@
 
 ```
 src/
-├── index.ts                  # 顶层入口：多 provider 路由（/v1 → codearts；/codebuddy/v1 → codebuddy）
+├── index.ts                  # 顶层入口：注册表 + Bun.serve
+├── registry.ts               # ProviderModule 注册表、前缀路由、404/405/503、聚合 health
 ├── shared/
-│   └── ids.ts                # 通用 ID 生成（跨 provider 复用）
+│   ├── ids.ts                # 通用 ID 生成（跨 provider 复用）
+│   └── sse.ts                # 通用 SSE 解析 + chat.completion 聚合
+├── protocols/                # 共享协议层（只依赖 ChatBackend，不感知 provider 名称）
+│   ├── index.ts              # createProtocolRoutes（models/chat/messages/responses/health）
+│   ├── types.ts              # ChatBackend / ProtocolCapabilities
+│   ├── anthropic.ts          # Anthropic Messages 适配
+│   └── responses.ts          # OpenAI Responses 适配
 └── providers/
-    ├── codearts/             # 码道适配器（自包含）
-    │   ├── index.ts          # provider 装配（createHandler / start）
+    ├── codearts/             # 码道适配器（自包含；协议适配暂保留私有副本）
+    │   ├── index.ts          # provider 模块（prefix=""，required）
     │   ├── openai.ts         # 内部统一管线 + OpenAI Chat 门面
     │   ├── anthropic.ts      # Anthropic /v1/messages 协议适配
     │   ├── responses.ts      # OpenAI Responses /v1/responses 协议适配
@@ -26,14 +33,11 @@ src/
     │   ├── config.ts         # 凭证加载 + 模型池
     │   ├── telemetry.ts      # OTLP 最小仿真
     │   └── protocol-spec.md  # 内核协议权威规格
-    └── codebuddy/            # CodeBuddy CN 适配器（自包含）
-        ├── index.ts          # provider 装配与路由
+    └── codebuddy/            # CodeBuddy CN 适配器
+        ├── index.ts          # provider 模块（prefix=/codebuddy，required=false）
         ├── openai.ts         # OpenAI Chat 门面 + 跨协议 respond 管线
-        ├── anthropic.ts      # Anthropic Messages 协议适配
-        ├── responses.ts      # OpenAI Responses 协议适配
         ├── client.ts         # 头集合 / gzip / 401 刷新
         ├── envelope.ts       # OpenAI ↔ CodeBuddy 请求体映射
-        ├── sse.ts            # SSE → chat.completion 聚合
         ├── msgcenter.ts      # 可选消息中心轮询（30s）
         ├── config.ts         # 凭证（Keychain safeStorage）+ 模型/提示词
         ├── ids.ts            # 32hex ID + 会话/轮次
@@ -41,6 +45,10 @@ src/
         ├── protocol-spec.md  # 协议权威规格
         └── *.test.ts         # bun test
 ```
+
+## 新增 provider
+
+在 `src/providers/<name>/` 实现一个 `ProviderModule`（`name`、`prefix`、`required`、`create()` 返回 `routes` + `health`），并在 `src/index.ts` 的注册表加一行即可。路由匹配由 `src/registry.ts` 统一处理（最长前缀 + 路径边界、404/405/503、聚合 `/healthz`）；Anthropic/Responses 适配优先复用 `src/protocols/`，provider 差异用 `ProtocolCapabilities` 表达（`toolChoice`、`errorShape`、`thinking`）。
 
 ## 生产启动（launchd，已配置）
 
@@ -107,7 +115,7 @@ curl -N http://127.0.0.1:8787/v1/chat/completions \
 - `POST /v1/messages` — Anthropic Messages 格式（Claude Code / Claude Desktop），text/thinking/tool_use/tool_result 块、tool 流式事件
 - `POST /v1/responses` — OpenAI Responses 格式（Codex CLI），instructions/input items、function_call 往返、reasoning summary 流
 - `GET /v1/models` — 模型列表
-- `GET /healthz` — 健康检查
+- `GET /healthz` — 聚合健康检查（JSON：`{ok, providers:[...]}`）
 
 当前模型池：启动时通过 Policy Center `POST /v1/policy/bundle`（Agent-Type: PromptCenter，商业版 x-auth-token 为空串、靠 provider 层 AKSK 签名认证）动态发现——这是 IDE 模型下拉的真实数据源，后端调整模型无需改代码；失败时回退观测池（`glm-5.3-flash`、`deepseek-v4.1-flash`）。
 

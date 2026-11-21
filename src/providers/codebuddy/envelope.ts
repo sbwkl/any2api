@@ -64,24 +64,4 @@ export function buildRequestBody(opts: {
   return body;
 }
 
-export function mapUsage(usage: any): any | undefined {
-  if (!usage || typeof usage !== "object") return undefined;
-  return {
-    prompt_tokens: usage.prompt_tokens ?? 0,
-    completion_tokens: usage.completion_tokens ?? 0,
-    total_tokens: usage.total_tokens ?? 0,
-    prompt_tokens_details: {
-      cached_tokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
-    },
-    completion_tokens_details: {
-      reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens ?? 0,
-    },
-  };
-}
-
-export function mapFinishReason(reason: any): string {
-  if (reason === "content-filter" || reason === "content_filter") return "content_filter";
-  if (reason === "tool_calls" || reason === "function_call" || reason === "tool_call") return "tool_calls";
-  if (reason === "stop" || reason === "length" || reason === "content_filter") return reason;
-  return reason || "stop";
-}
+export { mapUsage, mapFinishReason } from "../../shared/sse";

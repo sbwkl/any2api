@@ -1,9 +1,7 @@
-// OpenAI Responses API 适配 — /codebuddy/v1/responses ↔ 内部 OpenAI chat 管线
-// 覆盖 Codex CLI 所需子集：instructions、input（message/function_call/function_call_output）、
-// tools、流式 SSE（response.created/output_item.added/output_text.delta/response.completed 等）。
-import type { CodeBuddyFacade } from "./openai";
+// OpenAI Responses API 适配 — 共享协议层
+// 依赖 ChatBackend.respond；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
+import type { ChatBackend, ProtocolCapabilities } from "./types";
 
-// ---- 请求翻译：Responses → OpenAI chat ----
 function inputItemsToMessages(input: any): any[] {
   if (typeof input === "string") return [{ role: "user", content: input }];
   const out: any[] = [];
@@ -26,12 +24,11 @@ function inputItemsToMessages(input: any): any[] {
         content: typeof item.output === "string" ? item.output : JSON.stringify(item.output ?? ""),
       });
     }
-    // reasoning / 其他类型忽略
   }
   return out;
 }
 
-export function responsesToOpenAi(body: any): any {
+export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): any {
   const messages: any[] = [];
   if (typeof body.instructions === "string" && body.instructions) messages.push({ role: "system", content: body.instructions });
   messages.push(...inputItemsToMessages(body.input));
@@ -45,15 +42,19 @@ export function responsesToOpenAi(body: any): any {
     out.tools = body.tools
       .filter((t) => t?.type === "function")
       .map((t) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.parameters ?? { type: "object" } } }));
-  // CodeBuddy 上游只支持 auto；required/forced function 映射为 auto。
+
   const tc = body.tool_choice;
-  if (tc === "auto" || tc === "required" || tc === "none") out.tool_choice = tc === "required" ? "auto" : tc;
-  else if (tc?.type === "function") out.tool_choice = "auto";
-  else if (tc?.type === "auto") out.tool_choice = "auto";
+  if (caps.toolChoice === "auto-only") {
+    if (tc === "required") out.tool_choice = "auto";
+    else if (tc === "auto" || tc === "none") out.tool_choice = tc;
+    else if (tc?.type === "function" || tc?.type === "auto") out.tool_choice = "auto";
+  } else {
+    if (typeof tc === "string") out.tool_choice = tc;
+    else if (tc?.type === "function") out.tool_choice = { type: "function", function: { name: tc.name } };
+  }
   return out;
 }
 
-// ---- SSE 读取 ----
 async function* sseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<any> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -69,12 +70,16 @@ async function* sseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<any>
       if (!line.startsWith("data:")) continue;
       const payload = line.slice(5).trim();
       if (!payload || payload === "[DONE]") continue;
-      try { yield JSON.parse(payload); } catch { /* 忽略坏帧 */ }
+      try { yield JSON.parse(payload); } catch { /* ignore */ }
     }
   }
 }
 
-export async function handleResponses(facade: CodeBuddyFacade, req: Request): Promise<Response> {
+export async function handleResponses(
+  backend: ChatBackend,
+  req: Request,
+  caps: ProtocolCapabilities = {},
+): Promise<Response> {
   const body = await req.json().catch(() => null);
   if (!body) return Response.json({ error: { message: "invalid JSON body", type: "invalid_request_error" } }, { status: 400 });
   const sessionKey = (
@@ -84,25 +89,26 @@ export async function handleResponses(facade: CodeBuddyFacade, req: Request): Pr
     body.user ||
     "default"
   ).slice(0, 128);
-  const openaiBody = responsesToOpenAi(body);
-  const profile = facade.profileFor(req);
+  const profile = backend.profileFor?.(req);
+  const openaiBody = responsesToOpenAi(body, caps);
 
   if (body.stream !== true) {
-    const resp = await facade.respond(openaiBody, false, sessionKey, profile);
-    if (!resp.ok) return await relayError(resp);
+    const resp = await backend.respond(openaiBody, { stream: false, sessionKey, profile });
+    if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
     return Response.json(completionToResponse(await resp.json(), body.model));
   }
 
-  const resp = await facade.respond({ ...openaiBody, stream: true }, true, sessionKey, profile);
-  if (!resp.ok || !resp.body) return await relayError(resp);
-  const sse = await responsesSse(resp.body!, body.model);
+  const resp = await backend.respond({ ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
+  if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
+  const sse = await responsesSse(resp.body, body.model);
   return new Response(sse, {
     status: 200,
     headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
   });
 }
 
-async function relayError(resp: Response): Promise<Response> {
+async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
+  if (caps.errorShape === "passthrough") return resp;
   let message = `upstream ${resp.status}`;
   let code: any = resp.status;
   try {
@@ -143,12 +149,10 @@ function rid(): string {
   return crypto.randomUUID().replaceAll("-", "").slice(0, 24);
 }
 
-// ---- 流式翻译：OpenAI chunk SSE → Responses SSE ----
 async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string): Promise<ReadableStream<Uint8Array>> {
   const enc = new TextEncoder();
   const respId = `resp_${rid()}`;
   let outModel = model ?? "";
-  let outIndex = -1;
   let msgItemId: string | null = null;
   let seq = 0;
   const outputItems: any[] = [];
@@ -183,7 +187,6 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
           if (typeof delta.reasoning_content === "string" && delta.reasoning_content) {
             let item = outputItems.find((i) => i.type === "reasoning");
             if (!item) {
-              outIndex += 1;
               item = { type: "reasoning", id: `rs_${rid()}`, summary: [], _text: "" };
               outputItems.push(item);
               const oi = outputItems.indexOf(item);
@@ -197,7 +200,6 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
 
           if (typeof delta.content === "string" && delta.content) {
             if (!msgItemId) {
-              outIndex += 1;
               msgItemId = `msg_${rid()}`;
               const item = { type: "message", id: msgItemId, role: "assistant", status: "in_progress", content: [], _text: "" };
               outputItems.push(item);
@@ -215,7 +217,6 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
             const key = `call:${tc.index ?? 0}`;
             let slot = outputItems.find((i) => i._key === key);
             if (!slot) {
-              outIndex += 1;
               slot = { type: "function_call", id: `fc_${rid()}`, call_id: tc.id ?? `call_${tc.index ?? 0}`, name: tc.function?.name ?? "", arguments: "", status: "in_progress", _key: key };
               outputItems.push(slot);
               const oi = outputItems.indexOf(slot);
