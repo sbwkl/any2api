@@ -16,6 +16,7 @@ export interface ModelInfo {
   maxInputTokens?: number;
   supportsToolCall?: boolean;
   supportsReasoning?: boolean;
+  supportedEfforts?: string[];
   contextLength?: number;
   temperature?: number;
   tags?: string[];

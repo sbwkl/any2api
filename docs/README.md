@@ -21,6 +21,7 @@
 | [CHG-0007](changes/CHG-0007-responses-null-content.md) | 修复 Responses reasoning 项 `content: null` 导致 400 | 开发中 | REQ-0001 |
 | [CHG-0008](changes/CHG-0008-responses-parallel-tool-calls.md) | 修复 Responses 并行 function_call 拆成多条 assistant 导致 11148 | 开发中 | REQ-0001 |
 | [CHG-0009](changes/CHG-0009-codebuddy-system-sanitize.md) | 过滤竞品客户端 system preamble，修复 CodeBuddy 400 Request blocked | 开发中 | REQ-0001 |
+| [CHG-0010](changes/CHG-0010-codebuddy-peer-audit.md) | 对齐同类 CodeBuddy 2API 项目：字段透传、空消息过滤、thinking 映射 | 开发中 | REQ-0001 |
 
 ## RFC（rfcs）
 

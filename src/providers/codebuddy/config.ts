@@ -12,7 +12,7 @@ const KEYCHAIN_SERVICE = "CodeBuddy CN Safe Storage";
 const STORAGE_KEY = `secret://{"extensionId":"tencent-cloud.coding-copilot","key":"planning-genie.new.accessTokencn"}`;
 
 const FALLBACK_MODELS: ModelInfo[] = [
-  { id: "hy4flash-free", name: "Hy4 flash", maxOutputTokens: 64000, maxInputTokens: 960000, supportsToolCall: true, supportsReasoning: true, contextLength: 960000, temperature: 0.9 },
+  { id: "hy4flash-free", name: "Hy4 flash", maxOutputTokens: 64000, maxInputTokens: 960000, supportsToolCall: true, supportsReasoning: true, supportedEfforts: ["high"], contextLength: 960000, temperature: 0.9 },
   { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
   { id: "hy3", name: "Hunyuan 3" },
   { id: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
@@ -165,6 +165,7 @@ function mapModels(rawModels: any[], agents: AgentEntry[]): ModelInfo[] {
       maxInputTokens: m.maxInputTokens,
       supportsToolCall: m.supportsToolCall,
       supportsReasoning: m.supportsReasoning ?? m.onlyReasoning,
+      supportedEfforts: m.reasoning?.supportedEfforts,
       contextLength: m.maxInputTokens,
       temperature: m.temperature,
       tags: m.tags,
@@ -219,6 +220,7 @@ function mapCloudModels(rawModels: any[]): ModelInfo[] {
       maxInputTokens: input,
       supportsToolCall: m.supportsToolCall,
       supportsReasoning: m.supportsReasoning ?? m.onlyReasoning,
+      supportedEfforts: m.reasoning?.supportedEfforts,
       contextLength: input,
       temperature: m.temperature,
       tags: m.tags,

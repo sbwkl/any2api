@@ -140,6 +140,18 @@ export class CodeBuddyFacade {
       temperature: typeof body.temperature === "number" ? body.temperature : undefined,
       topP: typeof body.top_p === "number" ? body.top_p : undefined,
       reasoningEffort: typeof body.reasoning_effort === "string" ? body.reasoning_effort : undefined,
+      frequencyPenalty: typeof body.frequency_penalty === "number" ? body.frequency_penalty : undefined,
+      presencePenalty: typeof body.presence_penalty === "number" ? body.presence_penalty : undefined,
+      stop: body.stop,
+      seed: typeof body.seed === "number" ? body.seed : undefined,
+      responseFormat: body.response_format,
+      parallelToolCalls: typeof body.parallel_tool_calls === "boolean" ? body.parallel_tool_calls : undefined,
+      streamOptions: body.stream_options,
+      metadata: body.metadata,
+      store: typeof body.store === "boolean" ? body.store : undefined,
+      user: body.user,
+      serviceTier: body.service_tier,
+      maxCompletionTokens: typeof body.max_completion_tokens === "number" ? body.max_completion_tokens : undefined,
     });
 
     const makeHeaders = (creds: Credentials) => buildHeaders({

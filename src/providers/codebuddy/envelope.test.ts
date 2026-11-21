@@ -99,6 +99,58 @@ describe("envelope", () => {
     expect(usage.completion_tokens_details.reasoning_tokens).toBe(3);
   });
 
+  test("buildRequestBody passes through OpenAI fields", () => {
+    const body = buildRequestBody({
+      model,
+      messages: [{ role: "user", content: "hi" }],
+      frequencyPenalty: 0.5,
+      presencePenalty: 0.2,
+      stop: ["\n"],
+      seed: 42,
+      responseFormat: { type: "json_object" },
+      parallelToolCalls: false,
+      streamOptions: { include_usage: true },
+      metadata: { a: 1 },
+      store: true,
+      user: "u1",
+      serviceTier: "auto",
+      maxCompletionTokens: 123,
+    });
+    expect(body.frequency_penalty).toBe(0.5);
+    expect(body.presence_penalty).toBe(0.2);
+    expect(body.stop).toEqual(["\n"]);
+    expect(body.seed).toBe(42);
+    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.parallel_tool_calls).toBe(false);
+    expect(body.stream_options).toEqual({ include_usage: true });
+    expect(body.metadata).toEqual({ a: 1 });
+    expect(body.store).toBe(true);
+    expect(body.user).toBe("u1");
+    expect(body.service_tier).toBe("auto");
+    expect(body.max_completion_tokens).toBe(123);
+  });
+
+  test("buildRequestBody clamps reasoning effort to supported efforts", () => {
+    const withSupport = { ...model, supportedEfforts: ["high"] };
+    const minimal = buildRequestBody({ model: withSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "minimal" });
+    expect(minimal.reasoning_effort).toBe("high");
+
+    const withoutSupport = { ...model, supportedEfforts: undefined };
+    const off = buildRequestBody({ model: withoutSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "off" });
+    expect(off.reasoning_effort).toBe("low");
+  });
+
+  test("normalizeMessages drops messages without content or tool_calls", () => {
+    const out = normalizeMessages([
+      { role: "user", content: "hi" },
+      { role: "assistant" },
+      { role: "assistant", content: "" },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].role).toBe("user");
+    expect(out[1].content).toBe("");
+  });
+
   test("mapFinishReason maps tool_calls and content filter", () => {
     expect(mapFinishReason("tool_calls")).toBe("tool_calls");
     expect(mapFinishReason("content-filter")).toBe("content_filter");
