@@ -1,9 +1,9 @@
 # any2api
 
-把各 AI 编程工具的私有 LLM 通道封装为通用 **OpenAI 兼容 API**。每个工具是一个独立 provider（`src/providers/<name>/`），对外统一暴露 OpenAI 兼容端点（codearts：`/v1/*`；codebuddy：`/codebuddy/v1/*`）。
+把各 AI 编程工具的私有 LLM 通道封装为通用 **OpenAI 兼容 API**。每个工具是一个独立 provider（`src/providers/<name>/`），对外统一暴露 OpenAI 兼容端点（codearts：`/codearts/v1/*`；codebuddy：`/codebuddy/v1/*`）。
 
 - 当前 provider：**codearts**（码道 CodeArts Agent，华为云 snap-access 通道）、**codebuddy**（腾讯 CodeBuddy CN，`copilot.tencent.com`）
-- 路由：`/v1/*` → codearts（默认，向后兼容）；`/codebuddy/v1/*` → codebuddy
+- 路由：`/codearts/v1/*` → codearts；`/codebuddy/v1/*` → codebuddy
 - 运行时：Bun（原生执行 TypeScript，无需编译）
 
 ## 结构
@@ -22,7 +22,7 @@ src/
 │   └── responses.ts          # OpenAI Responses 适配
 └── providers/
     ├── codearts/             # 码道适配器（自包含；协议适配复用共享 protocols/）
-    │   ├── index.ts          # provider 模块（prefix=""，required）
+    │   ├── index.ts          # provider 模块（prefix="/codearts"，required）
     │   ├── openai.ts         # 内部统一管线 + OpenAI Chat 门面
     │   ├── snap.ts           # 加密通道（key-exchange + SM4-GCM SSE）
     │   ├── refresher.ts      # STS 自动刷新（DPoP + refresh_token 轮换回写）
@@ -92,7 +92,7 @@ OpenAI SDK（任意语言）：
 
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="http://127.0.0.1:8787/v1", api_key="anything")  # api-key 随意非空
+client = OpenAI(base_url="http://127.0.0.1:8787/codearts/v1", api_key="anything")  # api-key 随意非空
 resp = client.chat.completions.create(
     model="glm-5.3-flash",
     messages=[{"role": "user", "content": "你好"}],
@@ -103,17 +103,17 @@ resp = client.chat.completions.create(
 curl 直测：
 
 ```bash
-curl -N http://127.0.0.1:8787/v1/chat/completions \
+curl -N http://127.0.0.1:8787/codearts/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"glm-5.3-flash","messages":[{"role":"user","content":"hi"}],"stream":true}'
 ```
 
 端点（同一服务内三种协议，Claude Code / Codex / 任意 OpenAI 客户端均可直连）：
 
-- `POST /v1/chat/completions` — OpenAI Chat 格式，流式/非流式
-- `POST /v1/messages` — Anthropic Messages 格式（Claude Code / Claude Desktop），text/thinking/tool_use/tool_result 块、tool 流式事件
-- `POST /v1/responses` — OpenAI Responses 格式（Codex CLI），instructions/input items、function_call 往返、reasoning summary 流
-- `GET /v1/models` — 模型列表
+- `POST /codearts/v1/chat/completions` — OpenAI Chat 格式，流式/非流式
+- `POST /codearts/v1/messages` — Anthropic Messages 格式（Claude Code / Claude Desktop），text/thinking/tool_use/tool_result 块、tool 流式事件
+- `POST /codearts/v1/responses` — OpenAI Responses 格式（Codex CLI），instructions/input items、function_call 往返、reasoning summary 流
+- `GET /codearts/v1/models` — 模型列表
 - `GET /healthz` — 聚合健康检查（JSON：`{ok, providers:[...]}`）
 
 当前模型池：启动时通过 Policy Center `POST /v1/policy/bundle`（Agent-Type: PromptCenter，商业版 x-auth-token 为空串、靠 provider 层 AKSK 签名认证）动态发现——这是 IDE 模型下拉的真实数据源，后端调整模型无需改代码；失败时回退观测池（`glm-5.3-flash`、`deepseek-v4.1-flash`）。

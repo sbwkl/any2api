@@ -15,7 +15,7 @@ async function main(): Promise<void> {
     idleTimeout: 255,
     fetch: handler,
   });
-  console.log(`[any2api] 路由: /v1/* → codearts; /codebuddy/v1/* → codebuddy; http://${HOST}:${server.port}`);
+  console.log(`[any2api] 路由: /codearts/v1/* → codearts; /codebuddy/v1/* → codebuddy; http://${HOST}:${server.port}`);
 }
 
 main().catch((e) => {

@@ -134,7 +134,7 @@ OpenAI 兼容客户端（Cherry Studio / Cline / OpenAI SDK / curl）
                             POST https://copilot.tencent.com/v2/chat/completions
 ```
 
-**【决策】单进程、路径前缀路由**：`/v1/*` 保持 codearts（向后兼容），CodeBuddy 走 `/codebuddy/v1/*`。理由：OpenAI SDK 的 `base_url` 支持路径；避免多端口/多进程；避免模型名冲突时路由歧义。
+**【决策】单进程、路径前缀路由**：每个 provider 使用 `/<name>/v1` 前缀——codearts 为 `/codearts/v1/*`，CodeBuddy 为 `/codebuddy/v1/*`；不再保留无前缀的 `/v1`。理由：OpenAI SDK 的 `base_url` 支持路径；避免多端口/多进程；避免模型名冲突时路由歧义。
 
 ### 5.2 上游协议事实（v3.10.0）
 
@@ -338,7 +338,7 @@ Base URL 由 `product.json.endpoint` + `/v2` 组成；`product.json` 的 `stagin
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | CHG-0001 | 传输 + 信封 + OpenAI Chat/Models + 凭证 + 401 | §5.11 测试全绿；curl/OpenAI SDK 可用；抓包 diff 无未知差异 |
-| CHG-0002 | Anthropic `/v1/messages` + Responses `/v1/responses` | 复用 codearts 适配层；Claude Code / Codex 直连可用 |
+| CHG-0002 | Anthropic `/codebuddy/v1/messages` + Responses `/codebuddy/v1/responses` | 复用 codearts 适配层；Claude Code / Codex 直连可用 |
 | CHG-0003 | 遥测/消息中心/指纹加固 + diff 工具 | 7 天稳定性；残余差异清单更新 |
 
 ### 5.11 测试与验证（设计）
@@ -395,7 +395,7 @@ Base URL 由 `product.json.endpoint` + `/v2` 组成；`product.json` 的 `stagin
 | Token 续期未知 | 过期后不可用 | 首版手动更新；找到续期端点后补 CHG |
 | 工具 schema 差异 | 部分客户端工具调用失败 | 映射表 + 降级；覆盖主流客户端测试 |
 | 账号 ToS | 使用风险 | 与 codearts 先例一致；文档明确风险由用户承担 |
-| 多 provider 路由 | 端口/模型冲突 | 路径前缀隔离；默认 `/v1` 不变 |
+| 多 provider 路由 | 端口/模型冲突 | 路径前缀隔离；统一为 `/codearts/v1` 与 `/codebuddy/v1` |
 
 ---
 

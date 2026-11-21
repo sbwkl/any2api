@@ -38,7 +38,7 @@ Owner：wayne
 
 **目标**
 
-- **G1（可用性）**：提供与 codearts 对齐的 OpenAI 兼容端点（首版至少 `/v1/chat/completions` + `/v1/models`），支持流式与非流式、工具调用、reasoning 内容。
+- **G1（可用性）**：提供与 codearts 对齐的 OpenAI 兼容端点（首版至少 `/codebuddy/v1/chat/completions` + `/codebuddy/v1/models`），支持流式与非流式、工具调用、reasoning 内容。
 - **G2（拟真度）**：上游请求在头集合、请求体、ID 体系、步骤语义上与真实 IDE 一致；无法一致的部分（如 TLS 指纹）有明确的残余差异清单与缓解方案。
 - **G3（凭证自治）**：凭证从本机 CodeBuddy 安装自动提取，IDE 不必在线；token 过期可自动续期。
 
@@ -63,7 +63,7 @@ Owner：wayne
 
 采用「**信封仿真 + 客户端驱动循环**」（agent envelope emulation）：
 
-- 每个 OpenAI `/v1/chat/completions` 请求映射为 IDE 的一次 step（一次 `/v2/chat/completions`）。
+- 每个 OpenAI `/codebuddy/v1/chat/completions` 请求映射为 IDE 的一次 step（一次 `/v2/chat/completions`）。
 - 代理按目标模型选择 IDE 的提示词模板（craft/ask/chat），填充运行时变量，并注入与 IDE 一致的工具 schema。
 - 代理生成与 IDE 相同形态的 `conversationId` / `requestId` / `messageId` / trace，并维持会话内复用语义。
 - 代理按 IDE 的节奏发送可离线实现的旁路信号（如消息中心轮询）；无法实现的（如 IDE 专属遥测）列入残余差异。
@@ -73,8 +73,8 @@ Owner：wayne
 
 ## 7. 当前需求与验收（EARS）
 
-- **R1**：When 服务启动且凭证有效, the system shall 从 CodeBuddy 模型目录获取模型列表并暴露 `GET /v1/models`；获取失败时回退到内置观测池，并在日志中标注回退原因。
-- **R2**：When 收到 `POST /v1/chat/completions`, the system shall 向 `POST {endpoint}/v2/chat/completions` 发送 gzip 压缩的 JSON 请求体，请求头集合与 RFC-0001 §5.2 定义的清单一致（该清单在研究报告/抓包确认后补全；补全前以 protocol-spec 的实测清单为准）。
+- **R1**：When 服务启动且凭证有效, the system shall 从 CodeBuddy 模型目录获取模型列表并暴露 `GET /codebuddy/v1/models`；获取失败时回退到内置观测池，并在日志中标注回退原因。
+- **R2**：When 收到 `POST /codebuddy/v1/chat/completions`, the system shall 向 `POST {endpoint}/v2/chat/completions` 发送 gzip 压缩的 JSON 请求体，请求头集合与 RFC-0001 §5.2 定义的清单一致（该清单在研究报告/抓包确认后补全；补全前以 protocol-spec 的实测清单为准）。
 - **R3**：The system shall 生成 32 位小写 hex 的 `conversationId` / `requestId` / `messageId` / trace，并按「会话内复用 conversationId、每轮用户消息新 requestId、每次上游调用新 messageId」的语义使用。
 - **R4**：The system shall 按目标模型选择匹配的 IDE 提示词模板（craft/ask/chat 中适用者），填充运行时变量后作为 system 消息发送；客户端自带 system 消息时按 RFC-0001 §5.3 合并。
 - **R5**：Where 客户端请求包含 `tools`, the system shall 将其转换为 CodeBuddy 工具 schema 随请求发送，且不改变工具语义；where 客户端未指定 tools, the system shall 不发送 tools（首版不包含内置默认工具集，profile 只影响系统提示词）。
@@ -96,6 +96,7 @@ Owner：wayne
 - **R21**：When 上游 SSE 没有任何 choices, the system shall 返回 502，不得返回成功空回答。
 - **R22**：When Anthropic/Responses/OpenAI 请求体字段类型不合法（`messages`/`input`/`input[].content`/`content`/`metadata.user_id`/`session_id`/`user`/`tools`）, the system shall 返回 400 协议错误。
 - **R23**：When provider prefix 重复、出现多个空 prefix、或格式不合法（不以 `/` 开头、以 `/` 结尾、为 `/`）, the system shall 启动失败并给出明确错误。
+- **R24**：When 服务启动, the system shall 为每个 provider 使用 `/<name>/v1` 前缀（codearts `/codearts/v1`、codebuddy `/codebuddy/v1`）；不再保留无前缀的 `/v1`。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -129,6 +130,7 @@ Owner：wayne
 | CHG-0003 | any2api provider 注册表与共享协议层 | 开发中 | [CHG-0003](../changes/CHG-0003-provider-registry-protocols.md) |
 | CHG-0004 | CodeBuddy 排队协议与限流错误映射 | 开发中 | [CHG-0004](../changes/CHG-0004-codebuddy-queue.md) |
 | CHG-0005 | 评审修复：错误边界、空流、类型校验、normalizeErrors、共享 SSE、前缀校验 | 开发中 | [CHG-0005](../changes/CHG-0005-review-fixes.md) |
+| CHG-0006 | 统一 provider 前缀为 `/<name>/v1` | 开发中 | [CHG-0006](../changes/CHG-0006-unify-prefixes.md) |
 
 ## 11. 链接
 

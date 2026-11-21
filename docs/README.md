@@ -17,6 +17,7 @@
 | [CHG-0003](changes/CHG-0003-provider-registry-protocols.md) | any2api provider 注册表与共享协议层 | 开发中 | REQ-0001 |
 | [CHG-0004](changes/CHG-0004-codebuddy-queue.md) | CodeBuddy 排队协议与限流错误映射 | 开发中 | REQ-0001 |
 | [CHG-0005](changes/CHG-0005-review-fixes.md) | 评审修复：错误边界、空流、类型校验、normalizeErrors、共享 SSE、前缀校验 | 开发中 | REQ-0001 |
+| [CHG-0006](changes/CHG-0006-unify-prefixes.md) | 统一 provider 前缀为 `/<name>/v1` | 开发中 | REQ-0001 |
 
 ## RFC（rfcs）
 

@@ -83,7 +83,7 @@ export async function createProvider(): Promise<ProviderInstance> {
 
 export const codeartsProvider: ProviderModule = {
   name: "codearts",
-  prefix: "",
+  prefix: "/codearts",
   required: true,
   create: createProvider,
 };
@@ -97,6 +97,6 @@ export async function start(): Promise<void> {
     idleTimeout: 255,
     fetch: handler,
   });
-  console.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/v1 (POST /v1/chat/completions, GET /v1/models)`);
-  console.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/v1  api-key=任意非空串`);
+  console.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/codearts/v1 (POST /codearts/v1/chat/completions, GET /codearts/v1/models)`);
+  console.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/codearts/v1  api-key=任意非空串`);
 }

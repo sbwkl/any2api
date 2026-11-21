@@ -1,5 +1,7 @@
 # CHG-0003 any2api provider 注册表与共享协议层
 
+> 路径前缀后续统一为 `/codearts/v1` 与 `/codebuddy/v1`，见 [CHG-0006](CHG-0006-unify-prefixes.md)；本文中的 `/v1` 是当时的 codearts 路径。
+
 类型：CHG
 状态：开发中
 Owner：wayne
