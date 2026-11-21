@@ -5,12 +5,13 @@ import { buildHeaders, postChat, readUpstreamError, refreshAccessToken, fetchQue
 import { buildAgentPrompt, resolveModel } from "./config";
 import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from "./envelope";
 import { aggregateSseToCompletion } from "../../shared/sse";
+import { errorTypeForStatus } from "../../shared/errors";
 import type { Credentials, ProductConfig, Profile } from "./types";
 
 const PROFILES = new Set<Profile>(["chat", "ask", "craft"]);
 
 function jsonError(status: number, message: string, code?: any): Response {
-  return new Response(JSON.stringify({ error: { message, type: "upstream_error", code: code ?? null } }), {
+  return new Response(JSON.stringify({ error: { message, type: errorTypeForStatus(status), code: code ?? null } }), {
     status,
     headers: { "Content-Type": "application/json" },
   });

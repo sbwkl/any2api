@@ -9,6 +9,7 @@ import { refreshNow } from "./refresher";
 import type { GatewayConfig, ModelInfo, Credentials } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
 import { aggregateSseToCompletion } from "../../shared/sse";
+import { errorTypeForStatus } from "../../shared/errors";
 
 const CLIENT_TYPE = "IDE";
 const CLIENT_VERSION = "26.11.200";
@@ -251,7 +252,7 @@ export class OpenAIFacade {
 }
 
 function jsonError(status: number, message: string): Response {
-  return new Response(JSON.stringify({ error: { message, type: "invalid_request_error", code: null } }), {
+  return new Response(JSON.stringify({ error: { message, type: errorTypeForStatus(status), code: null } }), {
     status,
     headers: { "Content-Type": "application/json" },
   });

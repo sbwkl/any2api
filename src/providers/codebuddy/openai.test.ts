@@ -147,6 +147,8 @@ describe("openai facade", () => {
       }));
       expect(resp.status).toBe(401);
       expect(urls.some((u) => u.includes("/auth/token/refresh"))).toBe(false);
+      const j: any = await resp.json();
+      expect(j.error.type).toBe("authentication_error");
     } finally {
       if (old === undefined) delete process.env.CODEBUDDY_AUTO_REFRESH;
       else process.env.CODEBUDDY_AUTO_REFRESH = old;
@@ -184,10 +186,26 @@ describe("openai facade", () => {
     expect(resp.status).toBe(502);
     const j: any = await resp.json();
     expect(j.error.message).toContain("network down");
+    expect(j.error.type).toBe("upstream_error");
   });
 
   test("empty upstream stream becomes a 502", async () => {
     const fetchImpl = (async () => new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } })) as typeof fetch;
+    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
+    const resp = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    }));
+    expect(resp.status).toBe(502);
+  });
+
+  test("error-only upstream stream becomes a 502", async () => {
+    const fetchImpl = (async () =>
+      new Response('data: {"error":{"message":"bad"}}\n\n', {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      })) as typeof fetch;
     const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
@@ -205,6 +223,7 @@ describe("openai facade", () => {
       stream: false,
     }));
     expect(r1.status).toBe(400);
+    expect((await r1.json() as any).error.type).toBe("invalid_request_error");
     const r2 = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -225,6 +244,7 @@ describe("openai facade", () => {
     expect(resp.status).toBe(429);
     const j: any = await resp.json();
     expect(j.error.code).toBe(6021);
+    expect(j.error.type).toBe("rate_limit_error");
   });
 
   test("maps a non-stream upstream rejection to an OpenAI error", async () => {

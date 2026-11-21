@@ -2,6 +2,7 @@
 // 依赖 ChatBackend.respond；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
+import { errorTypeForStatus } from "../shared/errors";
 import { sseData } from "../shared/sse";
 
 function inputItemsToMessages(input: any): any[] {
@@ -130,7 +131,7 @@ async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): P
     message = j?.error?.message ?? j?.message ?? message;
     code = j?.error?.code ?? j?.code ?? code;
   } catch { /* ignore */ }
-  return Response.json({ error: { message, type: "upstream_error", code, param: null } }, { status: resp.status });
+  return Response.json({ error: { message, type: errorTypeForStatus(resp.status), code, param: null } }, { status: resp.status });
 }
 
 function completionToResponse(c: any, model?: string): any {

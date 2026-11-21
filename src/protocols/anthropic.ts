@@ -2,6 +2,7 @@
 // 依赖 ChatBackend.respond（OpenAI chat 形态）；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
+import { errorTypeForStatus } from "../shared/errors";
 import { sseData } from "../shared/sse";
 
 function systemToMessage(system: any): any | null {
@@ -151,16 +152,11 @@ export async function handleAnthropicMessages(
 async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
   if (caps.normalizeErrors === false) return resp;
   let message = `upstream ${resp.status}`;
-  let type = "api_error";
   try {
     const j: any = await resp.clone().json();
     message = j?.error?.message ?? j?.message ?? message;
-    type = j?.error?.type ?? type;
   } catch { /* ignore */ }
-  if (resp.status === 401) type = "authentication_error";
-  else if (resp.status === 429) type = "rate_limit_error";
-  else if (resp.status >= 400 && resp.status < 500) type = "invalid_request_error";
-  return anthroError(resp.status, message, type);
+  return anthroError(resp.status, message, errorTypeForStatus(resp.status));
 }
 
 function completionToAnthropic(c: any, model?: string, thinking = false): any {

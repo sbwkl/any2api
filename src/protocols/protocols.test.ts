@@ -141,6 +141,24 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect(r4.status).toBe(400);
   });
 
+  test("normalized errors use status-aligned types", async () => {
+    const make = (status: number) => createProtocolRoutes(makeBackend({
+      respond: async () => Response.json({ code: status, msg: "x" }, { status }),
+    }), { normalizeErrors: true });
+
+    const a = await dispatch(make(400), "/v1/messages", "POST", {
+      model: "m", max_tokens: 1, messages: [{ role: "user", content: "hi" }],
+    });
+    expect(a.status).toBe(400);
+    expect((await a.json() as any).error.type).toBe("invalid_request_error");
+
+    const r = await dispatch(make(429), "/v1/responses", "POST", { model: "m", input: "hi" });
+    expect((await r.json() as any).error.type).toBe("rate_limit_error");
+
+    const s = await dispatch(make(502), "/v1/responses", "POST", { model: "m", input: "hi" });
+    expect((await s.json() as any).error.type).toBe("upstream_error");
+  });
+
   test("Anthropic streaming handles a final chunk without a newline", async () => {
     const sse = 'data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}';
     const local = createProtocolRoutes(makeBackend({
