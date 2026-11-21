@@ -3,6 +3,7 @@
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
 import { errorTypeForStatus } from "../shared/errors";
+import { sanitizeSystemText } from "../shared/system";
 import { sseData } from "../shared/sse";
 
 function inputItemsToMessages(input: any): any[] {
@@ -52,7 +53,8 @@ function inputItemsToMessages(input: any): any[] {
 
 export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): any {
   const messages: any[] = [];
-  if (typeof body.instructions === "string" && body.instructions) messages.push({ role: "system", content: body.instructions });
+  if (typeof body.instructions === "string" && body.instructions)
+    messages.push({ role: "system", content: sanitizeSystemText(body.instructions) });
   messages.push(...inputItemsToMessages(body.input));
   const out: any = { model: body.model, messages };
   if (body.stream === true) out.stream = true;

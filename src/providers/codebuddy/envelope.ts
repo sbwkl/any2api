@@ -1,11 +1,26 @@
 // OpenAI ↔ CodeBuddy 请求体映射 — 对应 RFC-0001 §5.5
 import type { ModelInfo } from "./types";
+import { sanitizeSystemText } from "../../shared/system";
+
+function sanitizeSystemContent(content: any): any {
+  if (typeof content === "string") return sanitizeSystemText(content);
+  if (Array.isArray(content)) {
+    return content.map((b: any) =>
+      b && typeof b === "object" && b.type === "text" && typeof b.text === "string"
+        ? { ...b, text: sanitizeSystemText(b.text) }
+        : b,
+    );
+  }
+  return content;
+}
 
 export function normalizeMessages(messages: any[]): any[] {
   if (!Array.isArray(messages)) throw new Error("messages must be an array");
   return messages.map((m) => {
     if (!m || typeof m !== "object") throw new Error("invalid message");
-    return m.role === "developer" ? { ...m, role: "system" } : m;
+    if (m.role === "developer") return { ...m, role: "system", content: sanitizeSystemContent(m.content) };
+    if (m.role === "system") return { ...m, content: sanitizeSystemContent(m.content) };
+    return m;
   });
 }
 

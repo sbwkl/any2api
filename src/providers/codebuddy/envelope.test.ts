@@ -28,6 +28,14 @@ describe("envelope", () => {
     expect(out[1].role).toBe("user");
   });
 
+  test("normalizeMessages sanitizes competitor system preambles", () => {
+    const out = normalizeMessages([
+      { role: "system", content: "You are Claude Code, Anthropic's official CLI for Claude. Be brief." },
+    ]);
+    expect(out[0].content).toContain("You are an AI coding assistant.");
+    expect(out[0].content).not.toContain("Anthropic's official CLI");
+  });
+
   test("mergeAgentPrompt prepends the agent system message", () => {
     const out = mergeAgentPrompt([{ role: "user", content: "hi" }], "<system_prompt>X</system_prompt>");
     expect(out[0]).toEqual({ role: "system", content: "<system_prompt>X</system_prompt>" });

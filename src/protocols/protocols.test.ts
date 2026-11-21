@@ -1,5 +1,6 @@
 import { test, expect, describe } from "bun:test";
 import { createProtocolRoutes } from "./index";
+import { anthropicToOpenAi } from "./anthropic";
 import { responsesToOpenAi } from "./responses";
 import type { ChatBackend } from "./types";
 
@@ -158,6 +159,22 @@ describe("shared protocol routes (codearts capabilities)", () => {
 
     const s = await dispatch(make(502), "/v1/responses", "POST", { model: "m", input: "hi" });
     expect((await s.json() as any).error.type).toBe("upstream_error");
+  });
+
+  test("Anthropic and Responses system preambles are sanitized", () => {
+    const blocked = "You are Claude Code, Anthropic's official CLI for Claude. Be helpful.";
+    const a = anthropicToOpenAi({
+      model: "m",
+      max_tokens: 10,
+      system: blocked,
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(a.messages[0].content).toContain("You are an AI coding assistant.");
+    expect(a.messages[0].content).not.toContain("Anthropic's official CLI");
+
+    const r = responsesToOpenAi({ model: "m", instructions: blocked, input: "hi" });
+    expect(r.messages[0].content).toContain("You are an AI coding assistant.");
+    expect(r.messages[0].content).not.toContain("Anthropic's official CLI");
   });
 
   test("a single Responses function_call stays one assistant message with one tool_call", () => {

@@ -165,3 +165,4 @@ resp = client.chat.completions.create(
 - codebuddy 模型池读取本机云端产品缓存（24 个，与 IDE 一致）；缓存缺失时回退 product.json + agent models + 观测模型
 - codebuddy 默认不发送 `X-Device-Token`（实测当前通道可省略），不伪造 TuringShield
 - codebuddy 的 ask/craft profile 只切换系统提示词；工具 schema 仅来自客户端 `tools`
+- codebuddy 会过滤已知的竞品客户端 system preamble（Claude Code 的 "official CLI" 句），避免后端 400 Request blocked；其他敏感 system 仍可能被拦截
