@@ -26,7 +26,7 @@ Owner：wayne
 ## 3. 用户与场景
 
 - **主要用户**：本机开发者（wayne），以及任何使用 OpenAI 兼容客户端的用户。
-- **触发情境（When）**：用户配置好 CodeBuddy 凭证后，把客户端 Base URL 指向 `http://127.0.0.1:8787/v1`，选择 CodeBuddy 模型发起对话。
+- **触发情境（When）**：用户配置好 CodeBuddy 凭证后，把客户端 Base URL 指向 `http://127.0.0.1:8787/codebuddy/v1`，选择 CodeBuddy 模型发起对话。
 - **期望结果（so I can）**：像使用 OpenAI 一样使用 CodeBuddy 模型，包括流式输出、工具调用往返、长上下文。
 - **关键用例**：
   1. 普通聊天（单步问答，非流式/流式）。
