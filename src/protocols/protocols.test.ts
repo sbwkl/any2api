@@ -1,5 +1,6 @@
 import { test, expect, describe } from "bun:test";
 import { createProtocolRoutes } from "./index";
+import { responsesToOpenAi } from "./responses";
 import type { ChatBackend } from "./types";
 
 const completion = {
@@ -157,6 +158,55 @@ describe("shared protocol routes (codearts capabilities)", () => {
 
     const s = await dispatch(make(502), "/v1/responses", "POST", { model: "m", input: "hi" });
     expect((await s.json() as any).error.type).toBe("upstream_error");
+  });
+
+  test("a single Responses function_call stays one assistant message with one tool_call", () => {
+    const out = responsesToOpenAi({
+      model: "m",
+      input: [
+        { type: "function_call", call_id: "c1", name: "f", arguments: '{"x":1}' },
+        { type: "function_call_output", call_id: "c1", output: "ok" },
+      ],
+    });
+    expect(out.messages.map((m: any) => m.role)).toEqual(["assistant", "tool"]);
+    expect(out.messages[0].tool_calls).toHaveLength(1);
+    expect(out.messages[0].tool_calls[0]).toMatchObject({
+      id: "c1",
+      type: "function",
+      function: { name: "f", arguments: '{"x":1}' },
+    });
+    expect(out.messages[1].tool_call_id).toBe("c1");
+  });
+
+  test("consecutive Responses function_call items merge into one assistant message", () => {
+    const out = responsesToOpenAi({
+      model: "m",
+      input: [
+        { type: "function_call", call_id: "c1", name: "f", arguments: "{}" },
+        { type: "function_call", call_id: "c2", name: "g", arguments: "{}" },
+        { type: "function_call_output", call_id: "c1", output: "ok1" },
+        { type: "function_call_output", call_id: "c2", output: "ok2" },
+      ],
+    });
+    expect(out.messages.map((m: any) => m.role)).toEqual(["assistant", "tool", "tool"]);
+    expect(out.messages[0].tool_calls.map((tc: any) => tc.id)).toEqual(["c1", "c2"]);
+    expect(out.messages[1].tool_call_id).toBe("c1");
+    expect(out.messages[2].tool_call_id).toBe("c2");
+  });
+
+  test("reasoning between function_call items does not split the tool-call group", () => {
+    const out = responsesToOpenAi({
+      model: "m",
+      input: [
+        { type: "function_call", call_id: "c1", name: "f", arguments: "{}" },
+        { type: "reasoning", id: "rs", summary: [] },
+        { type: "function_call", call_id: "c2", name: "g", arguments: "{}" },
+        { type: "function_call_output", call_id: "c1", output: "ok" },
+        { type: "function_call_output", call_id: "c2", output: "ok" },
+      ],
+    });
+    expect(out.messages.filter((m: any) => m.role === "assistant")).toHaveLength(1);
+    expect(out.messages[0].tool_calls).toHaveLength(2);
   });
 
   test("Responses accepts reasoning content null and ignores non-message content", async () => {
