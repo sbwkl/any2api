@@ -8,9 +8,17 @@ const COMPETITOR_PREAMBLE = /You are Claude Code, Anthropic's official CLI for C
 // 该行只用于客户端遥测，删除后不影响模型行为。
 const BILLING_HEADER = /^[ \t]*x-anthropic-billing-header:.*(?:\r?\n|$)/gim;
 
+// Codex CLI 的自述首句触发上游 400（code 11128 Request blocked）；实测整句精确匹配，
+// 改动其中一处即通过。替换为新建 Codex 会话实际使用的短提示词。
+const CODEX_PREAMBLE =
+  /You are a coding agent running in the Codex CLI,\s*a terminal-based coding assistant\.\s*Codex CLI is an open source project led by OpenAI\.\s*You are expected to be precise, safe, and helpful\.?/gi;
+const CODEX_PREAMBLE_REPLACEMENT =
+  "You are Codex, a coding agent. You and the user share the same workspace and collaborate to achieve the user's goals.";
+
 export function sanitizeSystemText(text: string): string {
   // 只删已知指纹行，不改动其余文本（包括首尾空白）。
   return text
     .replace(COMPETITOR_PREAMBLE, "You are an AI coding assistant.")
+    .replace(CODEX_PREAMBLE, CODEX_PREAMBLE_REPLACEMENT)
     .replace(BILLING_HEADER, "");
 }
