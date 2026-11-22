@@ -59,7 +59,7 @@ Owner：wayne
 
 ## 5. 验证与观测
 
-- `bun test` → **106 pass / 0 fail / 374 expect() calls**（14 个测试文件）。
+- `bun test` → **110 pass / 0 fail / 383 expect() calls**（14 个测试文件）。
 - 新增/更新测试：
   - max_completion_tokens 时 max_tokens 为 undefined；
   - cache_control 逐条：一个显式 cache_control 不阻止其他消息自动添加；
@@ -68,14 +68,14 @@ Owner：wayne
   - sanitize 全局替换两处 preamble；
   - off + supportedEfforts ["high"] → high；无 supported → low。
 - `bun build src/index.ts --target=bun` → 成功。
-- 临时集成分支全量测试：见 §9。
+- 临时集成分支 `tmp/integration-codebuddy`（main + feat）→ **110 pass / 0 fail**，build 通过，已删除。
 - 未部署；fix 分支待用户审核/合并。
 
 ## 6. 回滚方案
 
 - **回滚方式**：`git revert` 本变更；恢复共享层 sanitize、全局 cache 早退、max tokens 双写、null/空数组放行。
 - **数据/配置兼容**：无持久化状态。
-- **回滚验证**：106 tests 回退；`bun test` 通过。
+- **回滚验证**：110 tests 回退；`bun test` 通过。
 
 ## 7. 风险与未决问题
 
@@ -98,4 +98,4 @@ Owner：wayne
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 开发中 | wayne | 7 项评审修复；106 tests 全绿；临时集成分支通过；未部署 |
+| 开发中 | wayne | 7 项评审修复 + 复审 3 项；110 tests 全绿；临时集成分支通过；未部署 |

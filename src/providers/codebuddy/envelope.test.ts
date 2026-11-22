@@ -60,6 +60,19 @@ describe("envelope", () => {
     expect(out[0].content).toContain("You are an AI coding assistant. A.");
   });
 
+  test("normalizeMessages keeps tool messages with null or empty-array content", () => {
+    const out = normalizeMessages([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "function", function: { name: "f", arguments: "{}" } }] },
+      { role: "tool", tool_call_id: "c1", content: [] },
+      { role: "tool", tool_call_id: "c2", content: null },
+    ]);
+    const tools = out.filter((m) => m.role === "tool");
+    expect(tools).toHaveLength(2);
+    expect(tools[0].content).toBe("");
+    expect(tools[1].content).toBe("");
+  });
+
   test("mergeAgentPrompt prepends the agent system message", () => {
     const out = mergeAgentPrompt([{ role: "user", content: "hi" }], "<system_prompt>X</system_prompt>");
     expect(out[0]).toEqual({ role: "system", content: "<system_prompt>X</system_prompt>" });

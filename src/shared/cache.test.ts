@@ -49,6 +49,21 @@ describe("prompt cache control", () => {
     expect((out[1] as any).content[0].cache_control).toEqual({ type: "ephemeral" });
   });
 
+  test("selects the system with the longest single text part", () => {
+    const split = [
+      { type: "text", text: "a".repeat(600) },
+      { type: "text", text: "b".repeat(600) },
+    ];
+    const single = "c".repeat(1100);
+    const out = applyPromptCacheControl([
+      { role: "system", content: split },
+      { role: "system", content: single },
+      { role: "user", content: "hi" },
+    ]);
+    expect((out[0] as any).content).toBe(split);
+    expect(Array.isArray((out[1] as any).content)).toBe(true);
+  });
+
   test("an explicit cache_control on one message does not block auto on another", () => {
     const out = applyPromptCacheControl([
       { role: "system", content: long },

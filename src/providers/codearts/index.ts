@@ -80,7 +80,6 @@ export async function createProvider(): Promise<ProviderInstance> {
   const routes = createProtocolRoutes(backend, {
     toolChoice: "full",
     normalizeErrors: false,
-    thinking: false,
     thinkingToEffort: false,
   });
   return { routes, health: () => ({ ok: true }) };

@@ -1,6 +1,6 @@
 // Prompt cache control — 对齐同类 CodeBuddy 2API 项目的自动缓存策略。
-// 对最长的 system 与最后一条 user 消息（文本长度 ≥1024）加 `cache_control: {type:"ephemeral"}`；
-// 单个消息已有显式 cache_control 时跳过该消息，不影响其他消息。
+// 对单段文本最长的一条 system 与最后一条 user 消息（单段 ≥1024）加 `cache_control: {type:"ephemeral"}`；
+// 选取与可缓存使用同一标准（单段长度），避免「总长大但无单段达标」被选中却加不上。
 
 const MIN_AUTO_CACHE_TEXT_LENGTH = 1024;
 
@@ -14,14 +14,14 @@ function hasCacheControl(content: any): boolean {
 function contentLength(content: any): number {
   if (typeof content === "string") return content.trim().length;
   if (Array.isArray(content)) {
-    return content.reduce(
-      (total, part) =>
-        total +
-        (part && typeof part === "object" && typeof part.text === "string"
-          ? part.text.trim().length
-          : 0),
-      0,
-    );
+    let max = 0;
+    for (const part of content) {
+      if (part && typeof part === "object" && typeof part.text === "string") {
+        const length = part.text.trim().length;
+        if (length > max) max = length;
+      }
+    }
+    return max;
   }
   return 0;
 }

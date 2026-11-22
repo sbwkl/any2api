@@ -19,7 +19,7 @@ export interface ProtocolCapabilities {
   toolChoice?: "full" | "auto-only";
   /** 是否把上游错误归一为对应协议错误（默认 true）；false = 透传 provider 原样响应 */
   normalizeErrors?: boolean;
-  /** 是否在流式响应中输出 thinking 块（默认 true） */
+  /** 是否在响应中输出 thinking 块（默认 true） */
   thinking?: boolean;
   /** 是否把 Anthropic thinking 映射为 reasoning_effort（默认 true） */
   thinkingToEffort?: boolean;

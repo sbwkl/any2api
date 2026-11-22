@@ -102,8 +102,8 @@ Owner：wayne
 - **R27**：When codebuddy 的 system/developer 消息包含已知竞品 preamble `You are Claude Code, Anthropic's official CLI for Claude.`, the system shall 在发送上游前将其替换为 `You are an AI coding assistant.`，并保留其余系统内容。
 - **R28**：When 客户端提供 OpenAI 可选字段（`frequency_penalty`、`presence_penalty`、`stop`、`seed`、`response_format`、`parallel_tool_calls`、`stream_options`、`metadata`、`store`、`user`、`service_tier`、`max_completion_tokens`）, the system shall 在模型支持范围内透传，不得静默丢弃。
 - **R29**：When Anthropic 请求包含 `thinking`, the system shall 将其映射为 `reasoning_effort`（`budget_tokens` ≤2048 → minimal，≤8192 → medium，否则 high；`disabled/off` → 按模型 `reasoning.supportedEfforts` 钳制：无列表时 low，有列表时就近，可能 high）。
-- **R30**：The system shall 丢弃 `content` 为 `undefined`/`null`/空数组且无 `tool_calls` 的消息；空字符串 `content: ""` 保留。
-- **R31**：When codebuddy 的**最长的一条 system** 或最后一条 user 消息文本长度 ≥1024 且该消息没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`；其他消息的显式 cache_control 不影响该判断。
+- **R30**：The system shall 始终保留 `role:"tool"` 或带 `tool_call_id` 的消息（空内容归一为 `""`）；其他消息在 `content` 为 `undefined`/`null`/空数组且无 `tool_calls` 时丢弃，空字符串 `content: ""` 保留。
+- **R31**：When codebuddy 的**最长单段 system**（单段文本 ≥1024）或最后一条 user 消息（单段 ≥1024）没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`；其他消息的显式 cache_control 不影响该判断。
 - **R32**：When 请求的模型不在 codebuddy 模型目录中, the system shall 返回 404 `model_not_found`，不向上游发送请求。
 - **R33**：When 客户端提供 `max_completion_tokens`, the system shall 不发送 `max_tokens`（二者互斥）；未提供时按模型类型选择 `max_tokens` 或 `max_completion_tokens`。
 

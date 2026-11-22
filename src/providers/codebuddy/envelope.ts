@@ -19,14 +19,24 @@ export function normalizeMessages(messages: any[]): any[] {
   return messages
     .filter((m) => {
       if (!m || typeof m !== "object") throw new Error("invalid message");
-      // 丢弃无内容（undefined/null/空数组）且无 tool_calls 的消息
+      // tool 消息（role=tool 或带 tool_call_id）始终保留，空内容归一为 ""
+      const isToolMessage = m.role === "tool" || m.tool_call_id !== undefined;
       const hasContent =
         m.content !== undefined &&
         m.content !== null &&
         !(Array.isArray(m.content) && m.content.length === 0);
-      return hasContent || m.tool_calls !== undefined;
+      const hasToolCalls = Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
+      return isToolMessage || hasContent || hasToolCalls;
     })
     .map((m) => {
+      const isToolMessage = m.role === "tool" || m.tool_call_id !== undefined;
+      if (isToolMessage) {
+        const empty =
+          m.content === undefined ||
+          m.content === null ||
+          (Array.isArray(m.content) && m.content.length === 0);
+        return empty ? { ...m, content: "" } : m;
+      }
       if (m.role === "developer") return { ...m, role: "system", content: sanitizeSystemContent(m.content) };
       if (m.role === "system") return { ...m, content: sanitizeSystemContent(m.content) };
       return m;
