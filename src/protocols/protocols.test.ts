@@ -234,6 +234,55 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect(nonMessageBad.status).toBe(200);
   });
 
+  test("thinking mapping can be disabled per provider", async () => {
+    let seen: any;
+    const local = createProtocolRoutes(makeBackend({
+      respond: async (body) => {
+        seen = body;
+        return Response.json(completion);
+      },
+    }), { normalizeErrors: true, thinkingToEffort: false });
+
+    const resp = await dispatch(local, "/v1/messages", "POST", {
+      model: "m",
+      max_tokens: 10,
+      thinking: { type: "enabled", budget_tokens: 4096 },
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(resp.status).toBe(200);
+    expect(seen.reasoning_effort).toBeUndefined();
+  });
+
+  test("thinking output can be disabled per provider", async () => {
+    const withReasoning = {
+      id: "1",
+      model: "m",
+      created: 1,
+      choices: [
+        {
+          index: 0,
+          message: { role: "assistant", content: "hi", reasoning_content: "think" },
+          finish_reason: "stop",
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+    const make = (caps: ProtocolCapabilities) =>
+      createProtocolRoutes(makeBackend({ respond: async () => Response.json(withReasoning) }), caps);
+    const body = {
+      model: "m",
+      max_tokens: 10,
+      thinking: { type: "enabled", budget_tokens: 1024 },
+      messages: [{ role: "user", content: "hi" }],
+    };
+
+    const withThinking = await dispatch(make({ normalizeErrors: true, thinking: true }), "/v1/messages", "POST", body);
+    expect((await withThinking.json() as any).content.some((b: any) => b.type === "thinking")).toBe(true);
+
+    const without = await dispatch(make({ normalizeErrors: true, thinking: false }), "/v1/messages", "POST", body);
+    expect((await without.json() as any).content.some((b: any) => b.type === "thinking")).toBe(false);
+  });
+
   test("Anthropic streaming handles a final chunk without a newline", async () => {
     const sse = 'data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}';
     const local = createProtocolRoutes(makeBackend({

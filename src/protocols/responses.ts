@@ -60,6 +60,8 @@ export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   if (body.temperature !== undefined) out.temperature = body.temperature;
   if (body.top_p !== undefined) out.top_p = body.top_p;
   if (body.reasoning?.effort) out.reasoning_effort = body.reasoning.effort;
+  if (body.parallel_tool_calls !== undefined) out.parallel_tool_calls = body.parallel_tool_calls;
+  if (body.metadata !== undefined) out.metadata = body.metadata;
   if (Array.isArray(body.tools) && body.tools.length)
     out.tools = body.tools
       .filter((t) => t?.type === "function")

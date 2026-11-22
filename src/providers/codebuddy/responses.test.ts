@@ -99,6 +99,17 @@ describe("responses adapter", () => {
       .toEqual({ type: "function", function: { name: "f" } });
   });
 
+  test("responsesToOpenAi passes through parallel_tool_calls and metadata", () => {
+    const out = responsesToOpenAi({
+      model: "m",
+      input: "hi",
+      parallel_tool_calls: false,
+      metadata: { a: 1 },
+    });
+    expect(out.parallel_tool_calls).toBe(false);
+    expect(out.metadata).toEqual({ a: 1 });
+  });
+
   test("non-stream text response becomes a Responses object", async () => {
     const backend = backendFor(facadeWith(SSE_TEXT));
     const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), CAPS);

@@ -5,6 +5,7 @@ import { buildHeaders, postChat, readUpstreamError, refreshAccessToken, fetchQue
 import { buildAgentPrompt, resolveModel } from "./config";
 import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from "./envelope";
 import { aggregateSseToCompletion } from "../../shared/sse";
+import { applyPromptCacheControl } from "../../shared/cache";
 import { errorTypeForStatus } from "../../shared/errors";
 import type { Credentials, ProductConfig, Profile } from "./types";
 
@@ -118,6 +119,9 @@ export class CodeBuddyFacade {
       return jsonError(400, e?.message ?? "invalid messages");
     }
     const model = resolveModel(this.config.models, typeof body.model === "string" ? body.model : undefined);
+    if (!model) {
+      return jsonError(404, `model_not_found: ${typeof body.model === "string" && body.model ? body.model : "(missing)"}`, "model_not_found");
+    }
     const conversationId = this.sessions.conversationFor(sessionKey);
     const { requestId } = this.sessions.requestIdFor(conversationId, messages);
     const messageId = newId();
@@ -125,11 +129,12 @@ export class CodeBuddyFacade {
 
     const agentPrompt = buildAgentPrompt(this.config, profile, model);
     const merged = mergeAgentPrompt(messages, agentPrompt);
+    const cacheControlled = applyPromptCacheControl(merged);
     const tools = mapTools(body.tools);
 
     const requestBody = buildRequestBody({
       model,
-      messages: merged,
+      messages: cacheControlled,
       tools,
       toolChoice: body.tool_choice,
       maxTokens: typeof body.max_tokens === "number"
@@ -140,6 +145,18 @@ export class CodeBuddyFacade {
       temperature: typeof body.temperature === "number" ? body.temperature : undefined,
       topP: typeof body.top_p === "number" ? body.top_p : undefined,
       reasoningEffort: typeof body.reasoning_effort === "string" ? body.reasoning_effort : undefined,
+      frequencyPenalty: typeof body.frequency_penalty === "number" ? body.frequency_penalty : undefined,
+      presencePenalty: typeof body.presence_penalty === "number" ? body.presence_penalty : undefined,
+      stop: body.stop,
+      seed: typeof body.seed === "number" ? body.seed : undefined,
+      responseFormat: body.response_format,
+      parallelToolCalls: typeof body.parallel_tool_calls === "boolean" ? body.parallel_tool_calls : undefined,
+      streamOptions: body.stream_options,
+      metadata: body.metadata,
+      store: typeof body.store === "boolean" ? body.store : undefined,
+      user: body.user,
+      serviceTier: body.service_tier,
+      maxCompletionTokens: typeof body.max_completion_tokens === "number" ? body.max_completion_tokens : undefined,
     });
 
     const makeHeaders = (creds: Credentials) => buildHeaders({

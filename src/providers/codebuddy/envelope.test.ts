@@ -28,6 +28,51 @@ describe("envelope", () => {
     expect(out[1].role).toBe("user");
   });
 
+  test("normalizeMessages sanitizes competitor system preambles", () => {
+    const out = normalizeMessages([
+      { role: "system", content: "You are Claude Code, Anthropic's official CLI for Claude. Be brief." },
+    ]);
+    expect(out[0].content).toContain("You are an AI coding assistant.");
+    expect(out[0].content).not.toContain("Anthropic's official CLI");
+  });
+
+  test("normalizeMessages drops null and empty-array content", () => {
+    const out = normalizeMessages([
+      { role: "user", content: "hi" },
+      { role: "user", content: null },
+      { role: "user", content: [] },
+      { role: "user", content: "" },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].content).toBe("hi");
+    expect(out[1].content).toBe("");
+  });
+
+  test("normalizeMessages sanitizes every occurrence of the preamble", () => {
+    const out = normalizeMessages([
+      {
+        role: "system",
+        content:
+          "You are Claude Code, Anthropic's official CLI for Claude. A. You are Claude Code, Anthropic's official CLI for Claude. B.",
+      },
+    ]);
+    expect(out[0].content).not.toContain("Anthropic's official CLI");
+    expect(out[0].content).toContain("You are an AI coding assistant. A.");
+  });
+
+  test("normalizeMessages keeps tool messages with null or empty-array content", () => {
+    const out = normalizeMessages([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "function", function: { name: "f", arguments: "{}" } }] },
+      { role: "tool", tool_call_id: "c1", content: [] },
+      { role: "tool", tool_call_id: "c2", content: null },
+    ]);
+    const tools = out.filter((m) => m.role === "tool");
+    expect(tools).toHaveLength(2);
+    expect(tools[0].content).toBe("");
+    expect(tools[1].content).toBe("");
+  });
+
   test("mergeAgentPrompt prepends the agent system message", () => {
     const out = mergeAgentPrompt([{ role: "user", content: "hi" }], "<system_prompt>X</system_prompt>");
     expect(out[0]).toEqual({ role: "system", content: "<system_prompt>X</system_prompt>" });
@@ -89,6 +134,62 @@ describe("envelope", () => {
     expect(usage.prompt_tokens).toBe(10);
     expect(usage.prompt_tokens_details.cached_tokens).toBe(4);
     expect(usage.completion_tokens_details.reasoning_tokens).toBe(3);
+  });
+
+  test("buildRequestBody passes through OpenAI fields", () => {
+    const body = buildRequestBody({
+      model,
+      messages: [{ role: "user", content: "hi" }],
+      frequencyPenalty: 0.5,
+      presencePenalty: 0.2,
+      stop: ["\n"],
+      seed: 42,
+      responseFormat: { type: "json_object" },
+      parallelToolCalls: false,
+      streamOptions: { include_usage: true },
+      metadata: { a: 1 },
+      store: true,
+      user: "u1",
+      serviceTier: "auto",
+      maxCompletionTokens: 123,
+    });
+    expect(body.frequency_penalty).toBe(0.5);
+    expect(body.presence_penalty).toBe(0.2);
+    expect(body.stop).toEqual(["\n"]);
+    expect(body.seed).toBe(42);
+    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.parallel_tool_calls).toBe(false);
+    expect(body.stream_options).toEqual({ include_usage: true });
+    expect(body.metadata).toEqual({ a: 1 });
+    expect(body.store).toBe(true);
+    expect(body.user).toBe("u1");
+    expect(body.service_tier).toBe("auto");
+    expect(body.max_completion_tokens).toBe(123);
+    expect(body.max_tokens).toBeUndefined();
+  });
+
+  test("buildRequestBody clamps reasoning effort to supported efforts", () => {
+    const withSupport = { ...model, supportedEfforts: ["high"] };
+    const minimal = buildRequestBody({ model: withSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "minimal" });
+    expect(minimal.reasoning_effort).toBe("high");
+
+    const offWithSupport = buildRequestBody({ model: withSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "off" });
+    expect(offWithSupport.reasoning_effort).toBe("high");
+
+    const withoutSupport = { ...model, supportedEfforts: undefined };
+    const off = buildRequestBody({ model: withoutSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "off" });
+    expect(off.reasoning_effort).toBe("low");
+  });
+
+  test("normalizeMessages drops messages without content or tool_calls", () => {
+    const out = normalizeMessages([
+      { role: "user", content: "hi" },
+      { role: "assistant" },
+      { role: "assistant", content: "" },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].role).toBe("user");
+    expect(out[1].content).toBe("");
   });
 
   test("mapFinishReason maps tool_calls and content filter", () => {

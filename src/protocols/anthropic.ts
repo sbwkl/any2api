@@ -55,12 +55,27 @@ function contentToOpenAi(role: string, content: any): any[] {
   return out;
 }
 
+function anthropicThinkingToEffort(thinking: any): string | undefined {
+  if (!thinking || typeof thinking !== "object") return undefined;
+  const type = String(thinking.type ?? "").toLowerCase();
+  if (type === "disabled" || type === "none" || type === "off") return "off";
+  if (type !== "enabled" && type !== "adaptive") return undefined;
+  const budget = typeof thinking.budget_tokens === "number" ? thinking.budget_tokens : NaN;
+  if (!Number.isFinite(budget)) return "high";
+  if (budget <= 2048) return "minimal";
+  if (budget <= 8192) return "medium";
+  return "high";
+}
+
 export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): any {
   const messages: any[] = [];
   const sys = systemToMessage(body.system);
   if (sys) messages.push(sys);
   for (const m of body.messages ?? []) messages.push(...contentToOpenAi(m.role, m.content));
   const out: any = { model: body.model, messages };
+  const thinkingEffort =
+    caps.thinkingToEffort === false ? undefined : anthropicThinkingToEffort(body.thinking);
+  if (thinkingEffort) out.reasoning_effort = thinkingEffort;
   if (body.stream === true) out.stream = true;
   if (body.max_tokens !== undefined) out.max_tokens = body.max_tokens;
   if (body.temperature !== undefined) out.temperature = body.temperature;

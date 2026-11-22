@@ -216,4 +216,13 @@ describe("anthropic adapter", () => {
     expect(j.error.code).toBe(11101);
     expect(j.error.message).toBe("No stream");
   });
+
+  test("anthropic thinking maps to reasoning_effort", () => {
+    const base = { model: "hy4flash-free", max_tokens: 10, messages: [{ role: "user", content: "hi" }] };
+    const effort = (thinking: any) => anthropicToOpenAi({ ...base, thinking }).reasoning_effort;
+    expect(effort({ type: "enabled", budget_tokens: 1024 })).toBe("minimal");
+    expect(effort({ type: "enabled", budget_tokens: 4096 })).toBe("medium");
+    expect(effort({ type: "enabled", budget_tokens: 10000 })).toBe("high");
+    expect(effort({ type: "disabled" })).toBe("off");
+  });
 });

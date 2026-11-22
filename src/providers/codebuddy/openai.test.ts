@@ -247,6 +247,18 @@ describe("openai facade", () => {
     expect(j.error.type).toBe("rate_limit_error");
   });
 
+  test("unknown model returns 404 model_not_found", async () => {
+    const facade = new CodeBuddyFacade(config, credentials);
+    const resp = await facade.handleChat(chatRequest({
+      model: "nope",
+      messages: [{ role: "user", content: "hi" }],
+      stream: false,
+    }));
+    expect(resp.status).toBe(404);
+    const j: any = await resp.json();
+    expect(j.error.code).toBe("model_not_found");
+  });
+
   test("maps a non-stream upstream rejection to an OpenAI error", async () => {
     const fetchImpl = (async () =>
       Response.json(

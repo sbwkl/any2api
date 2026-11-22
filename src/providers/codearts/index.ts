@@ -77,7 +77,11 @@ export async function createProvider(): Promise<ProviderInstance> {
     respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey),
   };
   // codearts：full tool_choice（支持 required/forced function），错误透传上游响应。
-  const routes = createProtocolRoutes(backend, { toolChoice: "full", normalizeErrors: false });
+  const routes = createProtocolRoutes(backend, {
+    toolChoice: "full",
+    normalizeErrors: false,
+    thinkingToEffort: false,
+  });
   return { routes, health: () => ({ ok: true }) };
 }
 
