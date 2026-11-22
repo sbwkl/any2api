@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/shared/cache.ts`、`src/shared/system.ts`、`src/providers/codebuddy/envelope.ts`、`src/protocols/anthropic.ts`、`src/protocols/responses.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0009](CHG-0009-codebuddy-system-sanitize.md)、[CHG-0010](CHG-0010-codebuddy-peer-audit.md)、[CHG-0011](CHG-0011-codebuddy-cache-and-model-404.md)
 
 ## 1. 摘要
@@ -90,7 +90,7 @@ Owner：wayne
 ## 8. 关联与证据
 
 - 评审：7 项发现（P0/P1）。
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 代码：`src/shared/cache.ts`、`src/shared/system.ts`、`src/providers/codebuddy/envelope.ts`、`src/protocols/`
 - 测试：`cache.test.ts`、`envelope.test.ts`、`protocols.test.ts`
 

@@ -1,9 +1,10 @@
-# REQ-0001 CodeBuddy provider（CodeBuddy CN → OpenAI 兼容 API）
+# 产品规格：CodeBuddy provider（CodeBuddy CN → OpenAI 兼容 API）
 
-类型：REQ
+类型：产品规格
 状态：活跃
+原需求卡：REQ-0001
 Owner：wayne
-关联：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)、[CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md)
+关联：[RFC-0001](../design-docs/rfcs/codebuddy-agent-simulation.md)、[CHG-0001](../exec-plans/active/CHG-0001-codebuddy-provider-initial.md)
 
 ## 1. 摘要
 
@@ -69,7 +70,7 @@ Owner：wayne
 - 代理按 IDE 的节奏发送可离线实现的旁路信号（如消息中心轮询）；无法实现的（如 IDE 专属遥测）列入残余差异。
 - 工具调用结果由客户端回传，代理原样映射，不在服务端执行。
 
-详细设计、取舍与未决问题见 [RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)。
+详细设计、取舍与未决问题见 [RFC-0001](../design-docs/rfcs/codebuddy-agent-simulation.md)。
 
 ## 7. 当前需求与验收（EARS）
 
@@ -135,24 +136,24 @@ Owner：wayne
 
 | CHG ID | 标题 | 状态 | 链接 |
 |---|---|---|---|
-| CHG-0001 | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 开发中 | [CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md) |
-| CHG-0002 | CodeBuddy 协议适配层（Anthropic Messages + Responses）与旁路信号 | 开发中 | [CHG-0002](../changes/CHG-0002-codebuddy-protocol-adapters.md) |
-| CHG-0003 | any2api provider 注册表与共享协议层 | 开发中 | [CHG-0003](../changes/CHG-0003-provider-registry-protocols.md) |
-| CHG-0004 | CodeBuddy 排队协议与限流错误映射 | 开发中 | [CHG-0004](../changes/CHG-0004-codebuddy-queue.md) |
-| CHG-0005 | 评审修复：错误边界、空流、类型校验、normalizeErrors、共享 SSE、前缀校验 | 开发中 | [CHG-0005](../changes/CHG-0005-review-fixes.md) |
-| CHG-0006 | 统一 provider 前缀为 `/<name>/v1` | 开发中 | [CHG-0006](../changes/CHG-0006-unify-prefixes.md) |
-| CHG-0007 | 修复 Responses reasoning 项 `content: null` 导致 400 | 开发中 | [CHG-0007](../changes/CHG-0007-responses-null-content.md) |
-| CHG-0008 | 修复 Responses 并行 function_call 拆成多条 assistant 导致 11148 | 开发中 | [CHG-0008](../changes/CHG-0008-responses-parallel-tool-calls.md) |
-| CHG-0009 | 过滤竞品客户端 system preamble，修复 CodeBuddy 400 Request blocked | 开发中 | [CHG-0009](../changes/CHG-0009-codebuddy-system-sanitize.md) |
-| CHG-0010 | 对齐同类 CodeBuddy 2API 项目：字段透传、空消息过滤、thinking 映射 | 开发中 | [CHG-0010](../changes/CHG-0010-codebuddy-peer-audit.md) |
-| CHG-0011 | CodeBuddy prompt cache_control 与未知模型 404 | 开发中 | [CHG-0011](../changes/CHG-0011-codebuddy-cache-and-model-404.md) |
-| CHG-0012 | 评审修复：协议层作用域、max tokens 互斥、cache 策略、空值过滤 | 开发中 | [CHG-0012](../changes/CHG-0012-review-fixes-2.md) |
-| CHG-0013 | 剥离客户端计费指纹头 `x-anthropic-billing-header`，修复 Claude Code 400 | 开发中 | [CHG-0013](../changes/CHG-0013-codebuddy-billing-header.md) |
-| CHG-0014 | 评审修复：计费头清理范围最小化，不改变其他 system 内容 | 开发中 | [CHG-0014](../changes/CHG-0014-codebuddy-billing-header-scope.md) |
+| CHG-0001 | CodeBuddy provider 初始实现（传输 + 信封仿真 + OpenAI Chat） | 已验证 | [CHG-0001](../exec-plans/active/CHG-0001-codebuddy-provider-initial.md) |
+| CHG-0002 | CodeBuddy 协议适配层（Anthropic Messages + Responses）与旁路信号 | 已验证 | [CHG-0002](../exec-plans/active/CHG-0002-codebuddy-protocol-adapters.md) |
+| CHG-0003 | any2api provider 注册表与共享协议层 | 已验证 | [CHG-0003](../exec-plans/active/CHG-0003-provider-registry-protocols.md) |
+| CHG-0004 | CodeBuddy 排队协议与限流错误映射 | 已验证 | [CHG-0004](../exec-plans/active/CHG-0004-codebuddy-queue.md) |
+| CHG-0005 | 评审修复：错误边界、空流、类型校验、normalizeErrors、共享 SSE、前缀校验 | 已验证 | [CHG-0005](../exec-plans/active/CHG-0005-review-fixes.md) |
+| CHG-0006 | 统一 provider 前缀为 `/<name>/v1` | 已验证 | [CHG-0006](../exec-plans/active/CHG-0006-unify-prefixes.md) |
+| CHG-0007 | 修复 Responses reasoning 项 `content: null` 导致 400 | 已验证 | [CHG-0007](../exec-plans/active/CHG-0007-responses-null-content.md) |
+| CHG-0008 | 修复 Responses 并行 function_call 拆成多条 assistant 导致 11148 | 已验证 | [CHG-0008](../exec-plans/active/CHG-0008-responses-parallel-tool-calls.md) |
+| CHG-0009 | 过滤竞品客户端 system preamble，修复 CodeBuddy 400 Request blocked | 已验证 | [CHG-0009](../exec-plans/active/CHG-0009-codebuddy-system-sanitize.md) |
+| CHG-0010 | 对齐同类 CodeBuddy 2API 项目：字段透传、空消息过滤、thinking 映射 | 已验证 | [CHG-0010](../exec-plans/active/CHG-0010-codebuddy-peer-audit.md) |
+| CHG-0011 | CodeBuddy prompt cache_control 与未知模型 404 | 已验证 | [CHG-0011](../exec-plans/active/CHG-0011-codebuddy-cache-and-model-404.md) |
+| CHG-0012 | 评审修复：协议层作用域、max tokens 互斥、cache 策略、空值过滤 | 已验证 | [CHG-0012](../exec-plans/active/CHG-0012-review-fixes-2.md) |
+| CHG-0013 | 剥离客户端计费指纹头 `x-anthropic-billing-header`，修复 Claude Code 400 | 已验证 | [CHG-0013](../exec-plans/active/CHG-0013-codebuddy-billing-header.md) |
+| CHG-0014 | 评审修复：计费头清理范围最小化，不改变其他 system 内容 | 已验证 | [CHG-0014](../exec-plans/active/CHG-0014-codebuddy-billing-header-scope.md) |
 
 ## 11. 链接
 
-- 技术方案：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)
+- 技术方案：[RFC-0001](../design-docs/rfcs/codebuddy-agent-simulation.md)
 - 先例：[codearts protocol-spec](../../src/providers/codearts/protocol-spec.md)（同一套「协议直连 + 全头模拟」方法论）
 - 本机证据：CodeBuddy CN 扩展日志 `~/Library/Application Support/CodeBuddyExtension/Logs/CodeBuddyIDE/2026-11-20/playground__*.log`；扩展 bundle `/Applications/CodeBuddy CN.app/Contents/Resources/app/extensions/genie/`（`product.json`、`out/extension/index.js`）
 - 相关文档：any2api [README](../../README.md)

@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/providers/codebuddy/envelope.ts`、`src/providers/codebuddy/config.ts`、`src/providers/codebuddy/openai.ts`、`src/protocols/anthropic.ts`、`src/protocols/responses.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0009](CHG-0009-codebuddy-system-sanitize.md)
 
 ## 1. 摘要
@@ -96,7 +96,7 @@ Owner：wayne
 ## 8. 关联与证据
 
 - 参考项目：`orangeboyChen/codebuddy2api`（`lib/server/proxy/codebuddy/upstream.ts`、`lib/server/shared/thinking-effort.ts`）、`Sliverkiss/CodeBuddy2api`。
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 代码：`src/providers/codebuddy/envelope.ts`、`config.ts`、`openai.ts`、`src/protocols/anthropic.ts`、`responses.ts`
 - 测试：`envelope.test.ts`、`anthropic.test.ts`、`responses.test.ts`
 

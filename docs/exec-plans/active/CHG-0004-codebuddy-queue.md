@@ -4,8 +4,8 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/providers/codebuddy/client.ts`、`src/providers/codebuddy/openai.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
-关联：[CHG-0002](CHG-0002-codebuddy-protocol-adapters.md)、[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
+关联：[CHG-0002](CHG-0002-codebuddy-protocol-adapters.md)、[RFC-0001](../../design-docs/rfcs/codebuddy-agent-simulation.md)
 
 ## 1. 摘要
 
@@ -64,7 +64,7 @@ Owner：wayne
 
 ## 8. 关联与证据
 
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 前置：[CHG-0002](CHG-0002-codebuddy-protocol-adapters.md)
 - 代码：`src/providers/codebuddy/client.ts`、`openai.ts`
 - 测试：`client.test.ts`、`openai.test.ts`

@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/protocols/responses.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0005](CHG-0005-review-fixes.md)
 
 ## 1. 摘要
@@ -74,7 +74,7 @@ Codex 的工具续轮会回传上一轮的 `reasoning` 项，其中 `content: nu
 ## 8. 关联与证据
 
 - 用户实测：reasoning `content:null` → 400；`[]`/缺失 → 200；codearts/codebuddy 均受影响。
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 前置：[CHG-0005](CHG-0005-review-fixes.md)
 - 代码：`src/protocols/responses.ts`
 - 测试：`src/protocols/protocols.test.ts`

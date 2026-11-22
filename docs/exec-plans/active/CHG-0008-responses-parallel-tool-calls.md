@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/protocols/responses.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0007](CHG-0007-responses-null-content.md)
 
 ## 1. 摘要
@@ -74,7 +74,7 @@ Codex 一个回合可能返回**多个连续 `function_call` 项**（并行工�
 ## 8. 关联与证据
 
 - 用户会话：`~/.codex/sessions/2026/11/21/rollout-2026-11-21T19-26-04-01a1fddb-36a8-7883-9176-f83099f84ea0.jsonl`
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 前置：[CHG-0007](CHG-0007-responses-null-content.md)
 - 代码：`src/protocols/responses.ts`
 - 测试：`src/protocols/protocols.test.ts`

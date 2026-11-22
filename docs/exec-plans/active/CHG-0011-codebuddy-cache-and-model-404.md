@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/shared/cache.ts`、`src/providers/codebuddy/openai.ts`、`src/providers/codebuddy/config.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0010](CHG-0010-codebuddy-peer-audit.md)
 
 ## 1. 摘要
@@ -75,7 +75,7 @@ Owner：wayne
 ## 8. 关联与证据
 
 - 参考：`orangeboyChen/codebuddy2api` 的 `upstream.ts`（`MIN_AUTO_CACHE_TEXT_LENGTH=1024`、`applyPromptCacheControl`）。
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 代码：`src/shared/cache.ts`、`src/providers/codebuddy/openai.ts`、`config.ts`
 - 后续：cache 目标改为「最长 system」并逐条判断，见 [CHG-0012](CHG-0012-review-fixes-2.md)。
 - 测试：`src/shared/cache.test.ts`、`config.test.ts`、`openai.test.ts`
