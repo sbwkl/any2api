@@ -2,7 +2,8 @@
 // 实测：system 为 "You are Claude Code, Anthropic's official CLI for Claude." → 400
 // {"error":{"message":"Request blocked. Please send it again"}}；替换为中性句后 200。
 // 代理只替换这段 preamble，保留其余系统内容。
-const COMPETITOR_PREAMBLE = /You are Claude Code, Anthropic's official CLI for Claude\.?/gi;
+const COMPETITOR_PREAMBLE =
+  /You\s+are\s+Claude\s+Code,\s+Anthropic['’]s\s+official\s+CLI\s+for\s+Claude\.?/gi;
 
 // 客户端计费指纹（x-anthropic-billing-header: cc_version=...）同样会触发 400 拦截；
 // 该行只用于客户端遥测，删除后不影响模型行为。
