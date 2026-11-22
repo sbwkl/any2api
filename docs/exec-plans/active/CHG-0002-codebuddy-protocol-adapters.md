@@ -4,8 +4,8 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/providers/codebuddy/`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
-关联：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)、[CHG-0001](CHG-0001-codebuddy-provider-initial.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
+关联：[RFC-0001](../../design-docs/rfcs/codebuddy-agent-simulation.md)、[CHG-0001](CHG-0001-codebuddy-provider-initial.md)
 
 ## 1. 摘要
 
@@ -82,11 +82,11 @@ Owner：wayne
 
 ## 8. 关联与证据
 
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
-- 技术方案：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
+- 技术方案：[RFC-0001](../../design-docs/rfcs/codebuddy-agent-simulation.md)
 - 前置：[CHG-0001](CHG-0001-codebuddy-provider-initial.md)
 - 后续：Anthropic/Responses 适配已抽到共享 `src/protocols/`，SSE 抽到 `src/shared/sse.ts`，codearts 与 codebuddy 均已切换，见 [CHG-0003](CHG-0003-provider-registry-protocols.md)。
-- 协议规格：[protocol-spec](../../src/providers/codebuddy/protocol-spec.md)
+- 协议规格：[protocol-spec](../../../src/providers/codebuddy/protocol-spec.md)
 - 测试：`src/providers/codebuddy/anthropic.test.ts`、`responses.test.ts`、`msgcenter.test.ts`、`openai.test.ts`
 
 ## 9. 变更记录

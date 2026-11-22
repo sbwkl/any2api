@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/shared/system.ts`、`src/protocols/anthropic.ts`、`src/protocols/responses.ts`、`src/providers/codebuddy/envelope.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0008](CHG-0008-responses-parallel-tool-calls.md)
 
 ## 1. 摘要
@@ -81,7 +81,7 @@ Claude Desktop 的 system 提示词以这句话开头，因此经代理接入 Co
 
 - 用户报告：Claude Desktop + CodeBuddy + DeepSeek，`Request blocked. Please send it again`（400）。
 - 实测对照：见 §2。
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 代码：`src/shared/system.ts`
 - 测试：`src/protocols/protocols.test.ts`、`src/providers/codebuddy/envelope.test.ts`
 

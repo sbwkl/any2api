@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/protocols/`、`src/registry.ts`、`src/shared/sse.ts`、`src/providers/codebuddy/openai.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0003](CHG-0003-provider-registry-protocols.md)
 
 ## 1. 摘要
@@ -82,7 +82,7 @@ Owner：wayne
 ## 8. 关联与证据
 
 - 评审文本：P0-1/P0-2、P1-3..P1-6。
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 前置：[CHG-0003](CHG-0003-provider-registry-protocols.md)
 - 代码：`src/protocols/`、`src/registry.ts`、`src/shared/sse.ts`、`src/providers/codebuddy/openai.ts`
 - 测试：`registry.test.ts`、`protocols/protocols.test.ts`、`shared/sse.test.ts`、`providers/codebuddy/openai.test.ts`、`providers/codearts/openai.test.ts`

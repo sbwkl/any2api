@@ -1,10 +1,16 @@
 # RFC-0001 CodeBuddy Agent 行为仿真与 API 化方案
 
+| 项 | 内容 |
+|---|---|
+| 文档库状态 | proposed |
+| 当前事实源 | [`../../product-specs/codebuddy-provider.md`](../../product-specs/codebuddy-provider.md) |
+| 索引 | [`../index.md`](../index.md) |
+
 类型：RFC
 状态：草案
 作者：wayne
 评审人：（待）
-关联：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)、[CHG-0001](../changes/CHG-0001-codebuddy-provider-initial.md)
+关联：[REQ-0001](../../product-specs/codebuddy-provider.md)、[CHG-0001](../../exec-plans/active/CHG-0001-codebuddy-provider-initial.md)
 
 > 本文是技术方案（Reference-level），不是实现细节的替代品。实现时以 `src/providers/codebuddy/protocol-spec.md` 为逐字规格；本文与 protocol-spec 冲突时，以 protocol-spec 的实测证据为准，并回写本文。
 > 证据基线：CodeBuddy CN genie 3.10.0（`coding-copilot`），本机 macOS，2026-11-20 实测。
@@ -27,7 +33,7 @@ CodeBuddy CN 的 Agent 通道是一个普通的 HTTPS 推理接口：`POST https
 ### 2.1 问题
 
 - 用户希望在 IDE 之外使用 CodeBuddy 的模型（脚本、Cherry Studio、Cline、OpenAI SDK）。
-- any2api 已有 codearts provider，验证了「协议直连 + 全头模拟」方法论（见 [codearts protocol-spec](../../src/providers/codearts/protocol-spec.md)），但 CodeBuddy 的协议、鉴权与 Agent 语义不同，需要独立 provider。
+- any2api 已有 codearts provider，验证了「协议直连 + 全头模拟」方法论（见 [codearts protocol-spec](../../../src/providers/codearts/protocol-spec.md)），但 CodeBuddy 的协议、鉴权与 Agent 语义不同，需要独立 provider。
 - 风险约束：用户明确要求「尽可能模拟 Agent 的行为，减少被识别的可能」。这不是 ToS 合规建议，而是技术约束：代理不能留下明显的「非 IDE」特征。
 
 ### 2.2 证据（本机实测，2026-11-20）
@@ -458,13 +464,13 @@ Base URL 由 `product.json.endpoint` + `/v2` 组成；`product.json` 的 `stagin
 | Agent 循环、CustomFetch、MsgCenter、usage | `~/Library/Application Support/CodeBuddyExtension/Logs/CodeBuddyIDE/2026-11-20/playground__*.log` |
 | 扩展入口与实现 | `.../genie/out/extension/index.js`（21MB bundle，待逐字核对） |
 | 凭证存储 | macOS Keychain `CodeBuddy CN Safe Storage`；`.../CodeBuddy CN/User/globalStorage/state.vscdb` |
-| 方法论先例 | [codearts protocol-spec](../../src/providers/codearts/protocol-spec.md) |
+| 方法论先例 | [codearts protocol-spec](../../../src/providers/codearts/protocol-spec.md) |
 
 ---
 
 ## 12. 实现校验（2026-11-20）
 
-首版实现后，对本方案的关键假设做了实测校验（逐字规格见 [protocol-spec](../../src/providers/codebuddy/protocol-spec.md)）。
+首版实现后，对本方案的关键假设做了实测校验（逐字规格见 [protocol-spec](../../../src/providers/codebuddy/protocol-spec.md)）。
 
 ### 12.1 已确认
 

@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/providers/codearts/index.ts`、`src/index.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0003](CHG-0003-provider-registry-protocols.md)
 
 ## 1. 摘要
@@ -61,7 +61,7 @@ codearts 的公开前缀从空字符串改为 `/codearts`；codebuddy 保持 `/c
 
 ## 8. 关联与证据
 
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 前置：[CHG-0003](CHG-0003-provider-registry-protocols.md)
 - 代码：`src/providers/codearts/index.ts`、`src/index.ts`
 - 测试：`src/providers/prefixes.test.ts`

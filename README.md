@@ -166,3 +166,25 @@ resp = client.chat.completions.create(
 - codebuddy 默认不发送 `X-Device-Token`（实测当前通道可省略），不伪造 TuringShield
 - codebuddy 的 ask/craft profile 只切换系统提示词；工具 schema 仅来自客户端 `tools`
 - codebuddy 会过滤已知的竞品客户端 system preamble（Claude Code 的 "official CLI" 句）与客户端计费指纹行（`x-anthropic-billing-header:`），避免后端 400 Request blocked；其他敏感 system 仍可能被拦截
+
+<!-- usage-ledger-docs-map -->
+## 文档地图
+
+本项目的知识库结构与兄弟项目 `usage-ledger` 一致；动手前先读 [`AGENTS.md`](AGENTS.md) 地图。
+
+| 文档 | 内容 | 何时读 |
+|---|---|---|
+| [`AGENTS.md`](AGENTS.md) | 项目工作区地图、硬规则、文档指针 | 进入项目时 |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | As-Built 架构；暂无事实写「待补」 | 了解整体结构 / 排障时 |
+| [`docs/DESIGN.md`](docs/DESIGN.md) 及相邻领域宪章 | 设计、前端、计划、产品感知、质量、可靠性、安全 | 对应领域评审时 |
+| [`docs/design-docs/index.md`](docs/design-docs/index.md) | 设计知识库状态索引 | 查 ADR / RFC / 历史设计时 |
+| [`docs/product-specs/index.md`](docs/product-specs/index.md) | 产品行为规格索引 | 产品 / 需求、开始新特性前 |
+| [`docs/exec-plans/completed/`](docs/exec-plans/completed/) | 已验证变更记录 | 开发 / 评审时 |
+| [`docs/references/index.md`](docs/references/index.md) | 调研、实测与外部参考证据 | 查证据时 |
+| [`docs/generated/index.md`](docs/generated/index.md) | 生成物索引 | 核对生成物时 |
+
+历史 `REQ-xxxx` / `CHG-xxxx` / `ADR-xxxx` 编号冻结；新增文档使用语义化主题路径，不再分配顺序编号。状态以文档首部为准，没有验证 / 部署证据不得标「已验证 / 已发布」。
+
+## 开发约定
+
+跨项目流程见 [工作区根 AGENTS.md](../AGENTS.md)：`main` 保护、新特性走 `feat/<特性名>`、脏工作区用 worktree、TDD、提交前静态检查、临时集成分支、PR / 合并前用户同意。项目级测试：`bun test`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`。未配置的检查保持「待补」，不得用跳过规则压掉告警。

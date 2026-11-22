@@ -6,8 +6,8 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/registry.ts`、`src/protocols/`、`src/shared/sse.ts`、`src/index.ts`、`src/providers/*/index.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
-关联：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)、[CHG-0002](CHG-0002-codebuddy-protocol-adapters.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
+关联：[RFC-0001](../../design-docs/rfcs/codebuddy-agent-simulation.md)、[CHG-0002](CHG-0002-codebuddy-protocol-adapters.md)
 
 ## 1. 摘要
 
@@ -97,7 +97,7 @@ Owner：wayne
 ## 8. 关联与证据
 
 - 架构评审：用户提供的架构师评审（静态注册表 + ChatBackend 共享协议层）。
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 - 前置：[CHG-0002](CHG-0002-codebuddy-protocol-adapters.md)
 - 代码：`src/registry.ts`、`src/protocols/`、`src/shared/sse.ts`、`src/index.ts`
 - 测试：`src/registry.test.ts`、`src/providers/codebuddy/anthropic.test.ts`、`responses.test.ts`、`src/shared/sse.test.ts`

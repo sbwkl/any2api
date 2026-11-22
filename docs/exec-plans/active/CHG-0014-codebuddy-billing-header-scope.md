@@ -4,7 +4,7 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/shared/system.ts`、`src/providers/codebuddy/envelope.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
 关联：[CHG-0013](CHG-0013-codebuddy-billing-header.md)
 
 ## 1. 摘要

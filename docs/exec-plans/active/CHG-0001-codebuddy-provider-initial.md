@@ -4,8 +4,8 @@
 状态：开发中
 Owner：wayne
 所属模块/入口：`src/providers/codebuddy/`、`src/index.ts`
-功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
-关联：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)
+功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
+关联：[RFC-0001](../../design-docs/rfcs/codebuddy-agent-simulation.md)
 
 ## 1. 摘要
 
@@ -115,8 +115,8 @@ Owner：wayne
 
 ## 8. 关联与证据
 
-- 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
-- 技术方案：[RFC-0001](../rfcs/RFC-0001-codebuddy-agent-simulation.md)
+- 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
+- 技术方案：[RFC-0001](../../design-docs/rfcs/codebuddy-agent-simulation.md)
 - 本机证据：扩展 bundle `/Applications/CodeBuddy CN.app/Contents/Resources/app/extensions/genie/`（`product.json`、`out/extension/index.js`）；日志 `~/Library/Application Support/CodeBuddyExtension/Logs/CodeBuddyIDE/2026-11-20/playground__*.log`。
 - 待补：用户提到但未随消息提供的 CodeBuddy 研究报告——收到后与 RFC-0001 §9 的未决问题逐条对齐。
 - issue / PR：暂无（本地仓库，无远程）。
