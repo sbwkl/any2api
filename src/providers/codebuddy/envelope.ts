@@ -19,8 +19,12 @@ export function normalizeMessages(messages: any[]): any[] {
   return messages
     .filter((m) => {
       if (!m || typeof m !== "object") throw new Error("invalid message");
-      // 丢弃既无 content 也无 tool_calls 的空消息（部分 SDK 会省略 content）
-      return m.content !== undefined || m.tool_calls !== undefined;
+      // 丢弃无内容（undefined/null/空数组）且无 tool_calls 的消息
+      const hasContent =
+        m.content !== undefined &&
+        m.content !== null &&
+        !(Array.isArray(m.content) && m.content.length === 0);
+      return hasContent || m.tool_calls !== undefined;
     })
     .map((m) => {
       if (m.role === "developer") return { ...m, role: "system", content: sanitizeSystemContent(m.content) };
@@ -112,9 +116,14 @@ export function buildRequestBody(opts: {
   const cap = opts.model.maxOutputTokens ?? 128000;
   const requested = opts.maxTokens ?? opts.model.maxOutputTokens ?? 4096;
   const maxTokens = Math.max(1, Math.min(requested, cap));
-  if (isMaxCompletionModel(opts.model.id)) body.max_completion_tokens = maxTokens;
-  else body.max_tokens = maxTokens;
-  if (opts.maxCompletionTokens !== undefined) body.max_completion_tokens = opts.maxCompletionTokens;
+  // max_tokens 与 max_completion_tokens 互斥：客户端给了 max_completion_tokens 就不再写 max_tokens。
+  if (opts.maxCompletionTokens !== undefined) {
+    body.max_completion_tokens = opts.maxCompletionTokens;
+  } else if (isMaxCompletionModel(opts.model.id)) {
+    body.max_completion_tokens = maxTokens;
+  } else {
+    body.max_tokens = maxTokens;
+  }
 
   const temperature = opts.temperature ?? opts.model.temperature;
   if (typeof temperature === "number") body.temperature = temperature;

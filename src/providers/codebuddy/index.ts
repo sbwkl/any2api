@@ -37,7 +37,12 @@ export const codebuddyProvider: ProviderModule = {
     };
 
     return {
-      routes: createProtocolRoutes(backend, { toolChoice: "auto-only", normalizeErrors: true }),
+      routes: createProtocolRoutes(backend, {
+        toolChoice: "auto-only",
+        normalizeErrors: true,
+        thinking: true,
+        thinkingToEffort: true,
+      }),
       health: () => ({ ok: true, ...facade.healthPayload() }),
     };
   },

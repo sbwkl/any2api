@@ -3,17 +3,13 @@
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
 import { errorTypeForStatus } from "../shared/errors";
-import { sanitizeSystemText } from "../shared/system";
 import { sseData } from "../shared/sse";
 
 function systemToMessage(system: any): any | null {
   if (!system) return null;
-  if (typeof system === "string") return { role: "system", content: sanitizeSystemText(system) };
+  if (typeof system === "string") return { role: "system", content: system };
   if (Array.isArray(system))
-    return {
-      role: "system",
-      content: sanitizeSystemText(system.filter((b) => b?.type === "text").map((b) => b.text).join("\n")),
-    };
+    return { role: "system", content: system.filter((b) => b?.type === "text").map((b) => b.text).join("\n") };
   return null;
 }
 
@@ -77,7 +73,8 @@ export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   if (sys) messages.push(sys);
   for (const m of body.messages ?? []) messages.push(...contentToOpenAi(m.role, m.content));
   const out: any = { model: body.model, messages };
-  const thinkingEffort = anthropicThinkingToEffort(body.thinking);
+  const thinkingEffort =
+    caps.thinkingToEffort === false ? undefined : anthropicThinkingToEffort(body.thinking);
   if (thinkingEffort) out.reasoning_effort = thinkingEffort;
   if (body.stream === true) out.stream = true;
   if (body.max_tokens !== undefined) out.max_tokens = body.max_tokens;

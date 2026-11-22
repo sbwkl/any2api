@@ -33,6 +33,33 @@ describe("prompt cache control", () => {
       { role: "system", content: [{ type: "text", text: long, cache_control: { type: "ephemeral" } }] },
       { role: "user", content: "hi" },
     ];
-    expect(applyPromptCacheControl(messages)).toBe(messages);
+    const out = applyPromptCacheControl(messages);
+    expect(out).toEqual(messages);
+    expect((out[0] as any).content[0].cache_control).toEqual({ type: "ephemeral" });
+  });
+
+  test("adds cache_control to the longest system, not the short agent prompt", () => {
+    const out = applyPromptCacheControl([
+      { role: "system", content: "You are an AI coding assistant." },
+      { role: "system", content: long },
+      { role: "user", content: "hi" },
+    ]);
+    expect(typeof (out[0] as any).content).toBe("string");
+    expect(Array.isArray((out[1] as any).content)).toBe(true);
+    expect((out[1] as any).content[0].cache_control).toEqual({ type: "ephemeral" });
+  });
+
+  test("an explicit cache_control on one message does not block auto on another", () => {
+    const out = applyPromptCacheControl([
+      { role: "system", content: long },
+      { role: "user", content: "hi" },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "ok", cache_control: { type: "ephemeral" } }],
+      },
+    ]);
+    expect(Array.isArray((out[0] as any).content)).toBe(true);
+    expect((out[0] as any).content[0].cache_control).toEqual({ type: "ephemeral" });
+    expect((out[2] as any).content[0].cache_control).toEqual({ type: "ephemeral" });
   });
 });

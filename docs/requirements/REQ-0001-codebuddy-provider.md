@@ -101,10 +101,11 @@ Owner：wayne
 - **R26**：When Responses `input` 含连续 `function_call` 项, the system shall 将其合并为一条 assistant 消息的 `tool_calls` 数组，并在对应 `function_call_output` 前 flush；`reasoning`/未知项不得打断该分组。
 - **R27**：When codebuddy 的 system/developer 消息包含已知竞品 preamble `You are Claude Code, Anthropic's official CLI for Claude.`, the system shall 在发送上游前将其替换为 `You are an AI coding assistant.`，并保留其余系统内容。
 - **R28**：When 客户端提供 OpenAI 可选字段（`frequency_penalty`、`presence_penalty`、`stop`、`seed`、`response_format`、`parallel_tool_calls`、`stream_options`、`metadata`、`store`、`user`、`service_tier`、`max_completion_tokens`）, the system shall 在模型支持范围内透传，不得静默丢弃。
-- **R29**：When Anthropic 请求包含 `thinking`, the system shall 将其映射为 `reasoning_effort`（`budget_tokens` ≤2048 → minimal，≤8192 → medium，否则 high；`disabled/off` → off），并按模型 `reasoning.supportedEfforts` 就近钳制。
-- **R30**：The system shall 丢弃既无 `content` 也无 `tool_calls` 的空消息，避免上游把它当成损坏的 tool_calls/tool-result 序列。
-- **R31**：When codebuddy 的 system 或最后一条 user 消息文本长度 ≥1024 且消息没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`（字符串转 `[{type:"text",text,cache_control}]`）；已有显式 cache_control 时不重复添加。
+- **R29**：When Anthropic 请求包含 `thinking`, the system shall 将其映射为 `reasoning_effort`（`budget_tokens` ≤2048 → minimal，≤8192 → medium，否则 high；`disabled/off` → 按模型 `reasoning.supportedEfforts` 钳制：无列表时 low，有列表时就近，可能 high）。
+- **R30**：The system shall 丢弃 `content` 为 `undefined`/`null`/空数组且无 `tool_calls` 的消息；空字符串 `content: ""` 保留。
+- **R31**：When codebuddy 的**最长的一条 system** 或最后一条 user 消息文本长度 ≥1024 且该消息没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`；其他消息的显式 cache_control 不影响该判断。
 - **R32**：When 请求的模型不在 codebuddy 模型目录中, the system shall 返回 404 `model_not_found`，不向上游发送请求。
+- **R33**：When 客户端提供 `max_completion_tokens`, the system shall 不发送 `max_tokens`（二者互斥）；未提供时按模型类型选择 `max_tokens` 或 `max_completion_tokens`。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -144,6 +145,7 @@ Owner：wayne
 | CHG-0009 | 过滤竞品客户端 system preamble，修复 CodeBuddy 400 Request blocked | 开发中 | [CHG-0009](../changes/CHG-0009-codebuddy-system-sanitize.md) |
 | CHG-0010 | 对齐同类 CodeBuddy 2API 项目：字段透传、空消息过滤、thinking 映射 | 开发中 | [CHG-0010](../changes/CHG-0010-codebuddy-peer-audit.md) |
 | CHG-0011 | CodeBuddy prompt cache_control 与未知模型 404 | 开发中 | [CHG-0011](../changes/CHG-0011-codebuddy-cache-and-model-404.md) |
+| CHG-0012 | 评审修复：协议层作用域、max tokens 互斥、cache 策略、空值过滤 | 开发中 | [CHG-0012](../changes/CHG-0012-review-fixes-2.md) |
 
 ## 11. 链接
 

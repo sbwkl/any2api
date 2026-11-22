@@ -36,6 +36,30 @@ describe("envelope", () => {
     expect(out[0].content).not.toContain("Anthropic's official CLI");
   });
 
+  test("normalizeMessages drops null and empty-array content", () => {
+    const out = normalizeMessages([
+      { role: "user", content: "hi" },
+      { role: "user", content: null },
+      { role: "user", content: [] },
+      { role: "user", content: "" },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].content).toBe("hi");
+    expect(out[1].content).toBe("");
+  });
+
+  test("normalizeMessages sanitizes every occurrence of the preamble", () => {
+    const out = normalizeMessages([
+      {
+        role: "system",
+        content:
+          "You are Claude Code, Anthropic's official CLI for Claude. A. You are Claude Code, Anthropic's official CLI for Claude. B.",
+      },
+    ]);
+    expect(out[0].content).not.toContain("Anthropic's official CLI");
+    expect(out[0].content).toContain("You are an AI coding assistant. A.");
+  });
+
   test("mergeAgentPrompt prepends the agent system message", () => {
     const out = mergeAgentPrompt([{ role: "user", content: "hi" }], "<system_prompt>X</system_prompt>");
     expect(out[0]).toEqual({ role: "system", content: "<system_prompt>X</system_prompt>" });
@@ -128,12 +152,16 @@ describe("envelope", () => {
     expect(body.user).toBe("u1");
     expect(body.service_tier).toBe("auto");
     expect(body.max_completion_tokens).toBe(123);
+    expect(body.max_tokens).toBeUndefined();
   });
 
   test("buildRequestBody clamps reasoning effort to supported efforts", () => {
     const withSupport = { ...model, supportedEfforts: ["high"] };
     const minimal = buildRequestBody({ model: withSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "minimal" });
     expect(minimal.reasoning_effort).toBe("high");
+
+    const offWithSupport = buildRequestBody({ model: withSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "off" });
+    expect(offWithSupport.reasoning_effort).toBe("high");
 
     const withoutSupport = { ...model, supportedEfforts: undefined };
     const off = buildRequestBody({ model: withoutSupport, messages: [{ role: "user", content: "hi" }], reasoningEffort: "off" });

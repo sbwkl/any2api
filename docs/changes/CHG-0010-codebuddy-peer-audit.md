@@ -70,7 +70,7 @@ Owner：wayne
 - `bun test` → **98 pass / 0 fail / 352 expect() calls**（13 个测试文件）。
 - 新增测试：
   - `buildRequestBody` 透传 12 个 OpenAI 字段；
-  - `reasoning_effort` 按 `supportedEfforts` 钳制（minimal → high；off → low）；
+  - `reasoning_effort` 按 `supportedEfforts` 钳制（minimal → high；off → 无列表时 low、有列表时就近，可能 high）；
   - `normalizeMessages` 丢弃空消息；
   - Anthropic thinking 分档（1024→minimal、4096→medium、10000→high、disabled→off）；
   - Responses `parallel_tool_calls` / `metadata` 透传。

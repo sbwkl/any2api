@@ -11,7 +11,7 @@ Owner：wayne
 
 落实同类项目审计的 #1、#4：
 
-1. **prompt cache_control**：对 system 与最后一条 user 消息（文本 ≥1024 字符）自动加 `cache_control: {type:"ephemeral"}`；已有显式 cache_control 时不重复添加。
+1. **prompt cache_control**：对最长的一条 system 与最后一条 user 消息（文本 ≥1024 字符）自动加 `cache_control: {type:"ephemeral"}`；单条消息已有显式 cache_control 时只跳过该消息。
 2. **未知模型 404**：`resolveModel` 不再回退到「原样透传」，未在 codebuddy 模型目录中的模型直接返回 404 `model_not_found`，不向上游发请求。
 
 ## 2. 变更理由与证据
@@ -22,7 +22,7 @@ Owner：wayne
 
 ## 3. 行为 / AC delta
 
-- **新增 R31**：When codebuddy 的 system 或最后一条 user 消息文本长度 ≥1024 且消息没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`（字符串转 `[{type:"text",text,cache_control}]`）；已有显式 cache_control 时不重复添加。
+- **新增 R31**：When codebuddy 的**最长的一条 system** 或最后一条 user 消息文本长度 ≥1024 且该消息没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`（字符串转 `[{type:"text",text,cache_control}]`）；其他消息的显式 cache_control 不影响该判断。
 - **新增 R32**：When 请求的模型不在 codebuddy 模型目录中, the system shall 返回 404 `model_not_found`，不向上游发送请求。
 - **修改**：`resolveModel` 返回 `ModelInfo | undefined`；codebuddy `respond` 在模型为空时返回 404。
 
@@ -77,6 +77,7 @@ Owner：wayne
 - 参考：`orangeboyChen/codebuddy2api` 的 `upstream.ts`（`MIN_AUTO_CACHE_TEXT_LENGTH=1024`、`applyPromptCacheControl`）。
 - 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
 - 代码：`src/shared/cache.ts`、`src/providers/codebuddy/openai.ts`、`config.ts`
+- 后续：cache 目标改为「最长 system」并逐条判断，见 [CHG-0012](CHG-0012-review-fixes-2.md)。
 - 测试：`src/shared/cache.test.ts`、`config.test.ts`、`openai.test.ts`
 
 ## 9. 变更记录

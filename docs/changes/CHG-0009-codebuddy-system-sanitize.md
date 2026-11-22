@@ -40,7 +40,7 @@ Claude Desktop 的 system 提示词以这句话开头，因此经代理接入 Co
 **受影响**
 
 - 新增 `src/shared/system.ts`。
-- 修改 `src/protocols/anthropic.ts`（system 块）、`src/protocols/responses.ts`（instructions）、`src/providers/codebuddy/envelope.ts`（system/developer 消息）。
+- 修改 `src/providers/codebuddy/envelope.ts`（system/developer 消息）；共享协议层不做 provider 专属 sanitize（见 [CHG-0012](CHG-0012-review-fixes-2.md)）。
 - 测试：`protocols.test.ts`、`envelope.test.ts`。
 - 文档：REQ R27、本 CHG、README 已知限制。
 
