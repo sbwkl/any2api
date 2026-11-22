@@ -15,7 +15,7 @@ Claude Desktop 新会话发送的 Claude Code 自述首句里，`You are Claude 
 修复：把正则改为空白/撇号容错：
 
 ```ts
-/You are Claude\s+Code,\s+Anthropic['’]s official CLI for Claude\.?/gi
+/You\s+are\s+Claude\s+Code,\s+Anthropic['’]s\s+official\s+CLI\s+for\s+Claude\.?/gi
 ```
 
 ## 2. 变更理由与证据
@@ -25,13 +25,13 @@ Claude Desktop 新会话发送的 Claude Code 自述首句里，`You are Claude 
   - 单空格 `You are Claude Code, Anthropic's official CLI for Claude.` → 200（旧 sanitizer 已覆盖）；
   - **双空格** `You are Claude Code,  Anthropic's official CLI for Claude.` → **400（旧 sanitizer 未覆盖）**；
   - 换行、制表符、Unicode 撇号、无句点 → 200；
-  - 双空格在修复后 → **200**。
+  - 双空格在修复后 → **200**；多词之间多空格（`You  are  Claude  Code, ...`）同样 → 200。
 - **结论**：触发点是同一句 preamble 的空白变体；后端按整句匹配，空白不一致就绕过 sanitizer。
 
 ## 3. 行为 / AC delta
 
-- **修改**：`sanitizeSystemText` 的竞品 preamble 正则改为 `Claude\s+Code,\s+Anthropic['’]s ...`，覆盖多空格、制表符、换行、ASCII/Unicode 撇号、可选句点。
-- **不改变**：其余 system 内容、计费头清理、Codex preamble 过滤。
+- **修改**：`sanitizeSystemText` 的 **Claude** preamble 正则改为 `Claude\s+Code,\s+Anthropic['’]s ...`，覆盖多空格、制表符、换行、ASCII/Unicode 撇号、可选句点。
+- **不改变**：其余 system 内容、计费头清理、**Codex preamble 过滤（保持 main 的固定空格版本）**。
 
 ## 4. 影响范围与非目标
 
@@ -44,18 +44,19 @@ Claude Desktop 新会话发送的 Claude Code 自述首句里，`You are Claude 
 **本次明确不做**
 
 - 不做通用“竞品提示词”识别；只覆盖已实测的 Claude Code preamble。
+- 不改 Codex preamble 过滤（评审要求；保持 main 的固定空格版本）。
 - 不改 Claude Desktop 客户端；不改 codearts。
 
 ## 5. 验证与观测
 
-- `bun test` → **120 pass / 0 fail / 402 expect() calls**（14 个测试文件）。
+- `bun test` → **123 pass / 0 fail / 418 expect() calls**（15 个测试文件）。
 - 真实上游 e2e：双空格 system + 工具 → **200**（`deepseek-v4.1-flash`，返回 `OK`）。
 - `bun build src/index.ts --target=bun` → 通过。
 - 服务已用该分支重启；live 双空格请求 200。
 
 ## 6. 回滚方案
 
-- **回滚方式**：把正则改回单空格版本；删除 `system.test.ts`。
+- **回滚方式**：把 Claude 正则改回单空格版本；删除 `system.test.ts`；Codex 正则未改动。
 - **数据/配置兼容**：无持久化状态。
 - **回滚验证**：双空格请求重新 400；`bun test` 通过。
 
@@ -78,4 +79,4 @@ Claude Desktop 新会话发送的 Claude Code 自述首句里，`You are Claude 
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 进行中 | wayne | 空白容错正则；120 tests；真实上游双空格 e2e 200；服务已用该分支重启 |
+| 进行中 | wayne | 仅 Claude 全空白容错；123 tests；真实上游双空格/多空格 e2e 200；服务已用该分支重启 |

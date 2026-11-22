@@ -100,7 +100,7 @@ Owner：wayne
 - **R24**：When 服务启动, the system shall 为每个 provider 使用 `/<name>/v1` 前缀（codearts `/codearts/v1`、codebuddy `/codebuddy/v1`）；不再保留无前缀的 `/v1`。
 - **R25**：When Responses `input` 项不是 message（如 `reasoning`）, the system shall 不因 `content` 校验拒绝该请求；当 message 项的 `content` 存在且非 `null` 时，须为 string 或 array。
 - **R26**：When Responses `input` 含连续 `function_call` 项, the system shall 将其合并为一条 assistant 消息的 `tool_calls` 数组，并在对应 `function_call_output` 前 flush；`reasoning`/未知项不得打断该分组。
-- **R27**：When codebuddy 的 system/developer 消息包含已知竞品 preamble `You are Claude Code, Anthropic's official CLI for Claude.`, the system shall 在发送上游前将其替换为 `You are an AI coding assistant.`，并保留其余系统内容。
+- **R27**：When codebuddy 的 system/developer 消息包含已知竞品 preamble `You are Claude Code, Anthropic's official CLI for Claude.`（含多空格/制表符/换行等空白变体、ASCII/Unicode 撇号、可选句点）, the system shall 在发送上游前将其替换为 `You are an AI coding assistant.`，并保留其余系统内容。
 - **R28**：When 客户端提供 OpenAI 可选字段（`frequency_penalty`、`presence_penalty`、`stop`、`seed`、`response_format`、`parallel_tool_calls`、`stream_options`、`metadata`、`store`、`user`、`service_tier`、`max_completion_tokens`）, the system shall 在模型支持范围内透传，不得静默丢弃。
 - **R29**：When Anthropic 请求包含 `thinking`, the system shall 将其映射为 `reasoning_effort`（`budget_tokens` ≤2048 → minimal，≤8192 → medium，否则 high；`disabled/off` → 按模型 `reasoning.supportedEfforts` 钳制：无列表时 low，有列表时就近，可能 high）。
 - **R30**：The system shall 始终保留 `role:"tool"` 或带 `tool_call_id` 的消息（空内容归一为 `""`）；其他消息在 `content` 为 `undefined`/`null`/空数组且无 `tool_calls` 时丢弃，空字符串 `content: ""` 保留。
@@ -152,6 +152,7 @@ Owner：wayne
 | CHG-0013 | 剥离客户端计费指纹头 `x-anthropic-billing-header`，修复 Claude Code 400 | 已验证 | [CHG-0013](../exec-plans/active/CHG-0013-codebuddy-billing-header.md) |
 | CHG-0014 | 评审修复：计费头清理范围最小化，不改变其他 system 内容 | 已验证 | [CHG-0014](../exec-plans/active/CHG-0014-codebuddy-billing-header-scope.md) |
 | 2026-11-22-codex-cli-preamble | 替换 Codex CLI 自述首句，修复 Codex 会话 400（11128） | 进行中 | [2026-11-22-codex-cli-preamble](../exec-plans/active/2026-11-22-codex-cli-preamble.md) |
+| 2026-11-22-codebuddy-sanitize-whitespace | 兼容 Claude Code preamble 的空白/撇号变体 | 进行中 | [2026-11-22-codebuddy-sanitize-whitespace](../exec-plans/active/2026-11-22-codebuddy-sanitize-whitespace.md) |
 
 ## 11. 链接
 
