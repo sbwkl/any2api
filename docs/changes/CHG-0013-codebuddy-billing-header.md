@@ -5,7 +5,7 @@
 Owner：wayne
 所属模块/入口：`src/shared/system.ts`、`src/providers/codebuddy/envelope.ts`
 功能卡：[REQ-0001](../requirements/REQ-0001-codebuddy-provider.md)
-关联：[CHG-0009](CHG-0009-codebuddy-system-sanitize.md)
+关联：[CHG-0009](CHG-0009-codebuddy-system-sanitize.md)、[CHG-0014](CHG-0014-codebuddy-billing-header-scope.md)（清理范围收窄）
 
 ## 1. 摘要
 
@@ -18,6 +18,8 @@ x-anthropic-billing-header: cc_version=2.1.319.cb2; cc_entrypoint=claude-desktop
 只要 system 中出现字面量 `x-anthropic-billing-header:`，CodeBuddy 上游就返回 `400 {"error":{"message":"Request blocked. Please send it again"}}`。该行只用于客户端计费/遥测，删除不影响模型行为。
 
 修复：代理在发送上游前删除 system 文本中以 `x-anthropic-billing-header:` 开头的整行；被删空的 text 块与被清空的 system 消息不再发送。
+
+> 清理范围已由 [CHG-0014](CHG-0014-codebuddy-billing-header-scope.md) 收窄：不再做全局 `.trim()`，只有「清洗前非空、清洗后为空」的块/消息才被丢弃。本 CHG §3/§5 描述的是初版行为。
 
 ## 2. 变更理由与证据
 
