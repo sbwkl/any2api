@@ -6,7 +6,7 @@
 | 状态 | 已验证 |
 | Owner | 工作区维护者 |
 | 所属模块 / 入口 | `AGENTS.md`、`README.md`、`docs/`、`scripts/verify-doc-links.py` |
-| 关联 | 无长期产品规格；仓库位置与文档地图调整 |
+| 关联 | [PR #1](https://github.com/sbwkl/any2api/pull/1)、[GitHub 仓库](https://github.com/sbwkl/any2api)；无长期产品规格 |
 
 ## 1. 摘要
 
@@ -37,7 +37,10 @@
 - 命令：`scripts/verify-doc-links.py`、`bun test`、`bun build src/index.ts --target=bun`。
 - 环境：macOS，Asia/Shanghai，2026-11-22；Bun 与本机仓库 `/Users/wayne/workspace/any2api`。
 - 结果：结构检查 0 issue，Markdown 本地链接 0 missing；`bun test` 120 pass / 0 fail / 402 expect() calls / 14 files；`bun build src/index.ts --target=bun --outdir .arts/build` 成功，26 modules / 131.75 KB。
+- 安全门禁：gitleaks 全 Git 历史与工作树快照复核 0 leaks；detect-secrets 5 个候选逐项核实为公开算法常量 / 协议示例 / 测试占位符，0 true positives；字面凭据格式扫描 0 命中；`logs/` 保持 ignored，未推送。
+- 推送证据：`origin` = `git@github.com:sbwkl/any2api.git`；`git push --all origin` 推送 `main`、`feat/codebuddy-billing-header`、`feat/docs-knowledge-base`、`feat/promote-to-standalone`；`git push --tags origin` 无标签可推；GitHub `isEmpty=false`、`defaultBranchRef=main`。
 - 通过 / 失败 / 跳过：测试 120 pass / 0 fail / 0 skip；构建 0 errors / 0 warnings；文档检查 0 failed / 0 skipped。
+- PR 证据：[PR #1](https://github.com/sbwkl/any2api/pull/1) 已创建，base `main`，head `feat/promote-to-standalone`，状态 `OPEN`。
 - 证据限制：变更在 `feat/promote-to-standalone` 分支验证，未合并 `main`，未部署，不标「已发布」。
 
 ## 6. 回滚
