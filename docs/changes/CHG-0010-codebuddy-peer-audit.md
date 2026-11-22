@@ -33,10 +33,10 @@ Owner：wayne
 | Anthropic thinking | 归一为 reasoning_effort | 忽略 | **已修复**（R29） |
 | 空消息 | 过滤 | 保留 | **已修复**（R30） |
 | 模型 supportedEfforts | 用于钳制 effort | 未保存 | **已修复** |
-| prompt cache_control | 自动给 system/最后一条 user 加 `cache_control` | Anthropic 适配器丢弃 | **待审核** |
+| prompt cache_control | 自动给 system/最后一条 user 加 `cache_control` | Anthropic 适配器丢弃 | **已实现（CHG-0011）** |
 | 请求头 | CLI 身份 + `X-Requested-With`/`Origin`/`Referer`/`x-stainless-*` | IDE 身份，无 stainless | **待审核** |
 | Token 刷新 | 未看到 refresh 端点（登录态为主） | `/v2/plugin/auth/token/refresh` | **待审核**（写回 IDE Keychain 未实现） |
-| 模型校验 | 按 credential supported models 校验 | 未知模型透传上游 | **待审核** |
+| 模型校验 | 按 credential supported models 校验 | 未知模型透传上游 | **已实现（CHG-0011）** |
 | 排队/遥测/图片 | 部分支持 | 未实现/透传 | 非本轮范围 |
 
 ## 3. 行为 / AC delta

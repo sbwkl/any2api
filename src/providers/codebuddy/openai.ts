@@ -5,6 +5,7 @@ import { buildHeaders, postChat, readUpstreamError, refreshAccessToken, fetchQue
 import { buildAgentPrompt, resolveModel } from "./config";
 import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from "./envelope";
 import { aggregateSseToCompletion } from "../../shared/sse";
+import { applyPromptCacheControl } from "../../shared/cache";
 import { errorTypeForStatus } from "../../shared/errors";
 import type { Credentials, ProductConfig, Profile } from "./types";
 
@@ -118,6 +119,9 @@ export class CodeBuddyFacade {
       return jsonError(400, e?.message ?? "invalid messages");
     }
     const model = resolveModel(this.config.models, typeof body.model === "string" ? body.model : undefined);
+    if (!model) {
+      return jsonError(404, `model_not_found: ${typeof body.model === "string" && body.model ? body.model : "(missing)"}`, "model_not_found");
+    }
     const conversationId = this.sessions.conversationFor(sessionKey);
     const { requestId } = this.sessions.requestIdFor(conversationId, messages);
     const messageId = newId();
@@ -125,11 +129,12 @@ export class CodeBuddyFacade {
 
     const agentPrompt = buildAgentPrompt(this.config, profile, model);
     const merged = mergeAgentPrompt(messages, agentPrompt);
+    const cacheControlled = applyPromptCacheControl(merged);
     const tools = mapTools(body.tools);
 
     const requestBody = buildRequestBody({
       model,
-      messages: merged,
+      messages: cacheControlled,
       tools,
       toolChoice: body.tool_choice,
       maxTokens: typeof body.max_tokens === "number"

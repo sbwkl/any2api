@@ -8,6 +8,7 @@ import {
   loadCredentials,
   loadProductConfig,
   renderPrompt,
+  resolveModel,
   selectPrompt,
 } from "./config";
 import type { ProductConfig, PromptEntry } from "./types";
@@ -116,6 +117,13 @@ describe("config", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("resolveModel returns undefined for unknown models", () => {
+    const models = [{ id: "hy4flash-free", name: "Hy4 flash" }];
+    expect(resolveModel(models, "hy4flash-free")?.id).toBe("hy4flash-free");
+    expect(resolveModel(models, "Hy4 flash")?.id).toBe("hy4flash-free");
+    expect(resolveModel(models, "nope")).toBeUndefined();
   });
 
   test("loadCredentials prefers explicit env", () => {

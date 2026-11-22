@@ -103,6 +103,8 @@ Owner：wayne
 - **R28**：When 客户端提供 OpenAI 可选字段（`frequency_penalty`、`presence_penalty`、`stop`、`seed`、`response_format`、`parallel_tool_calls`、`stream_options`、`metadata`、`store`、`user`、`service_tier`、`max_completion_tokens`）, the system shall 在模型支持范围内透传，不得静默丢弃。
 - **R29**：When Anthropic 请求包含 `thinking`, the system shall 将其映射为 `reasoning_effort`（`budget_tokens` ≤2048 → minimal，≤8192 → medium，否则 high；`disabled/off` → off），并按模型 `reasoning.supportedEfforts` 就近钳制。
 - **R30**：The system shall 丢弃既无 `content` 也无 `tool_calls` 的空消息，避免上游把它当成损坏的 tool_calls/tool-result 序列。
+- **R31**：When codebuddy 的 system 或最后一条 user 消息文本长度 ≥1024 且消息没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`（字符串转 `[{type:"text",text,cache_control}]`）；已有显式 cache_control 时不重复添加。
+- **R32**：When 请求的模型不在 codebuddy 模型目录中, the system shall 返回 404 `model_not_found`，不向上游发送请求。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -141,6 +143,7 @@ Owner：wayne
 | CHG-0008 | 修复 Responses 并行 function_call 拆成多条 assistant 导致 11148 | 开发中 | [CHG-0008](../changes/CHG-0008-responses-parallel-tool-calls.md) |
 | CHG-0009 | 过滤竞品客户端 system preamble，修复 CodeBuddy 400 Request blocked | 开发中 | [CHG-0009](../changes/CHG-0009-codebuddy-system-sanitize.md) |
 | CHG-0010 | 对齐同类 CodeBuddy 2API 项目：字段透传、空消息过滤、thinking 映射 | 开发中 | [CHG-0010](../changes/CHG-0010-codebuddy-peer-audit.md) |
+| CHG-0011 | CodeBuddy prompt cache_control 与未知模型 404 | 开发中 | [CHG-0011](../changes/CHG-0011-codebuddy-cache-and-model-404.md) |
 
 ## 11. 链接
 

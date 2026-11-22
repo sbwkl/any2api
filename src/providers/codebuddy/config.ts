@@ -337,13 +337,12 @@ export function buildAgentPrompt(config: ProductConfig, profile: Profile, model:
   return out;
 }
 
-export function resolveModel(models: ModelInfo[], name?: string): ModelInfo {
-  if (!name) return models[0] ?? FALLBACK_MODELS[0];
+export function resolveModel(models: ModelInfo[], name?: string): ModelInfo | undefined {
+  if (!name) return models[0];
   const lower = name.toLowerCase();
   return (
     models.find((m) => m.id.toLowerCase() === lower)
     ?? models.find((m) => m.name.toLowerCase() === lower)
     ?? models.find((m) => m.id.toLowerCase().includes(lower) || lower.includes(m.id.toLowerCase()))
-    ?? { id: name, name }
   );
 }
