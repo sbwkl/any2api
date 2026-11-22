@@ -5,11 +5,17 @@ import { sanitizeSystemText } from "../../shared/system";
 function sanitizeSystemContent(content: any): any {
   if (typeof content === "string") return sanitizeSystemText(content);
   if (Array.isArray(content)) {
-    return content.map((b: any) =>
-      b && typeof b === "object" && b.type === "text" && typeof b.text === "string"
-        ? { ...b, text: sanitizeSystemText(b.text) }
-        : b,
-    );
+    return content
+      .map((b: any) =>
+        b && typeof b === "object" && b.type === "text" && typeof b.text === "string"
+          ? { ...b, text: sanitizeSystemText(b.text) }
+          : b,
+      )
+      // 被整块删空的 text 块必须移除，避免上游收到空 system 内容
+      .filter(
+        (b: any) =>
+          !(b && typeof b === "object" && b.type === "text" && typeof b.text === "string" && b.text === ""),
+      );
   }
   return content;
 }
@@ -37,10 +43,17 @@ export function normalizeMessages(messages: any[]): any[] {
           (Array.isArray(m.content) && m.content.length === 0);
         return empty ? { ...m, content: "" } : m;
       }
-      if (m.role === "developer") return { ...m, role: "system", content: sanitizeSystemContent(m.content) };
-      if (m.role === "system") return { ...m, content: sanitizeSystemContent(m.content) };
+      if (m.role === "developer" || m.role === "system") {
+        const content = sanitizeSystemContent(m.content);
+        const emptied =
+          typeof content === "string"
+            ? content === ""
+            : Array.isArray(content) && content.length === 0;
+        return emptied ? null : { ...m, role: "system", content };
+      }
       return m;
-    });
+    })
+    .filter((m) => m !== null);
 }
 
 // 有 agent 提示词时放在最前面；客户端自带 system 消息保留（API 用户依赖它）。

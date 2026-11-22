@@ -106,6 +106,7 @@ Owner：wayne
 - **R31**：When codebuddy 的**最长单段 system**（单段文本 ≥1024）或最后一条 user 消息（单段 ≥1024）没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`；其他消息的显式 cache_control 不影响该判断。
 - **R32**：When 请求的模型不在 codebuddy 模型目录中, the system shall 返回 404 `model_not_found`，不向上游发送请求。
 - **R33**：When 客户端提供 `max_completion_tokens`, the system shall 不发送 `max_tokens`（二者互斥）；未提供时按模型类型选择 `max_tokens` 或 `max_completion_tokens`。
+- **R34**：When codebuddy 的 system/developer 文本（字符串或 text 块）包含以 `x-anthropic-billing-header:` 开头的行, the system shall 在发送上游前删除该行；删除后为空的 text 块与被清空的 system 消息不再发送。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -146,6 +147,7 @@ Owner：wayne
 | CHG-0010 | 对齐同类 CodeBuddy 2API 项目：字段透传、空消息过滤、thinking 映射 | 开发中 | [CHG-0010](../changes/CHG-0010-codebuddy-peer-audit.md) |
 | CHG-0011 | CodeBuddy prompt cache_control 与未知模型 404 | 开发中 | [CHG-0011](../changes/CHG-0011-codebuddy-cache-and-model-404.md) |
 | CHG-0012 | 评审修复：协议层作用域、max tokens 互斥、cache 策略、空值过滤 | 开发中 | [CHG-0012](../changes/CHG-0012-review-fixes-2.md) |
+| CHG-0013 | 剥离客户端计费指纹头 `x-anthropic-billing-header`，修复 Claude Code 400 | 开发中 | [CHG-0013](../changes/CHG-0013-codebuddy-billing-header.md) |
 
 ## 11. 链接
 
