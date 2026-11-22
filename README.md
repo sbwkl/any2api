@@ -187,4 +187,4 @@ resp = client.chat.completions.create(
 
 ## 开发约定
 
-跨项目流程见 [工作区根 AGENTS.md](../AGENTS.md)：`main` 保护、新特性走 `feat/<特性名>`、脏工作区用 worktree、TDD、提交前静态检查、临时集成分支、PR / 合并前用户同意。项目级测试：`bun test`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`。未配置的检查保持「待补」，不得用跳过规则压掉告警。
+本仓库流程见 [`AGENTS.md`](AGENTS.md)：`main` 保护、新特性走 `feat/<特性名>`、脏工作区用 worktree、TDD、提交前静态检查、临时集成分支、PR / 合并前用户同意。项目级测试：`bun test`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`。未配置的检查保持「待补」，不得用跳过规则压掉告警。

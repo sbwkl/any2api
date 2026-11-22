@@ -1,6 +1,6 @@
 # AGENTS.md — any2api 项目工作区地图
 
-本目录是 `any2api`——把各 AI 编程工具的私有 LLM 通道封装为 OpenAI 兼容 API。**本文件只是地图**：目录结构、硬性规则摘要、文档指针；跨项目规则见 [工作区根 AGENTS.md](../AGENTS.md)。当前实现见 [`ARCHITECTURE.md`](ARCHITECTURE.md)，项目说明与开发约定见 [`README.md`](README.md)，产品行为事实源见 [`docs/product-specs/index.md`](docs/product-specs/index.md)，设计知识库见 [`docs/design-docs/index.md`](docs/design-docs/index.md)；聊天 / issue / PR 只做同步。
+本目录是 `any2api`——把各 AI 编程工具的私有 LLM 通道封装为 OpenAI 兼容 API。**本文件只是地图**：目录结构、硬性规则摘要、文档指针；本仓库已升级为正式项目，开发流程以本文件、`README.md` 与项目文档为准。当前实现见 [`ARCHITECTURE.md`](ARCHITECTURE.md)，项目说明与开发约定见 [`README.md`](README.md)，产品行为事实源见 [`docs/product-specs/index.md`](docs/product-specs/index.md)，设计知识库见 [`docs/design-docs/index.md`](docs/design-docs/index.md)；聊天 / issue / PR 只做同步。
 
 ## 目录结构
 
@@ -25,7 +25,7 @@
 
 ## 开发流程
 
-按 [工作区根 AGENTS.md](../AGENTS.md) 的完整流程执行：从最新 `main` 切分支、TDD、提交前静态检查、临时集成分支、PR 或纯本地提交记录、合并前征求用户同意。文档结构变更同样先写失败的结构 / 链接检查。
+按本仓库规则执行：从最新 `main` 切 `feat/<特性名>` 分支、TDD、提交前静态检查、临时集成分支、PR 或纯本地提交记录；任何分支合并进 `main` 前必须征求用户同意。文档结构变更同样先写失败的结构 / 链接检查。
 
 ## 文档地图
 
@@ -45,4 +45,4 @@
 
 - 测试：`bun test`
 - 编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`
-- 文档结构与本地链接检查：见工作区根变更文档中的验证命令；未配置项目级检查时写「未配置；待补」。
+- 文档结构与本地链接检查：项目级 Markdown 本地链接检查与 `docs/` 顶层结构检查；未配置项目级 lint / 类型检查时写「未配置；待补」。
