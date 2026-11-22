@@ -73,6 +73,29 @@ describe("envelope", () => {
     expect(tools[1].content).toBe("");
   });
 
+  test("normalizeMessages drops the client billing header block", () => {
+    const out = normalizeMessages([
+      {
+        role: "system",
+        content: [
+          { type: "text", text: "x-anthropic-billing-header: cc_version=2.1.319.b5f; cc_entrypoint=sdk-cli;" },
+          { type: "text", text: "Be brief." },
+        ],
+      },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].content).toEqual([{ type: "text", text: "Be brief." }]);
+  });
+
+  test("normalizeMessages drops a system message that only holds the billing header", () => {
+    const out = normalizeMessages([
+      { role: "system", content: "x-anthropic-billing-header: cc_version=2.1.319.b5f; cc_entrypoint=sdk-cli;" },
+      { role: "user", content: "hi" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].role).toBe("user");
+  });
+
   test("mergeAgentPrompt prepends the agent system message", () => {
     const out = mergeAgentPrompt([{ role: "user", content: "hi" }], "<system_prompt>X</system_prompt>");
     expect(out[0]).toEqual({ role: "system", content: "<system_prompt>X</system_prompt>" });

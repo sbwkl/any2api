@@ -4,6 +4,13 @@
 // 代理只替换这段 preamble，保留其余系统内容。
 const COMPETITOR_PREAMBLE = /You are Claude Code, Anthropic's official CLI for Claude\.?/gi;
 
+// 客户端计费指纹（x-anthropic-billing-header: cc_version=...）同样会触发 400 拦截；
+// 该行只用于客户端遥测，删除后不影响模型行为。
+const BILLING_HEADER = /^[ \t]*x-anthropic-billing-header:.*(?:\r?\n|$)/gim;
+
 export function sanitizeSystemText(text: string): string {
-  return text.replace(COMPETITOR_PREAMBLE, "You are an AI coding assistant.");
+  return text
+    .replace(COMPETITOR_PREAMBLE, "You are an AI coding assistant.")
+    .replace(BILLING_HEADER, "")
+    .trim();
 }
