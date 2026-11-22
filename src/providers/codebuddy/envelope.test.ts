@@ -18,6 +18,11 @@ const model = {
   temperature: 0.9,
 };
 
+const CODEX_PREAMBLE =
+  "You are a coding agent running in the Codex CLI, a terminal-based coding assistant. Codex CLI is an open source project led by OpenAI. You are expected to be precise, safe, and helpful.";
+const CODEX_SHORT =
+  "You are Codex, a coding agent. You and the user share the same workspace and collaborate to achieve the user's goals.";
+
 describe("envelope", () => {
   test("developer role is normalized to system", () => {
     const out = normalizeMessages([
@@ -58,6 +63,18 @@ describe("envelope", () => {
     ]);
     expect(out[0].content).not.toContain("Anthropic's official CLI");
     expect(out[0].content).toContain("You are an AI coding assistant. A.");
+  });
+
+  test("normalizeMessages replaces the Codex CLI self-introduction with the short prompt", () => {
+    const out = normalizeMessages([{ role: "developer", content: `${CODEX_PREAMBLE}\n\n# Rest of the prompt` }]);
+    expect(out[0].content).toBe(`${CODEX_SHORT}\n\n# Rest of the prompt`);
+  });
+
+  test("normalizeMessages replaces the Codex preamble inside a system text block", () => {
+    const out = normalizeMessages([
+      { role: "system", content: [{ type: "text", text: `${CODEX_PREAMBLE}\nBe brief.` }] },
+    ]);
+    expect((out[0].content as any[])[0].text).toBe(`${CODEX_SHORT}\nBe brief.`);
   });
 
   test("normalizeMessages keeps tool messages with null or empty-array content", () => {

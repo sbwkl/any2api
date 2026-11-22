@@ -5,7 +5,7 @@
 Owner：wayne
 所属模块/入口：`src/shared/system.ts`、`src/protocols/anthropic.ts`、`src/protocols/responses.ts`、`src/providers/codebuddy/envelope.ts`
 功能卡：[REQ-0001](../../product-specs/codebuddy-provider.md)
-关联：[CHG-0008](CHG-0008-responses-parallel-tool-calls.md)
+关联：[CHG-0008](CHG-0008-responses-parallel-tool-calls.md)、[2026-11-22-codex-cli-preamble](2026-11-22-codex-cli-preamble.md)（同类拦截：Codex CLI 自述首句）
 
 ## 1. 摘要
 
