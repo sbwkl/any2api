@@ -19,6 +19,8 @@ x-anthropic-billing-header: cc_version=2.1.319.cb2; cc_entrypoint=claude-desktop
 
 修复：代理在发送上游前删除 system 文本中以 `x-anthropic-billing-header:` 开头的整行；被删空的 text 块与被清空的 system 消息不再发送。
 
+> 清理范围已由 [CHG-0014](CHG-0014-codebuddy-billing-header-scope.md) 收窄：不再做全局 `.trim()`，只有「清洗前非空、清洗后为空」的块/消息才被丢弃。本 CHG §3/§5 描述的是初版行为。
+
 ## 2. 变更理由与证据
 
 - **现象**：用户把 Claude Code 切到 CodeBuddy 后仍报 400（[CHG-0009](CHG-0009-codebuddy-system-sanitize.md) 只替换 `You are Claude Code, Anthropic's official CLI for Claude.` 这句 preamble，而 Claude Code 的 system 首块只有计费头，第二句已是 `You are a Claude agent, built on Anthropic's Claude Agent SDK.`，R27 覆盖不到）。

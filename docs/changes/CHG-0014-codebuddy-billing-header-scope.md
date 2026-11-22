@@ -22,7 +22,7 @@ Owner：wayne
 
 ## 3. 行为 / AC delta
 
-- **修改 R34**：仅当 system/developer 的文本块或消息**因删除计费头而变空**时不再发送；清洗前已为空的块/消息、其他 system 内容（含首尾空白）保持不变。
+- **修改 R34**：仅当 system/developer 的文本块或消息**因删除计费头而变空**时不再发送；清洗前已为空的文本块、`content: ""` 的消息、其他 system 内容（含首尾空白）保持不变；`content` 为 `null` 或空数组的消息仍按 R30 丢弃（前置过滤先于清洗，system/developer 不例外）。
 - **不改变**：计费头删除本身（CHG-0013 的 400 修复）、preamble 替换、工具调用、模型映射、codearts。
 
 ## 4. 影响范围与非目标
@@ -41,12 +41,13 @@ Owner：wayne
 
 ## 5. 验证与观测
 
-- 单元测试：`bun test` → **116 pass / 0 fail / 396 expect() calls**（14 个文件）。
+- 单元测试：`bun test` → **118 pass / 0 fail / 400 expect() calls**（14 个文件）。
 - 构建：`bun build src/index.ts --target=bun` → 成功（131.32 KB）。
 - 新增用例：
   - 无计费头时首尾空白原样保留；
   - 预置空 text 块（带 `cache_control`）原样保留；
   - 预置空 system 消息（`content: ""`）原样保留；
+  - `content` 为 `[]`（system 与 developer）或 `null` 的消息按 R30 丢弃；
   - CRLF 计费头行被删除，其余文本与行尾符不变。
 - 真实 Claude Code e2e（本分支代码，:8788 临时实例）→ **200**，`is_error:false`、`result:"OK"`。
 - 未部署；分支 `feat/codebuddy-billing-header-scope` 待用户审核。

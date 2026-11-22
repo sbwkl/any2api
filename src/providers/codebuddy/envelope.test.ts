@@ -119,6 +119,26 @@ describe("envelope", () => {
     expect(out[0].content).toBe("");
   });
 
+  // R30：content 为 null / 空数组的非 tool 消息一律丢弃，system/developer 也不例外。
+  test("normalizeMessages drops a system message whose content is an empty array", () => {
+    const out = normalizeMessages([
+      { role: "system", content: [] },
+      { role: "developer", content: [] },
+      { role: "user", content: "hi" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].role).toBe("user");
+  });
+
+  test("normalizeMessages drops a system message whose content is null", () => {
+    const out = normalizeMessages([
+      { role: "system", content: null },
+      { role: "user", content: "hi" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].role).toBe("user");
+  });
+
   test("normalizeMessages strips a CRLF billing header line and keeps the rest", () => {
     const out = normalizeMessages([
       { role: "system", content: "x-anthropic-billing-header: cc_version=1\r\nBe brief.\r\n" },

@@ -106,7 +106,7 @@ Owner：wayne
 - **R31**：When codebuddy 的**最长单段 system**（单段文本 ≥1024）或最后一条 user 消息（单段 ≥1024）没有显式 `cache_control`, the system shall 为该消息添加 `cache_control: {type:"ephemeral"}`；其他消息的显式 cache_control 不影响该判断。
 - **R32**：When 请求的模型不在 codebuddy 模型目录中, the system shall 返回 404 `model_not_found`，不向上游发送请求。
 - **R33**：When 客户端提供 `max_completion_tokens`, the system shall 不发送 `max_tokens`（二者互斥）；未提供时按模型类型选择 `max_tokens` 或 `max_completion_tokens`。
-- **R34**：When codebuddy 的 system/developer 文本（字符串或 text 块）包含以 `x-anthropic-billing-header:` 开头的行, the system shall 在发送上游前删除该行；仅当该文本块/消息因删除而变空时不再发送，清洗前已为空的块或消息以及其他 system 内容（含首尾空白）保持不变。
+- **R34**：When codebuddy 的 system/developer 文本（字符串或 text 块）包含以 `x-anthropic-billing-header:` 开头的行, the system shall 在发送上游前删除该行；仅当该文本块或消息的文本因删除而变空时不再发送，清洗前已为空的文本块、`content: ""` 的消息以及其他 system 内容（含首尾空白）保持不变；`content` 为 `null` 或空数组的消息仍按 R30 丢弃。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
