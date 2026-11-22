@@ -96,6 +96,37 @@ describe("envelope", () => {
     expect(out[0].role).toBe("user");
   });
 
+  test("normalizeMessages keeps leading and trailing whitespace when no billing header is present", () => {
+    const out = normalizeMessages([{ role: "system", content: "  keep me  " }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].content).toBe("  keep me  ");
+  });
+
+  test("normalizeMessages keeps a pre-existing empty text block and its cache_control", () => {
+    const block = { type: "text", text: "", cache_control: { type: "ephemeral" } };
+    const out = normalizeMessages([{ role: "system", content: [block, { type: "text", text: "Be brief." }] }]);
+    expect(out).toHaveLength(1);
+    expect((out[0].content as any[])[0]).toEqual(block);
+  });
+
+  test("normalizeMessages keeps a pre-existing empty system message", () => {
+    const out = normalizeMessages([
+      { role: "system", content: "" },
+      { role: "user", content: "hi" },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].role).toBe("system");
+    expect(out[0].content).toBe("");
+  });
+
+  test("normalizeMessages strips a CRLF billing header line and keeps the rest", () => {
+    const out = normalizeMessages([
+      { role: "system", content: "x-anthropic-billing-header: cc_version=1\r\nBe brief.\r\n" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].content).toBe("Be brief.\r\n");
+  });
+
   test("mergeAgentPrompt prepends the agent system message", () => {
     const out = mergeAgentPrompt([{ role: "user", content: "hi" }], "<system_prompt>X</system_prompt>");
     expect(out[0]).toEqual({ role: "system", content: "<system_prompt>X</system_prompt>" });

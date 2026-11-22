@@ -9,8 +9,8 @@ const COMPETITOR_PREAMBLE = /You are Claude Code, Anthropic's official CLI for C
 const BILLING_HEADER = /^[ \t]*x-anthropic-billing-header:.*(?:\r?\n|$)/gim;
 
 export function sanitizeSystemText(text: string): string {
+  // 只删已知指纹行，不改动其余文本（包括首尾空白）。
   return text
     .replace(COMPETITOR_PREAMBLE, "You are an AI coding assistant.")
-    .replace(BILLING_HEADER, "")
-    .trim();
+    .replace(BILLING_HEADER, "");
 }

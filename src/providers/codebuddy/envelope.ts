@@ -2,20 +2,36 @@
 import type { ModelInfo } from "./types";
 import { sanitizeSystemText } from "../../shared/system";
 
+function isTextBlock(block: any): boolean {
+  return !!block && typeof block === "object" && block.type === "text" && typeof block.text === "string";
+}
+
+function isEmptyText(text: string): boolean {
+  return text.trim() === "";
+}
+
+// 清洗前是否有内容：空串/纯空白/空数组都算没有。
+function hasContent(content: any): boolean {
+  if (typeof content === "string") return !isEmptyText(content);
+  if (Array.isArray(content)) return content.length > 0;
+  return content !== undefined && content !== null;
+}
+
 function sanitizeSystemContent(content: any): any {
   if (typeof content === "string") return sanitizeSystemText(content);
   if (Array.isArray(content)) {
-    return content
-      .map((b: any) =>
-        b && typeof b === "object" && b.type === "text" && typeof b.text === "string"
-          ? { ...b, text: sanitizeSystemText(b.text) }
-          : b,
-      )
-      // 被整块删空的 text 块必须移除，避免上游收到空 system 内容
-      .filter(
-        (b: any) =>
-          !(b && typeof b === "object" && b.type === "text" && typeof b.text === "string" && b.text === ""),
-      );
+    const out: any[] = [];
+    for (const block of content) {
+      if (!isTextBlock(block)) {
+        out.push(block);
+        continue;
+      }
+      const text = sanitizeSystemText(block.text);
+      // 只丢弃「清洗前非空、清洗后变空」的块；本来就空的块原样保留
+      if (isEmptyText(text) && !isEmptyText(block.text)) continue;
+      out.push({ ...block, text });
+    }
+    return out;
   }
   return content;
 }
@@ -27,12 +43,12 @@ export function normalizeMessages(messages: any[]): any[] {
       if (!m || typeof m !== "object") throw new Error("invalid message");
       // tool 消息（role=tool 或带 tool_call_id）始终保留，空内容归一为 ""
       const isToolMessage = m.role === "tool" || m.tool_call_id !== undefined;
-      const hasContent =
+      const hasBody =
         m.content !== undefined &&
         m.content !== null &&
         !(Array.isArray(m.content) && m.content.length === 0);
       const hasToolCalls = Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
-      return isToolMessage || hasContent || hasToolCalls;
+      return isToolMessage || hasBody || hasToolCalls;
     })
     .map((m) => {
       const isToolMessage = m.role === "tool" || m.tool_call_id !== undefined;
@@ -45,10 +61,8 @@ export function normalizeMessages(messages: any[]): any[] {
       }
       if (m.role === "developer" || m.role === "system") {
         const content = sanitizeSystemContent(m.content);
-        const emptied =
-          typeof content === "string"
-            ? content === ""
-            : Array.isArray(content) && content.length === 0;
+        // 只丢弃「清洗前有内容、清洗后为空」的消息；其他 system 内容保持不变
+        const emptied = hasContent(m.content) && !hasContent(content);
         return emptied ? null : { ...m, role: "system", content };
       }
       return m;
