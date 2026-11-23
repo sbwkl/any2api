@@ -4,7 +4,7 @@ import type { ChatBackend, ProtocolCapabilities } from "../../protocols/types";
 import { CodeBuddyFacade } from "./openai";
 import type { Credentials, ProductConfig } from "./types";
 
-const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", normalizeErrors: true };
+const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", normalizeErrors: true, promptTokensIncludeCache: true };
 
 const config: ProductConfig = {
   endpoint: "https://example.test",
@@ -170,6 +170,88 @@ describe("anthropic adapter", () => {
     expect(text).toContain("Hello");
     expect(text).toContain("event: message_delta");
     expect(text).toContain("event: message_stop");
+  });
+
+  test("streaming message_delta carries upstream input and cache tokens", async () => {
+    const sse = [
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"}}]}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":31,"completion_tokens":5,"total_tokens":36,"prompt_tokens_details":{"cached_tokens":7,"cache_creation_tokens":2}}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const resp = await handleAnthropicMessages(backendFor(facadeWith(sse)), anthroReq({
+      model: "hy4flash-free",
+      max_tokens: 64,
+      stream: true,
+      messages: [{ role: "user", content: "hi" }],
+    }), CAPS);
+    const text = await resp.text();
+    const line = text.split("\n").find((l) => l.startsWith('data: {"type":"message_delta"'));
+    expect(line).toBeDefined();
+    const j = JSON.parse(line!.slice("data: ".length));
+    expect(j.usage.input_tokens).toBe(22);
+    expect(j.usage.cache_read_input_tokens).toBe(7);
+    expect(j.usage.cache_creation_input_tokens).toBe(2);
+    expect(j.usage.output_tokens).toBe(5);
+  });
+
+  test("non-stream usage excludes cached tokens from input_tokens", async () => {
+    const sse = [
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"}}]}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":31,"completion_tokens":5,"total_tokens":36,"prompt_tokens_details":{"cached_tokens":7,"cache_creation_tokens":2}}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const resp = await handleAnthropicMessages(backendFor(facadeWith(sse)), anthroReq({
+      model: "hy4flash-free", max_tokens: 64, messages: [{ role: "user", content: "hi" }],
+    }), CAPS);
+    const j: any = await resp.json();
+    expect(j.usage.input_tokens).toBe(22);
+    expect(j.usage.cache_read_input_tokens).toBe(7);
+    expect(j.usage.cache_creation_input_tokens).toBe(2);
+    expect(j.usage.output_tokens).toBe(5);
+  });
+
+  test("streaming usage merges fields across multiple chunks", async () => {
+    const sse = [
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{"content":"Hi"}}]}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{}}],"usage":{"prompt_tokens":31,"prompt_tokens_details":{"cached_tokens":7,"cache_creation_tokens":2}}}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens":5}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const resp = await handleAnthropicMessages(backendFor(facadeWith(sse)), anthroReq({
+      model: "hy4flash-free", max_tokens: 64, stream: true, messages: [{ role: "user", content: "hi" }],
+    }), CAPS);
+    const text = await resp.text();
+    const line = text.split("\n").find((l) => l.startsWith('data: {"type":"message_delta"'));
+    expect(line).toBeDefined();
+    const j = JSON.parse(line!.slice("data: ".length));
+    expect(j.usage).toEqual({ input_tokens: 22, output_tokens: 5, cache_read_input_tokens: 7, cache_creation_input_tokens: 2 });
+  });
+
+  test("Anthropic input_tokens clamps to zero when cached tokens exceed prompt tokens", async () => {
+    const sse = [
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{"content":"Hi"}}]}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"prompt_tokens_details":{"cached_tokens":7}}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const resp = await handleAnthropicMessages(backendFor(facadeWith(sse)), anthroReq({
+      model: "hy4flash-free", max_tokens: 64, messages: [{ role: "user", content: "hi" }],
+    }), CAPS);
+    const j: any = await resp.json();
+    expect(j.usage.input_tokens).toBe(0);
+    expect(j.usage.cache_read_input_tokens).toBe(7);
   });
 
   test("streaming tool call emits input_json_delta", async () => {

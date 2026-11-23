@@ -192,7 +192,13 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
   let msgItemId: string | null = null;
   let seq = 0;
   const outputItems: any[] = [];
-  let usage: any = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+  let usage: any = {
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    input_tokens_details: { cached_tokens: 0 },
+    output_tokens_details: { reasoning_tokens: 0 },
+  };
   let finish: string | null = null;
 
   const ev = (ctrl: ReadableStreamDefaultController, type: string, data: any) =>
@@ -212,14 +218,19 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
         let chunk: any;
         try { chunk = JSON.parse(data); } catch { continue; }
           if (chunk.model && !outModel) outModel = chunk.model;
-          if (chunk.usage)
+          if (chunk.usage) {
             usage = {
-              input_tokens: chunk.usage.prompt_tokens ?? 0,
-              output_tokens: chunk.usage.completion_tokens ?? 0,
-              total_tokens: chunk.usage.total_tokens ?? 0,
-              input_tokens_details: { cached_tokens: chunk.usage.prompt_tokens_details?.cached_tokens ?? 0 },
-              output_tokens_details: { reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens ?? 0 },
+              input_tokens: chunk.usage.prompt_tokens ?? usage.input_tokens,
+              output_tokens: chunk.usage.completion_tokens ?? usage.output_tokens,
+              total_tokens: chunk.usage.total_tokens ?? usage.total_tokens,
+              input_tokens_details: {
+                cached_tokens: chunk.usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens,
+              },
+              output_tokens_details: {
+                reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens ?? usage.output_tokens_details?.reasoning_tokens,
+              },
             };
+          }
           const choice = chunk.choices?.[0];
           const delta = choice?.delta ?? {};
 

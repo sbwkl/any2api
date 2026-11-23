@@ -103,6 +103,18 @@ const STOP_REASON: Record<string, string> = {
   stop: "end_turn", tool_calls: "tool_use", length: "max_tokens", content_filter: "end_turn",
 };
 
+function anthropicUsage(usage: any, promptTokensIncludeCache = false): { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number } {
+  const cacheRead = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+  const cacheCreation = usage?.prompt_tokens_details?.cache_creation_tokens ?? 0;
+  const totalInput = usage?.prompt_tokens ?? 0;
+  return {
+    input_tokens: promptTokensIncludeCache ? Math.max(0, totalInput - cacheRead - cacheCreation) : totalInput,
+    output_tokens: usage?.completion_tokens ?? 0,
+    cache_read_input_tokens: cacheRead,
+    cache_creation_input_tokens: cacheCreation,
+  };
+}
+
 function validateAnthropic(body: any): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body must be an object";
   if (!Array.isArray(body.messages)) return "messages must be an array";
@@ -152,12 +164,12 @@ export async function handleAnthropicMessages(
   if (body.stream !== true) {
     const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile });
     if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
-    return Response.json(completionToAnthropic(await resp.json(), model, thinking));
+    return Response.json(completionToAnthropic(await resp.json(), model, thinking, caps.promptTokensIncludeCache === true));
   }
 
   const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
   if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
-  const sse = await anthropicSse(resp.body, thinking, model);
+  const sse = await anthropicSse(resp.body, thinking, model, caps.promptTokensIncludeCache === true);
   return new Response(sse, {
     status: 200,
     headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
@@ -174,7 +186,7 @@ async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): P
   return anthroError(resp.status, message, errorTypeForStatus(resp.status));
 }
 
-function completionToAnthropic(c: any, model?: string, thinking = false): any {
+function completionToAnthropic(c: any, model?: string, thinking = false, promptTokensIncludeCache = false): any {
   const content: any[] = [];
   if (thinking && c?.choices?.[0]?.message?.reasoning_content)
     content.push({ type: "thinking", thinking: c.choices[0].message.reasoning_content });
@@ -193,12 +205,7 @@ function completionToAnthropic(c: any, model?: string, thinking = false): any {
     content,
     stop_reason: STOP_REASON[c?.choices?.[0]?.finish_reason ?? "stop"] ?? "end_turn",
     stop_sequence: null,
-    usage: {
-      input_tokens: usage.prompt_tokens ?? 0,
-      output_tokens: usage.completion_tokens ?? 0,
-      cache_read_input_tokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
-      cache_creation_input_tokens: usage.prompt_tokens_details?.cache_creation_tokens ?? 0,
-    },
+    usage: anthropicUsage(usage, promptTokensIncludeCache),
   };
 }
 
@@ -211,13 +218,17 @@ function anthroError(status: number, message: string, type = "invalid_request_er
   return Response.json({ type: "error", error: { type, message } }, { status });
 }
 
-async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: boolean, model?: string): Promise<ReadableStream<Uint8Array>> {
+async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: boolean, model?: string, promptTokensIncludeCache = false): Promise<ReadableStream<Uint8Array>> {
   const enc = new TextEncoder();
   const id = `msg_${crypto.randomUUID().replaceAll("-", "")}`;
   let outModel = model ?? "";
   let blockIdx = -1;
   let curBlock: "text" | "thinking" | "tool_use" | null = null;
   let outputTokens = 0;
+  let promptTokens = 0;
+  let inputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheCreationTokens = 0;
   const toolCalls = new Map<number, { id: string; name: string }>();
   let stopReason: string | null = null;
 
@@ -254,7 +265,19 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         let chunk: any;
         try { chunk = JSON.parse(data); } catch { continue; }
           if (chunk.model && !outModel) outModel = chunk.model;
-          if (chunk.usage) outputTokens = chunk.usage.completion_tokens ?? outputTokens;
+          if (chunk.usage) {
+            if (chunk.usage.prompt_tokens !== undefined) promptTokens = chunk.usage.prompt_tokens;
+            if (chunk.usage.completion_tokens !== undefined) outputTokens = chunk.usage.completion_tokens;
+            if (chunk.usage.prompt_tokens_details?.cached_tokens !== undefined)
+              cacheReadTokens = chunk.usage.prompt_tokens_details.cached_tokens;
+            if (chunk.usage.prompt_tokens_details?.cache_creation_tokens !== undefined)
+              cacheCreationTokens = chunk.usage.prompt_tokens_details.cache_creation_tokens;
+            const parsed = anthropicUsage(
+              { prompt_tokens: promptTokens, completion_tokens: outputTokens, prompt_tokens_details: { cached_tokens: cacheReadTokens, cache_creation_tokens: cacheCreationTokens } },
+              promptTokensIncludeCache,
+            );
+            inputTokens = parsed.input_tokens;
+          }
           const choice = chunk.choices?.[0];
           const delta = choice?.delta ?? {};
           if (thinking && typeof delta.reasoning_content === "string" && delta.reasoning_content) {
@@ -285,7 +308,12 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         ev(ctrl, "message_delta", {
           type: "message_delta",
           delta: { stop_reason: stopReason ?? "end_turn", stop_sequence: null },
-          usage: { output_tokens: outputTokens },
+          usage: {
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            cache_read_input_tokens: cacheReadTokens,
+            cache_creation_input_tokens: cacheCreationTokens,
+          },
         });
         ev(ctrl, "message_stop", { type: "message_stop" });
       } catch (e: any) {

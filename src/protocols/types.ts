@@ -23,6 +23,8 @@ export interface ProtocolCapabilities {
   thinking?: boolean;
   /** 是否把 Anthropic thinking 映射为 reasoning_effort（默认 true） */
   thinkingToEffort?: boolean;
+  /** 是否把上游 prompt_tokens 视为包含缓存分量的总输入（默认 false；CodeBuddy 已实测为 true） */
+  promptTokensIncludeCache?: boolean;
 }
 
 export type { Route };

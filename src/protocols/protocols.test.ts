@@ -294,4 +294,19 @@ describe("shared protocol routes (codearts capabilities)", () => {
     const text = await resp.text();
     expect(text).toContain("hi");
   });
+
+  test("Anthropic usage only subtracts cached tokens with promptTokensIncludeCache", async () => {
+    const withCache = {
+      ...completion,
+      usage: { prompt_tokens: 31, completion_tokens: 5, total_tokens: 36, prompt_tokens_details: { cached_tokens: 7 } },
+    };
+    const backend = makeBackend({ respond: async () => Response.json(withCache) });
+    const plain = createProtocolRoutes(backend, { toolChoice: "full", normalizeErrors: false });
+    const withCap = createProtocolRoutes(backend, { toolChoice: "auto-only", normalizeErrors: true, promptTokensIncludeCache: true });
+    const body = { model: "m", max_tokens: 10, messages: [{ role: "user", content: "hi" }] };
+    const a: any = await (await dispatch(plain, "/v1/messages", "POST", body)).json();
+    const b: any = await (await dispatch(withCap, "/v1/messages", "POST", body)).json();
+    expect(a.usage.input_tokens).toBe(31);
+    expect(b.usage.input_tokens).toBe(24);
+  });
 });

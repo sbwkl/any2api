@@ -172,7 +172,8 @@ data: [DONE]
 
 - `reasoning_content`：思考增量（`hy4flash-free` 只有 reasoning + content 两段）。
 - `tool_calls`：首帧给 `id` + `function.name`，后续帧给 `arguments` 分片；`finish_reason:"tool_calls"`。
-- `usage`：最后一帧；`prompt_tokens_details.cached_tokens`、`completion_tokens_details.reasoning_tokens`。
+- `usage`：最后一帧；`prompt_tokens_details.cached_tokens`、`completion_tokens_details.reasoning_tokens`。`prompt_tokens` 为**总输入**，下游转 Anthropic 时必须扣除缓存分项得到 `input_tokens`（见 R37）。
+- `prompt_tokens_details.cache_creation_tokens`：【待验证】上游规格未记录；若缺失按 0 处理，不伪造数值。
 - 模型名会被服务端归一化（请求 `hy4flash-free` → 响应 `hy4-flash-free`），属正常。
 
 ## 6. ID 与会话
