@@ -34,7 +34,27 @@ const SSE_WITH_CACHE_CREATION = [
   "",
 ].join("\n");
 
+const SSE_MULTIFRAME_USAGE = [
+  `data: {"id":"2","model":"m","created":2,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12,"prompt_tokens_details":{"cached_tokens":6,"cache_creation_tokens":2},"completion_tokens_details":{"reasoning_tokens":1}}}`,
+  "",
+  `data: {"id":"2","model":"m","created":2,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens":3}}`,
+  "",
+  "data: [DONE]",
+  "",
+].join("\n");
+
 describe("sse aggregation", () => {
+  test("merges usage fields across multiple chunks", async () => {
+    const out = await aggregateSseToCompletion(streamOf(SSE_MULTIFRAME_USAGE));
+    expect(out.usage).toEqual({
+      prompt_tokens: 10,
+      completion_tokens: 3,
+      total_tokens: 12,
+      prompt_tokens_details: { cached_tokens: 6, cache_creation_tokens: 2 },
+      completion_tokens_details: { reasoning_tokens: 1 },
+    });
+  });
+
   test("preserves cache creation tokens in mapped usage", async () => {
     const out = await aggregateSseToCompletion(streamOf(SSE_WITH_CACHE_CREATION));
     expect(out.usage.prompt_tokens_details.cache_creation_tokens).toBe(2);

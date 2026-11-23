@@ -21,9 +21,9 @@ Owner：wayne
 ## 3. 行为 / AC delta
 
 - **修改**：Anthropic usage 统一由 `anthropicUsage(usage, promptTokensIncludeCache)` 映射。仅当 provider 能力位开启（当前只有 CodeBuddy，因其 `prompt_tokens` 为总输入已实测）时才计算 `input_tokens = max(0, prompt_tokens - cached_tokens - cache_creation_tokens)`；其他 provider 保持上游 `prompt_tokens` 原值。
-- **修改**：流式 usage 按字段合并（`??` 保留前值），避免上游多帧 usage 时后续帧缺少部分字段而把缓存值归零。
+- **修改**：流式 usage 按字段合并（`??` 保留前值），避免上游多帧 usage 时后续帧缺少部分字段而把缓存值归零；Anthropic 流式、OpenAI Chat 聚合、Responses 流式三条路径一致。
 - **修改**：OpenAI Chat 聚合 `mapUsage` 保留 `prompt_tokens_details.cache_creation_tokens`。
-- **修改**：Responses 流式初始 `usage` 包含 `input_tokens_details.cached_tokens` 与 `output_tokens_details.reasoning_tokens`。
+- **修改**：Responses 流式初始 `usage` 包含 `input_tokens_details.cached_tokens` 与 `output_tokens_details.reasoning_tokens`，并按字段合并多帧 usage。
 - **不影响**：请求映射、工具调用、错误结构、模型池、codebuddy 系统清洗。
 
 ## 4. 影响范围与非目标
@@ -45,8 +45,8 @@ Owner：wayne
 ## 5. 验证与观测
 
 - 新增失败测试先行：Anthropic `input_tokens` 原为 31，应为 22；`response.created.usage.input_tokens_details` 原为 undefined；`mapUsage` 原丢弃 `cache_creation_tokens`；能力隔离原对所有 provider 生效；流式多帧 usage 原会归零。
-- 修复后定向测试：`bun test src/providers/codebuddy/anthropic.test.ts src/protocols/protocols.test.ts src/shared/sse.test.ts src/providers/codebuddy/responses.test.ts` → 48 pass / 0 fail / 159 expect() calls。
-- 全套：`bun test` → 134 pass / 0 fail / 444 expect() calls（15 个测试文件）。
+- 修复后定向测试：`bun test src/providers/codebuddy/anthropic.test.ts src/protocols/protocols.test.ts src/shared/sse.test.ts src/providers/codebuddy/responses.test.ts` → 50 pass / 0 fail / 162 expect() calls。
+- 全套：`bun test` → 136 pass / 0 fail / 447 expect() calls（15 个测试文件）。
 - 构建：`bun build src/index.ts --target=bun` → 成功。
 - 未做：真实上游回归（本机限流 429，重置时间 2026-11-24 16:29:08 UTC+8）；CC Switch 定价配置与 UI 统计复查（因此不能声称 CC Switch 统计已完全恢复）。
 
@@ -75,4 +75,4 @@ Owner：wayne
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 开发中 | wayne | TDD 红灯→绿灯；131 tests 全绿；build 成功；未部署 |
+| 开发中 | wayne | TDD 红灯→绿灯；136 tests 全绿；build 成功；未部署 |

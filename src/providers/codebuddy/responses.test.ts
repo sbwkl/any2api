@@ -159,6 +159,31 @@ describe("responses adapter", () => {
     });
   });
 
+  test("streaming response merges usage fields across multiple chunks", async () => {
+    const sse = [
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{"content":"Hi"}},{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{}}],"usage":{"prompt_tokens":31,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":7},"completion_tokens_details":{"reasoning_tokens":2}}}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens":6,"total_tokens":37}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const resp = await handleResponses(backendFor(facadeWith(sse)), respReq({ model: "hy4flash-free", input: "hi", stream: true }), CAPS);
+    const text = await resp.text();
+    const completed = text.split("\n").find((l) => l.startsWith('data: {"type":"response.completed"'));
+    expect(completed).toBeDefined();
+    const event = JSON.parse(completed!.slice("data: ".length));
+    expect(event.response.usage).toMatchObject({
+      input_tokens: 31,
+      output_tokens: 6,
+      total_tokens: 37,
+      input_tokens_details: { cached_tokens: 7 },
+      output_tokens_details: { reasoning_tokens: 2 },
+    });
+  });
+
   test("response.created usage includes complete detail fields", async () => {
     const backend = backendFor(facadeWith(SSE_TEXT));
     const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi", stream: true }), CAPS);

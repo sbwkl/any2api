@@ -112,8 +112,8 @@ Owner：wayne
 
 - **R36**：When codebuddy 的 system/developer 文本包含 Claude Code 反馈链接行（含 `github.com/anthropics/claude-code`）, the system shall 在发送上游前删除该行，并保留其余内容。
 - **R37**：When provider 声明 `promptTokensIncludeCache`（当前仅 codebuddy，已实测上游 `prompt_tokens` 为总输入）, the system shall 在 Anthropic usage 中令 `input_tokens` 只表示未缓存输入（`max(0, prompt_tokens - cached_tokens - cache_creation_tokens)`），并保留 `cache_read_input_tokens` / `cache_creation_input_tokens` 为缓存分项；其他 provider 保持上游 `prompt_tokens` 原值。流式多帧 usage 应按字段合并，避免缺失字段把已采集值归零。
-- **R38**：When OpenAI Chat SSE 被聚合为非流式 completion, the system shall 在 `usage.prompt_tokens_details` 中保留上游 `cache_creation_tokens`。
-- **R39**：When Responses 流式响应创建时, the system shall 在初始 `usage` 中包含 `input_tokens_details.cached_tokens` 与 `output_tokens_details.reasoning_tokens`，并在终态事件中携带完整 usage。
+- **R38**：When OpenAI Chat SSE 被聚合为非流式 completion, the system shall 在 `usage.prompt_tokens_details` 中保留上游 `cache_creation_tokens`；上游多帧 usage 时按字段合并，缺失字段不覆盖先前值。
+- **R39**：When Responses 流式响应创建时, the system shall 在初始 `usage` 中包含 `input_tokens_details.cached_tokens` 与 `output_tokens_details.reasoning_tokens`，并在终态事件中携带完整 usage；多帧 usage 按字段合并，缺失字段不覆盖先前值。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 

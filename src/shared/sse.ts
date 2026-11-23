@@ -72,7 +72,21 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
     if (!id && chunk.id) id = chunk.id;
     if (!model && chunk.model) model = chunk.model;
     if (!created && chunk.created) created = chunk.created;
-    if (chunk.usage) usage = chunk.usage;
+    if (chunk.usage) {
+      const prev = usage ?? {};
+      usage = {
+        prompt_tokens: chunk.usage.prompt_tokens ?? prev.prompt_tokens,
+        completion_tokens: chunk.usage.completion_tokens ?? prev.completion_tokens,
+        total_tokens: chunk.usage.total_tokens ?? prev.total_tokens,
+        prompt_tokens_details: {
+          cached_tokens: chunk.usage.prompt_tokens_details?.cached_tokens ?? prev.prompt_tokens_details?.cached_tokens,
+          cache_creation_tokens: chunk.usage.prompt_tokens_details?.cache_creation_tokens ?? prev.prompt_tokens_details?.cache_creation_tokens,
+        },
+        completion_tokens_details: {
+          reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens ?? prev.completion_tokens_details?.reasoning_tokens,
+        },
+      };
+    }
     for (const c of chunk.choices ?? []) {
       const idx = c.index ?? 0;
       const slot = slots.get(idx) ?? { content: "", reasoning: "", toolCalls: new Map() };
