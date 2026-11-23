@@ -16,10 +16,16 @@ const CODEX_PREAMBLE =
 const CODEX_PREAMBLE_REPLACEMENT =
   "You are Codex, a coding agent. You and the user share the same workspace and collaborate to achieve the user's goals.";
 
+// Claude Code 的反馈链接行会触发上游 400（Request blocked）；整行删除。
+// 实测：block 2 的最后一行 "- To give feedback, users should report the issue at
+// https://github.com/anthropics/claude-code/issues" 单独发送即 400；其余行均 200。
+const CLAUDE_CODE_FEEDBACK_LINE = /^.*github\.com\/anthropics\/claude-code.*(?:\r?\n|$)/gim;
+
 export function sanitizeSystemText(text: string): string {
   // 只删已知指纹行，不改动其余文本（包括首尾空白）。
   return text
     .replace(COMPETITOR_PREAMBLE, "You are an AI coding assistant.")
     .replace(CODEX_PREAMBLE, CODEX_PREAMBLE_REPLACEMENT)
-    .replace(BILLING_HEADER, "");
+    .replace(BILLING_HEADER, "")
+    .replace(CLAUDE_CODE_FEEDBACK_LINE, "");
 }

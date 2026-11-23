@@ -110,6 +110,8 @@ Owner：wayne
 - **R34**：When codebuddy 的 system/developer 文本（字符串或 text 块）包含以 `x-anthropic-billing-header:` 开头的行, the system shall 在发送上游前删除该行；仅当该文本块或消息的文本因删除而变空时不再发送，清洗前已为空的文本块、`content: ""` 的消息以及其他 system 内容（含首尾空白）保持不变；`content` 为 `null` 或空数组的消息仍按 R30 丢弃。
 - **R35**：When codebuddy 的 system/developer 文本包含 Codex CLI 自述首句 `You are a coding agent running in the Codex CLI, a terminal-based coding assistant. Codex CLI is an open source project led by OpenAI. You are expected to be precise, safe, and helpful.`, the system shall 将其替换为 `You are Codex, a coding agent. You and the user share the same workspace and collaborate to achieve the user's goals.`，其余内容保持不变。
 
+- **R36**：When codebuddy 的 system/developer 文本包含 Claude Code 反馈链接行（含 `github.com/anthropics/claude-code`）, the system shall 在发送上游前删除该行，并保留其余内容。
+
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
 ## 8. 风险与兔子洞
@@ -153,6 +155,7 @@ Owner：wayne
 | CHG-0014 | 评审修复：计费头清理范围最小化，不改变其他 system 内容 | 已验证 | [CHG-0014](../exec-plans/active/CHG-0014-codebuddy-billing-header-scope.md) |
 | 2026-11-22-codex-cli-preamble | 替换 Codex CLI 自述首句，修复 Codex 会话 400（11128） | 进行中 | [2026-11-22-codex-cli-preamble](../exec-plans/active/2026-11-22-codex-cli-preamble.md) |
 | 2026-11-22-codebuddy-sanitize-whitespace | 兼容 Claude Code preamble 的空白/撇号变体 | 进行中 | [2026-11-22-codebuddy-sanitize-whitespace](../exec-plans/active/2026-11-22-codebuddy-sanitize-whitespace.md) |
+| 2026-11-22-codebuddy-claude-feedback-line | 清理 Claude Code 反馈链接行，修复 Claude Desktop 400 | 进行中 | [2026-11-22-codebuddy-claude-feedback-line](../exec-plans/active/2026-11-22-codebuddy-claude-feedback-line.md) |
 
 ## 11. 链接
 
