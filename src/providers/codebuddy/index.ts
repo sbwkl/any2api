@@ -42,6 +42,7 @@ export const codebuddyProvider: ProviderModule = {
         normalizeErrors: true,
         thinking: true,
         thinkingToEffort: true,
+        promptTokensIncludeCache: true,
       }),
       health: () => ({ ok: true, ...facade.healthPayload() }),
     };
