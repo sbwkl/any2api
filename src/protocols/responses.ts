@@ -192,7 +192,13 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
   let msgItemId: string | null = null;
   let seq = 0;
   const outputItems: any[] = [];
-  let usage: any = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+  let usage: any = {
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    input_tokens_details: { cached_tokens: 0 },
+    output_tokens_details: { reasoning_tokens: 0 },
+  };
   let finish: string | null = null;
 
   const ev = (ctrl: ReadableStreamDefaultController, type: string, data: any) =>

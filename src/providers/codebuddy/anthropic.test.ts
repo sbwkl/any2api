@@ -172,6 +172,50 @@ describe("anthropic adapter", () => {
     expect(text).toContain("event: message_stop");
   });
 
+  test("streaming message_delta carries upstream input and cache tokens", async () => {
+    const sse = [
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"}}]}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":31,"completion_tokens":5,"total_tokens":36,"prompt_tokens_details":{"cached_tokens":7,"cache_creation_tokens":2}}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const resp = await handleAnthropicMessages(backendFor(facadeWith(sse)), anthroReq({
+      model: "hy4flash-free",
+      max_tokens: 64,
+      stream: true,
+      messages: [{ role: "user", content: "hi" }],
+    }), CAPS);
+    const text = await resp.text();
+    const line = text.split("\n").find((l) => l.startsWith('data: {"type":"message_delta"'));
+    expect(line).toBeDefined();
+    const j = JSON.parse(line!.slice("data: ".length));
+    expect(j.usage.input_tokens).toBe(22);
+    expect(j.usage.cache_read_input_tokens).toBe(7);
+    expect(j.usage.cache_creation_input_tokens).toBe(2);
+    expect(j.usage.output_tokens).toBe(5);
+  });
+
+  test("non-stream usage excludes cached tokens from input_tokens", async () => {
+    const sse = [
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"}}]}`,
+      "",
+      `data: {"id":"1","model":"hy4flash-free","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":31,"completion_tokens":5,"total_tokens":36,"prompt_tokens_details":{"cached_tokens":7,"cache_creation_tokens":2}}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const resp = await handleAnthropicMessages(backendFor(facadeWith(sse)), anthroReq({
+      model: "hy4flash-free", max_tokens: 64, messages: [{ role: "user", content: "hi" }],
+    }), CAPS);
+    const j: any = await resp.json();
+    expect(j.usage.input_tokens).toBe(22);
+    expect(j.usage.cache_read_input_tokens).toBe(7);
+    expect(j.usage.cache_creation_input_tokens).toBe(2);
+    expect(j.usage.output_tokens).toBe(5);
+  });
+
   test("streaming tool call emits input_json_delta", async () => {
     const backend = backendFor(facadeWith(SSE_TOOL));
     const resp = await handleAnthropicMessages(backend, anthroReq({

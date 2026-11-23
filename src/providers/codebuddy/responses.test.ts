@@ -143,6 +143,33 @@ describe("responses adapter", () => {
     expect(text).toContain("event: response.completed");
   });
 
+  test("streaming response emits a final usage-derived completed response", async () => {
+    const backend = backendFor(facadeWith(SSE_TEXT));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi", stream: true }), CAPS);
+    const text = await resp.text();
+    const completed = text.split("\n").find((l) => l.startsWith('data: {"type":"response.completed"'));
+    expect(completed).toBeDefined();
+    const event = JSON.parse(completed!.slice("data: ".length));
+    expect(event.response.usage).toMatchObject({
+      input_tokens: 3,
+      output_tokens: 1,
+      total_tokens: 4,
+      input_tokens_details: { cached_tokens: 1 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    });
+  });
+
+  test("response.created usage includes complete detail fields", async () => {
+    const backend = backendFor(facadeWith(SSE_TEXT));
+    const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi", stream: true }), CAPS);
+    const text = await resp.text();
+    const created = text.split("\n").find((l) => l.startsWith('data: {"type":"response.created"'));
+    expect(created).toBeDefined();
+    const event = JSON.parse(created!.slice("data: ".length));
+    expect(event.response.usage.input_tokens_details).toEqual({ cached_tokens: 0 });
+    expect(event.response.usage.output_tokens_details).toEqual({ reasoning_tokens: 0 });
+  });
+
   test("streaming tool call emits function_call_arguments.delta", async () => {
     const backend = backendFor(facadeWith(SSE_TOOL));
     const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "weather?", stream: true }), CAPS);

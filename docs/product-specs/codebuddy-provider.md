@@ -111,6 +111,9 @@ Owner：wayne
 - **R35**：When codebuddy 的 system/developer 文本包含 Codex CLI 自述首句 `You are a coding agent running in the Codex CLI, a terminal-based coding assistant. Codex CLI is an open source project led by OpenAI. You are expected to be precise, safe, and helpful.`, the system shall 将其替换为 `You are Codex, a coding agent. You and the user share the same workspace and collaborate to achieve the user's goals.`，其余内容保持不变。
 
 - **R36**：When codebuddy 的 system/developer 文本包含 Claude Code 反馈链接行（含 `github.com/anthropics/claude-code`）, the system shall 在发送上游前删除该行，并保留其余内容。
+- **R37**：When 共享协议层把上游 OpenAI Chat usage 转换为 Anthropic usage, the system shall 令 `input_tokens` 只表示未缓存输入（`max(0, prompt_tokens - cached_tokens - cache_creation_tokens)`），并保留 `cache_read_input_tokens` / `cache_creation_input_tokens` 为缓存分项；流式用法可在 `message_delta.usage` 中补齐。
+- **R38**：When OpenAI Chat SSE 被聚合为非流式 completion, the system shall 在 `usage.prompt_tokens_details` 中保留上游 `cache_creation_tokens`。
+- **R39**：When Responses 流式响应创建时, the system shall 在初始 `usage` 中包含 `input_tokens_details.cached_tokens` 与 `output_tokens_details.reasoning_tokens`，并在终态事件中携带完整 usage。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -156,6 +159,7 @@ Owner：wayne
 | 2026-11-22-codex-cli-preamble | 替换 Codex CLI 自述首句，修复 Codex 会话 400（11128） | 进行中 | [2026-11-22-codex-cli-preamble](../exec-plans/active/2026-11-22-codex-cli-preamble.md) |
 | 2026-11-22-codebuddy-sanitize-whitespace | 兼容 Claude Code preamble 的空白/撇号变体 | 进行中 | [2026-11-22-codebuddy-sanitize-whitespace](../exec-plans/active/2026-11-22-codebuddy-sanitize-whitespace.md) |
 | 2026-11-22-codebuddy-claude-feedback-line | 清理 Claude Code 反馈链接行，修复 Claude Desktop 400 | 进行中 | [2026-11-22-codebuddy-claude-feedback-line](../exec-plans/active/2026-11-22-codebuddy-claude-feedback-line.md) |
+| 2026-11-23-usage-field-semantics | 修复三协议 usage 字段语义（Anthropic / Chat / Responses） | 进行中 | [2026-11-23-usage-field-semantics](../exec-plans/active/2026-11-23-usage-field-semantics.md) |
 
 ## 11. 链接
 

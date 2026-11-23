@@ -27,7 +27,20 @@ const SSE = [
   "",
 ].join("\n");
 
+const SSE_WITH_CACHE_CREATION = [
+  `data: {"id":"2","model":"m","created":2,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12,"prompt_tokens_details":{"cached_tokens":6,"cache_creation_tokens":2},"completion_tokens_details":{"reasoning_tokens":1}}}`,
+  "",
+  "data: [DONE]",
+  "",
+].join("\n");
+
 describe("sse aggregation", () => {
+  test("preserves cache creation tokens in mapped usage", async () => {
+    const out = await aggregateSseToCompletion(streamOf(SSE_WITH_CACHE_CREATION));
+    expect(out.usage.prompt_tokens_details.cache_creation_tokens).toBe(2);
+    expect(out.usage.prompt_tokens_details.cached_tokens).toBe(6);
+  });
+
   test("aggregates content, reasoning, tool calls, finish and usage", async () => {
     const out = await aggregateSseToCompletion(streamOf(SSE));
     expect(out.object).toBe("chat.completion");

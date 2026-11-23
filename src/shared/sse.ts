@@ -32,6 +32,7 @@ export function mapUsage(usage: any): any | undefined {
     total_tokens: usage.total_tokens ?? 0,
     prompt_tokens_details: {
       cached_tokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+      cache_creation_tokens: usage.prompt_tokens_details?.cache_creation_tokens ?? 0,
     },
     completion_tokens_details: {
       reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens ?? 0,

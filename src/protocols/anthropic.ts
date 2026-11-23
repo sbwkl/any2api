@@ -103,6 +103,18 @@ const STOP_REASON: Record<string, string> = {
   stop: "end_turn", tool_calls: "tool_use", length: "max_tokens", content_filter: "end_turn",
 };
 
+function anthropicUsage(usage: any): { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number } {
+  const cacheRead = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+  const cacheCreation = usage?.prompt_tokens_details?.cache_creation_tokens ?? 0;
+  const totalInput = usage?.prompt_tokens ?? 0;
+  return {
+    input_tokens: Math.max(0, totalInput - cacheRead - cacheCreation),
+    output_tokens: usage?.completion_tokens ?? 0,
+    cache_read_input_tokens: cacheRead,
+    cache_creation_input_tokens: cacheCreation,
+  };
+}
+
 function validateAnthropic(body: any): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body must be an object";
   if (!Array.isArray(body.messages)) return "messages must be an array";
@@ -193,12 +205,7 @@ function completionToAnthropic(c: any, model?: string, thinking = false): any {
     content,
     stop_reason: STOP_REASON[c?.choices?.[0]?.finish_reason ?? "stop"] ?? "end_turn",
     stop_sequence: null,
-    usage: {
-      input_tokens: usage.prompt_tokens ?? 0,
-      output_tokens: usage.completion_tokens ?? 0,
-      cache_read_input_tokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
-      cache_creation_input_tokens: usage.prompt_tokens_details?.cache_creation_tokens ?? 0,
-    },
+    usage: anthropicUsage(usage),
   };
 }
 
@@ -218,6 +225,9 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
   let blockIdx = -1;
   let curBlock: "text" | "thinking" | "tool_use" | null = null;
   let outputTokens = 0;
+  let inputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheCreationTokens = 0;
   const toolCalls = new Map<number, { id: string; name: string }>();
   let stopReason: string | null = null;
 
@@ -254,7 +264,13 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         let chunk: any;
         try { chunk = JSON.parse(data); } catch { continue; }
           if (chunk.model && !outModel) outModel = chunk.model;
-          if (chunk.usage) outputTokens = chunk.usage.completion_tokens ?? outputTokens;
+          if (chunk.usage) {
+            const parsed = anthropicUsage(chunk.usage);
+            inputTokens = parsed.input_tokens;
+            outputTokens = parsed.output_tokens;
+            cacheReadTokens = parsed.cache_read_input_tokens;
+            cacheCreationTokens = parsed.cache_creation_input_tokens;
+          }
           const choice = chunk.choices?.[0];
           const delta = choice?.delta ?? {};
           if (thinking && typeof delta.reasoning_content === "string" && delta.reasoning_content) {
@@ -285,7 +301,12 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         ev(ctrl, "message_delta", {
           type: "message_delta",
           delta: { stop_reason: stopReason ?? "end_turn", stop_sequence: null },
-          usage: { output_tokens: outputTokens },
+          usage: {
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            cache_read_input_tokens: cacheReadTokens,
+            cache_creation_input_tokens: cacheCreationTokens,
+          },
         });
         ev(ctrl, "message_stop", { type: "message_stop" });
       } catch (e: any) {
