@@ -2,6 +2,7 @@ import type { ProviderName } from "./types";
 
 const PROVIDERS: ProviderName[] = ["codearts", "codebuddy"];
 const DEFAULT_PREFERENCE = ["GLM-5.3-Flash", "DeepSeek-v4.1-Flash(1017)"];
+const DEFAULT_IMAGE_URL = "https://pic.rmb.bdstatic.com/bjh/news/49a357178ac9972519fab6f835ba61aa.jpeg";
 
 export interface E2EConfig {
   maxCalls: number;
@@ -49,7 +50,7 @@ export function loadConfig(
   const preference = parseList(env.E2E_MODEL_PREFERENCE);
 
   return {
-    maxCalls: parsePositiveInt("E2E_MAX_CALLS", env.E2E_MAX_CALLS, 40),
+    maxCalls: parsePositiveInt("E2E_MAX_CALLS", env.E2E_MAX_CALLS, 200),
     providers,
     modelPreference: preference.length ? preference : [...DEFAULT_PREFERENCE],
     modelFallback: env.E2E_MODEL_FALLBACK?.trim() || undefined,
@@ -59,7 +60,7 @@ export function loadConfig(
     port: parsePort(env.E2E_PORT),
     fixturesDir: env.E2E_FIXTURES_DIR?.trim() || "e2e/fixtures",
     reportsDir: env.E2E_REPORTS_DIR?.trim() || "e2e/reports",
-    imageUrl: env.E2E_IMAGE_URL?.trim() || undefined,
+    imageUrl: env.E2E_IMAGE_URL?.trim() || DEFAULT_IMAGE_URL,
     only: env.E2E_ONLY?.trim() || undefined,
   };
 }

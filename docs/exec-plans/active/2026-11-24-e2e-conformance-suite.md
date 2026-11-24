@@ -27,7 +27,7 @@ Owner：wayne
 | D4 | 覆盖范围 | 全部已暴露端点 × 两 provider，先定义全量矩阵，图片链路 pilot 先行 |
 | D5 | 修复边界 | 本变更只交付测试、基线、缺陷清单；P0 缺陷另开分支修复 |
 | D6 | 运行载体 | `scripts/e2e/` 独立 runner + `bun run e2e`；默认 `bun test` 保持纯离线单测 |
-| D7 | 凭据与成本 | 复用现有自动提取 + env 覆盖；`E2E_MAX_CALLS` 硬上限（默认 40）；用户同意消耗真实 token |
+| D7 | 凭据与成本 | 复用现有自动提取 + env 覆盖；`E2E_MAX_CALLS` 硬上限（默认 200，2026-11-24 由 40 调高）；用户同意消耗真实 token |
 | D8 | 模型选择 | 偏好 `GLM-5.3-Flash > DeepSeek-v4.1-Flash(1017)`，`E2E_MODEL_PREFERENCE` 可配；fallback：`E2E_MODEL_FALLBACK` → 启发式 → skipped；绝不静默回退 `models[0]` |
 | D9 | 静默丢弃观测 | 服务器 env 门控的上游请求转储 + 行为探测；MITM 不入自动化 |
 | D10 | 样本 | 实弹流量脱敏后录 `e2e/fixtures/`（合成数据、≤2MB）；v1 不做离线 replay |
@@ -119,7 +119,7 @@ Owner：wayne
 
 ## 9. 基线暴露的缺陷（修复不在本次范围）
 
-优先级为建议值，由后续修复分支确认。状态均为基线当时行为。
+优先级为建议值，由后续修复分支确认。状态均为基线当时行为；其中部分缺陷已在 `fix/e2e-clear-defects` 修复，见 §11 变更记录。
 
 | 缺陷 | 范围 | 基线证据 | 影响 | 建议 |
 |---|---|---|---|---|
@@ -163,3 +163,5 @@ D13 约定：客户端只直连 any2api，**不经 cc-switch 代理、不新增�
 | 开发中 | wayne | 2026-11-24 决策锁定（D1–D17，见 §3）；本文件创建 |
 | 已验证（未合并） | wayne | 2026-11-24 最终基线：50/60 调用，32 pass / 17 fail / 4 not-supported / 4 skipped；报告改为 HTML + JSON + 最小 MD（D14 更新），49 个非 skipped 场景带场景证据；`bun test` 219 pass；三处 `bun build` 零错误；fixtures 53 文件 / 244KB；1440px / 500px 布局与筛选已验证；缺陷与缺口见 §9；客户端冒烟待执行（§10） |
 | 已验证（未合并） | wayne | 2026-11-24 场景集一致性与跨 provider 对照矩阵（D18–D21）：场景改为 provider 无关模板、`buildScenarios` 统一绑定，删除 `responses.tools.forced` 的 codebuddy 特判；单测断言两 provider 场景清单与判定元数据一致，运行时 `coverage` 不一致即失败；报告改一张矩阵 + provider 分区证据 + 全局小节，JSON 增加 `scenarioSet` / `coverage`；基线离线重渲染（HTML 158,184 B / JSON 165,264 B / MD 667 B，coverage 28/28 × 2）；定点实弹 `responses.tools.forced` 2 次调用结果不变（codearts not-supported / codebuddy pass）；`bun test` 225 pass / 0 fail（28 files，771 assertions），三处 `bun build` 零错误 |
+| 开发中 | wayne | 2026-11-24 分支 `fix/e2e-clear-defects` 修复 §9 中契约明确的缺陷：① Responses 流补 `response.output_text.done`（先于 `content_part.done`）；② Responses `input_image` 映射为 chat `image_url`（无 URL 时保留诊断占位）；③ codearts 未知模型显式 404，不再回退 `models[0]`；④ 代理自身生成的错误响应加 `x-any2api-error-source: proxy`，协议层在 `normalizeErrors=false` 时仍按请求方协议归一；⑤ 两家 SSE usage 归一为末尾单个 `choices: []` 块（合并分片字段）。证据：`bun test` 238 pass / 0 fail（28 files，807 assertions）；三处 `bun build` 零错误；定点实弹 `basic.stream` 6/6、`image.data_url` 4/4、`unknown_model` 6/6 pass（`/tmp/e2e-fix1..3`）；全矩阵 40 pass / 9 fail / 4 not-supported / 4 skipped（50/60 调用，`/tmp/e2e-full-fix`），剩余 9 格即待审核的 6 个场景，无回归。上游能力探测（2026-11-24，临时脚本未入库）：codearts `n=2` 上游 400（`InferHub.001001005` 参数非法），`logprobs` / `response_format`（json_object、json_schema）接受但不生效（中性 prompt 返回纯文本、无 logprobs）；codebuddy `n=2`、`logprobs` 接受但忽略（choices=1、无 logprobs），`response_format` 接受但不强制。剩余 5 个场景（response_format × 2、logprobs、n、system 图片）经用户 2026-11-24 审核：**均不做修改，保持原样**（上游能力探测结论留档于本行，供后续决定）。e2e 场景模板不随代码修复改动，`knownDefect` 标记保持基线值 |
+| 开发中 | wayne | 2026-11-24 配置默认值调整（用户决定）：`E2E_IMAGE_URL` 默认 `https://pic.rmb.bdstatic.com/bjh/news/49a357178ac9972519fab6f835ba61aa.jpeg`；`E2E_MAX_CALLS` 默认 40 → 200；README 环境变量表与 D7 同步；`bun test` 238 pass / 0 fail，三处 `bun build` 零错误 |

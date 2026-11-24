@@ -167,7 +167,7 @@ bun run e2e:corpus [dir]                               # 对入站采集 JSONL �
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
-| `E2E_MAX_CALLS` | `40` | 模型调用硬上限；`models` / `healthz` 不计。全矩阵约 54 次，建议基线用 60 |
+| `E2E_MAX_CALLS` | `200` | 模型调用硬上限；`models` / `healthz` 不计。全矩阵约 54 次 |
 | `E2E_PROVIDERS` | `codearts,codebuddy` | 参与矩阵的 provider |
 | `E2E_MODEL_PREFERENCE` | `GLM-5.3-Flash,DeepSeek-v4.1-Flash(1017)` | 优先模型，逗号分隔；大小写不敏感、容忍括号后缀 |
 | `E2E_MODEL_FALLBACK` | 空 | 偏好都不存在时的指定模型；仍无则启发式选 flash/mini/lite/small，绝不静默取 `models[0]` |
@@ -175,7 +175,7 @@ bun run e2e:corpus [dir]                               # 对入站采集 JSONL �
 | `E2E_TIMEOUT_MS` | `120000` | 单次请求超时 |
 | `E2E_PORT` | `0` | 子进程监听端口；0 为随机 |
 | `E2E_RECORD` / `--record` | 关 | 录制脱敏 fixture 到 `e2e/fixtures/`（总量 ≤2MB） |
-| `E2E_IMAGE_URL` | 空 | 公网图片 URL；未设置时 URL 图片场景标 skipped |
+| `E2E_IMAGE_URL` | `https://pic.rmb.bdstatic.com/bjh/news/49a357178ac9972519fab6f835ba61aa.jpeg` | 公网图片 URL；默认公共图片，可用 env 覆盖 |
 | `E2E_FIXTURES_DIR` / `E2E_REPORTS_DIR` | `e2e/fixtures` / `e2e/reports` | 产物目录；`e2e/reports/` 已 gitignore |
 
 报告写入 `e2e/reports/latest.html`（一张跨 provider 对照矩阵，状态筛选、点击状态格展开对应 provider 的输入 / 上游请求 / 输出摘要）与 `latest.json`（含入站请求、上游请求与响应原文，单条 ≤64KB，并记录 `scenarioSet` / `coverage`）。观测开关：`TRACE_CAPTURE_DIR` 采集入站 JSONL（Authorization / x-api-key / cookie 等记为 `<redacted>`，单条 ≤256KB，按天轮转）；`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求 JSONL，供「字段是否被静默丢弃」的结构断言。

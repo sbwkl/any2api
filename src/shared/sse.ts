@@ -73,6 +73,76 @@ interface Slot {
   toolCalls: Map<number, { id: string; name: string; args: string }>;
 }
 
+// 上游可能把 usage 拆到多帧（codebuddy 实测：prompt 分项与 completion 分项分两帧），
+// 归并时按字段合并，不能后帧整体覆盖前帧。
+function mergeUsage(prev: any, next: any): any {
+  if (!prev) return { ...next };
+  const merged: any = { ...prev };
+  for (const [key, value] of Object.entries(next ?? {})) {
+    if (value === undefined) continue;
+    if (key === "prompt_tokens_details" || key === "completion_tokens_details") {
+      merged[key] = { ...(merged[key] ?? {}), ...(value as any) };
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+// OpenAI 规定 include_usage 的 usage 块必须带空 choices；两家的上游都做不到：
+// codebuddy 把 usage 挂在最后一个带 finish_reason 的 chunk 上，严格按官方语义解析 usage 的
+// SDK 会把这次 usage 连同该 chunk 的增量重复计数。流式透传统一改成「正文块 usage=null，
+// 末尾单独一个 choices:[] 的 usage 块」，已合规的上游（codearts）同样收敛成一个 usage 块。
+export function normalizeChatSseUsage(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    async start(ctrl) {
+      const write = (data: string) => ctrl.enqueue(enc.encode(`data: ${data}\n\n`));
+      let meta: { id?: string; model?: string; created?: number } = {};
+      let usage: any = null;
+      try {
+        for await (const data of sseData(body)) {
+          if (!data) continue;
+          if (data === "[DONE]") break;
+          let chunk: any;
+          try {
+            chunk = JSON.parse(data);
+          } catch {
+            write(data);
+            continue;
+          }
+          if (typeof chunk?.id === "string") meta.id = chunk.id;
+          if (typeof chunk?.model === "string") meta.model = chunk.model;
+          if (typeof chunk?.created === "number") meta.created = chunk.created;
+          if (chunk?.usage) {
+            usage = mergeUsage(usage, chunk.usage);
+            const choices = Array.isArray(chunk.choices) ? chunk.choices : [];
+            if (choices.length === 0) continue;
+            write(JSON.stringify({ ...chunk, usage: null }));
+            continue;
+          }
+          write(data);
+        }
+        if (usage) {
+          write(JSON.stringify({
+            id: meta.id ?? `chatcmpl-${Date.now()}`,
+            object: "chat.completion.chunk",
+            created: meta.created ?? Math.floor(Date.now() / 1000),
+            model: meta.model ?? "",
+            choices: [],
+            usage,
+          }));
+        }
+        write("[DONE]");
+      } catch (e) {
+        ctrl.error(e);
+        return;
+      }
+      ctrl.close();
+    },
+  });
+}
+
 export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>): Promise<any> {
   let id = "";
   let model = "";

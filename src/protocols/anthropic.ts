@@ -2,7 +2,7 @@
 // 依赖 ChatBackend.respond（OpenAI chat 形态）；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
-import { errorTypeForStatus } from "../shared/errors";
+import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
 import { sseData, upstreamErrorFromChunk, NO_CHOICES } from "../shared/sse";
 
 function systemToMessage(system: any): any | null {
@@ -297,7 +297,7 @@ export async function handleAnthropicMessages(
 }
 
 async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
-  if (caps.normalizeErrors === false) return resp;
+  if (caps.normalizeErrors === false && resp.headers.get(PROXY_ERROR_HEADER) !== "proxy") return resp;
   let message = `upstream ${resp.status}`;
   try {
     const j: any = await resp.clone().json();

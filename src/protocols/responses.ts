@@ -2,8 +2,38 @@
 // 依赖 ChatBackend.respond；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
-import { errorTypeForStatus } from "../shared/errors";
+import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
 import { sseData } from "../shared/sse";
+
+// input_image → OpenAI chat 的 image_url：图片必须真的送达上游，取不到 URL 时留诊断占位符，
+// 不能安静丢掉（Responses 客户端的读图结果会变成模型从未见过的内容）。
+function inputImagePart(part: any): any {
+  const raw = part?.image_url;
+  const url = typeof raw === "string" ? raw : typeof raw?.url === "string" ? raw.url : null;
+  if (url) return { type: "image_url", image_url: { url } };
+  return `[image omitted: input_image without image_url${part?.file_id ? ` (file_id=${part.file_id})` : ""}]`;
+}
+
+function messageContentToOpenAi(content: any): any {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  const parts: any[] = [];
+  for (const part of content) {
+    if (typeof part === "string") { parts.push(part); continue; }
+    if (part?.type === "input_image") { parts.push(inputImagePart(part)); continue; }
+    if (typeof part?.text === "string") parts.push(part.text);
+  }
+  if (!parts.some((p) => typeof p !== "string")) return parts.join("");
+  const out: any[] = [];
+  for (const p of parts) {
+    if (typeof p !== "string") { out.push(p); continue; }
+    if (!p) continue;
+    const last = out.at(-1);
+    if (last?.type === "text") last.text += p;
+    else out.push({ type: "text", text: p });
+  }
+  return out;
+}
 
 function inputItemsToMessages(input: any): any[] {
   if (typeof input === "string") return [{ role: "user", content: input }];
@@ -35,13 +65,9 @@ function inputItemsToMessages(input: any): any[] {
     }
     if (item?.type === "message" || (!item?.type && item?.role)) {
       flush();
-      const c = item.content;
-      const text = typeof c === "string"
-        ? c
-        : Array.isArray(c)
-          ? c.map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join("")
-          : "";
-      if (text) out.push({ role: item.role ?? "user", content: text });
+      const content = messageContentToOpenAi(item.content);
+      const empty = typeof content === "string" ? !content : content.length === 0;
+      if (!empty) out.push({ role: item.role ?? "user", content });
       continue;
     }
     // reasoning / 其他类型：忽略，不打断连续 function_call 分组
@@ -144,7 +170,7 @@ export async function handleResponses(
 }
 
 async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): Promise<Response> {
-  if (caps.normalizeErrors === false) return resp;
+  if (caps.normalizeErrors === false && resp.headers.get(PROXY_ERROR_HEADER) !== "proxy") return resp;
   let message = `upstream ${resp.status}`;
   let code: any = resp.status;
   try {
@@ -291,6 +317,7 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
         });
         outputItems.forEach((item: any, oi: number) => {
           if (item.type === "message") {
+            ev(ctrl, "response.output_text.done", { type: "response.output_text.done", item_id: item.id, output_index: oi, content_index: 0, text: item._text ?? "" });
             ev(ctrl, "response.content_part.done", { type: "response.content_part.done", item_id: item.id, output_index: oi, content_index: 0, part: { type: "output_text", text: item._text ?? "", annotations: [] } });
           }
           if (item.type === "function_call") {

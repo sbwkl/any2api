@@ -1,6 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import { createProtocolRoutes } from "./index";
 import { responsesToOpenAi } from "./responses";
+import { PROXY_ERROR_HEADER } from "../shared/errors";
 import type { ChatBackend } from "./types";
 
 const completion = {
@@ -68,6 +69,23 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect(resp.status).toBe(400);
     const j: any = await resp.json();
     expect(j.code).toBe(123);
+  });
+
+  test("proxy-generated errors are normalized for Anthropic even when normalizeErrors is false", async () => {
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => Response.json(
+        { error: { message: "model_not_found: nope", type: "invalid_request_error", code: null } },
+        { status: 404, headers: { [PROXY_ERROR_HEADER]: "proxy" } },
+      ),
+    }), { toolChoice: "full", normalizeErrors: false });
+    const resp = await dispatch(local, "/v1/messages", "POST", {
+      model: "nope", max_tokens: 10, messages: [{ role: "user", content: "hi" }],
+    });
+    expect(resp.status).toBe(404);
+    const j: any = await resp.json();
+    expect(j.type).toBe("error");
+    expect(j.error.type).toBe("invalid_request_error");
+    expect(j.error.message).toContain("model_not_found");
   });
 
   test("Responses full tool_choice supports required and returns a response", async () => {
@@ -176,6 +194,53 @@ describe("shared protocol routes (codearts capabilities)", () => {
       function: { name: "f", arguments: '{"x":1}' },
     });
     expect(out.messages[1].tool_call_id).toBe("c1");
+  });
+
+  test("Responses input_image becomes an image_url part", () => {
+    const out = responsesToOpenAi({
+      model: "m",
+      input: [{
+        role: "user",
+        content: [
+          { type: "input_text", text: "color?" },
+          { type: "input_image", image_url: "data:image/png;base64,QUJD", detail: "auto" },
+        ],
+      }],
+    });
+    expect(out.messages[0].content).toEqual([
+      { type: "text", text: "color?" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,QUJD" } },
+    ]);
+  });
+
+  test("Responses text-only content stays a plain string", () => {
+    const out = responsesToOpenAi({
+      model: "m",
+      input: [{ role: "user", content: [{ type: "input_text", text: "a" }, { type: "input_text", text: "b" }] }],
+    });
+    expect(out.messages[0].content).toBe("ab");
+  });
+
+  test("Responses input_image without a URL keeps a diagnostic placeholder", () => {
+    const out = responsesToOpenAi({
+      model: "m",
+      input: [{ role: "user", content: [{ type: "input_image", file_id: "file-1" }] }],
+    });
+    expect(JSON.stringify(out.messages[0].content)).toContain("[image omitted");
+  });
+
+  test("Responses stream emits output_text.done before content_part.done", async () => {
+    const sse = 'data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}\n\n';
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+    }), { normalizeErrors: true });
+    const resp = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi", stream: true });
+    const text = await resp.text();
+    const doneAt = text.indexOf("event: response.output_text.done");
+    const partAt = text.indexOf("event: response.content_part.done");
+    expect(doneAt).toBeGreaterThanOrEqual(0);
+    expect(partAt).toBeGreaterThan(doneAt);
+    expect(text).toContain('"text":"hi"');
   });
 
   test("consecutive Responses function_call items merge into one assistant message", () => {

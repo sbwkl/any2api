@@ -4,7 +4,7 @@ import { newId, SessionRegistry } from "./ids";
 import { buildHeaders, postChat, readUpstreamError, refreshAccessToken, fetchQueueStatus, sleep } from "./client";
 import { buildAgentPrompt, resolveModel } from "./config";
 import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from "./envelope";
-import { aggregateSseToCompletion } from "../../shared/sse";
+import { aggregateSseToCompletion, normalizeChatSseUsage } from "../../shared/sse";
 import { applyPromptCacheControl } from "../../shared/cache";
 import { errorTypeForStatus } from "../../shared/errors";
 import type { Credentials, ProductConfig, Profile } from "./types";
@@ -225,7 +225,7 @@ export class CodeBuddyFacade {
     }
 
     if (wantStream) {
-      return new Response(resp.body, {
+      return new Response(resp.body ? normalizeChatSseUsage(resp.body) : resp.body, {
         status: 200,
         headers: {
           "Content-Type": "text/event-stream",
