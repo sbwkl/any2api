@@ -1,0 +1,66 @@
+{
+  "scenario": "messages.image.system",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:00:22.769Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/messages",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 256,
+        "system": [
+          {
+            "type": "text",
+            "text": "You are terse."
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+            }
+          }
+        ],
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is the dominant color of this image? Answer with one English word."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"msg_202611241900206a5aefd354504666\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"No image was provided.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":32,\"output_tokens\":71,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:20.370Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are terse."
+          },
+          {
+            "role": "user",
+            "content": "What is the dominant color of this image? Answer with one English word."
+          }
+        ],
+        "max_tokens": 256,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ]
+}

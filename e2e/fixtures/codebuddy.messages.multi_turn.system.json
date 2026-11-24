@@ -1,0 +1,67 @@
+{
+  "scenario": "messages.multi_turn.system",
+  "provider": "codebuddy",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:01:09.804Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/messages",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 128,
+        "system": "You are terse.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Name the capital of France."
+          },
+          {
+            "role": "assistant",
+            "content": "Paris."
+          },
+          {
+            "role": "user",
+            "content": "Now name the country."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"msg_48528dd1a3d7486493206e70d69090a6\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"France.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":34,\"output_tokens\":6,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:01:07.906Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are terse."
+          },
+          {
+            "role": "user",
+            "content": "Name the capital of France."
+          },
+          {
+            "role": "assistant",
+            "content": "Paris."
+          },
+          {
+            "role": "user",
+            "content": "Now name the country."
+          }
+        ],
+        "stream": true,
+        "max_tokens": 128,
+        "temperature": 1
+      }
+    }
+  ]
+}

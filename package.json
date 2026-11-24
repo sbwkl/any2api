@@ -4,6 +4,8 @@
   "type": "module",
   "description": "把各 AI 编程工具的私有 LLM 通道封装为通用 OpenAI 兼容 API（codearts / codebuddy / …）",
   "scripts": {
-    "start": "bun src/index.ts"
+    "start": "bun src/index.ts",
+    "e2e": "bun scripts/e2e/run.ts",
+    "e2e:corpus": "bun scripts/e2e/corpus.ts"
   }
 }

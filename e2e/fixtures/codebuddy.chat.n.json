@@ -1,0 +1,47 @@
+{
+  "scenario": "chat.n",
+  "provider": "codebuddy",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:01:00.952Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 16,
+        "n": 2,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Say one word."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"f0f3309ebccc419bab61b6d05cc93f5e\",\"object\":\"chat.completion\",\"created\":1795518059,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Okay\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":16,\"completion_tokens\":3,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:58.186Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Say one word."
+          }
+        ],
+        "stream": true,
+        "max_tokens": 16,
+        "temperature": 1
+      }
+    }
+  ]
+}

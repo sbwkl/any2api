@@ -1,0 +1,18 @@
+{
+  "scenario": "healthz.aggregate",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:01:41.515Z",
+  "calls": [
+    {
+      "method": "GET",
+      "path": "/healthz",
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"ok\":true,\"providers\":[{\"provider\":\"codearts\",\"ok\":true},{\"provider\":\"codebuddy\",\"ok\":true,\"models\":24,\"credentialSource\":\"keychain\",\"uid\":\"03583f87...\"}]}"
+      }
+    }
+  ],
+  "upstream": []
+}

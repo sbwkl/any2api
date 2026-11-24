@@ -1,0 +1,72 @@
+{
+  "scenario": "chat.multi_turn.system",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T10:59:35.223Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 128,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are terse."
+          },
+          {
+            "role": "user",
+            "content": "Name the capital of France."
+          },
+          {
+            "role": "assistant",
+            "content": "Paris."
+          },
+          {
+            "role": "user",
+            "content": "Now name the country."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"20261124185933017551a39c724aa4\",\"object\":\"chat.completion\",\"created\":1795517973,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"France.\",\"reasoning_content\":\"The user asked the capital of France (Paris), and now asks to name the country. That's France. Terse response: France.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":34,\"completion_tokens\":32,\"total_tokens\":66,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":28}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:33.319Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are terse."
+          },
+          {
+            "role": "user",
+            "content": "Name the capital of France."
+          },
+          {
+            "role": "assistant",
+            "content": "Paris."
+          },
+          {
+            "role": "user",
+            "content": "Now name the country."
+          }
+        ],
+        "max_tokens": 128,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ]
+}

@@ -4,4 +4,4 @@
 
 | 文档 | 类型 | 说明 |
 |---|---|---|
-| 暂无 | 待补 | 当前没有已登记的调研 / 实测证据 |
+| [official-api/](official-api/README.md) | 官方规范条款 | OpenAI Chat Completions / Responses、Anthropic Messages 的 e2e 参照条款；来源为第一方源码仓库，2026-11-24 快照 |

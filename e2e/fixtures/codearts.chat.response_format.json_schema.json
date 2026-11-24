@@ -1,0 +1,67 @@
+{
+  "scenario": "chat.response_format.json_schema",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T10:59:37.285Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 512,
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "answer",
+            "strict": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return JSON with ok=true."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"20261124185935596ae50b91ea48e8\",\"object\":\"chat.completion\",\"created\":1795517975,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"```json\\n{\\n  \\\"ok\\\": true\\n}\\n```\",\"reasoning_content\":\"The user is asking me to return JSON with ok=true. This is a simple request for a JSON response. Let me provide that.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":41,\"total_tokens\":59,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":27}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:35.225Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return JSON with ok=true."
+          }
+        ],
+        "max_tokens": 512,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ]
+}

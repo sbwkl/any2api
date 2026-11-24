@@ -1,0 +1,3570 @@
+{
+  "schema": "any2api-e2e-report/v1",
+  "meta": {
+    "generatedAt": "2026-11-24T11:01:41.519Z",
+    "baseUrl": "http://127.0.0.1:52841",
+    "maxCalls": 60,
+    "calls": 50,
+    "providers": [
+      "codearts",
+      "codebuddy"
+    ],
+    "models": {
+      "codearts": "glm-5.3-flash",
+      "codebuddy": "glm-5.3-flash"
+    },
+    "scenarioSet": [
+      {
+        "id": "chat.basic.nonstream",
+        "endpoint": "/v1/chat/completions",
+        "feature": "基础非流式（含 usage）",
+        "clause": "OAI-CHAT-01"
+      },
+      {
+        "id": "chat.basic.stream",
+        "endpoint": "/v1/chat/completions",
+        "feature": "SSE 流式 + usage 块",
+        "clause": "OAI-CHAT-02"
+      },
+      {
+        "id": "chat.image.data_url",
+        "endpoint": "/v1/chat/completions",
+        "feature": "image_url data URL",
+        "clause": "OAI-CHAT-04"
+      },
+      {
+        "id": "chat.image.url",
+        "endpoint": "/v1/chat/completions",
+        "feature": "image_url 公网 URL",
+        "clause": "OAI-CHAT-04"
+      },
+      {
+        "id": "chat.multi_turn.system",
+        "endpoint": "/v1/chat/completions",
+        "feature": "multi-turn + system"
+      },
+      {
+        "id": "chat.response_format.json_schema",
+        "endpoint": "/v1/chat/completions",
+        "feature": "response_format json_schema",
+        "clause": "OAI-CHAT-06"
+      },
+      {
+        "id": "chat.tools.forced",
+        "endpoint": "/v1/chat/completions",
+        "feature": "tools + 强制 tool_choice",
+        "clause": "OAI-CHAT-05"
+      },
+      {
+        "id": "chat.response_format.json",
+        "endpoint": "/v1/chat/completions",
+        "feature": "response_format json_object",
+        "clause": "OAI-CHAT-06"
+      },
+      {
+        "id": "chat.logprobs",
+        "endpoint": "/v1/chat/completions",
+        "feature": "logprobs / top_logprobs",
+        "clause": "OAI-CHAT-07"
+      },
+      {
+        "id": "chat.n",
+        "endpoint": "/v1/chat/completions",
+        "feature": "n > 1",
+        "clause": "OAI-CHAT-08"
+      },
+      {
+        "id": "chat.negative.unknown_model",
+        "endpoint": "/v1/chat/completions",
+        "feature": "未知模型显式拒绝",
+        "clause": "OAI-CHAT-03"
+      },
+      {
+        "id": "chat.negative.invalid_json",
+        "endpoint": "/v1/chat/completions",
+        "feature": "非法 JSON 请求体",
+        "clause": "OAI-CHAT-03"
+      },
+      {
+        "id": "messages.basic.nonstream",
+        "endpoint": "/v1/messages",
+        "feature": "基础非流式（含 usage）",
+        "clause": "ANT-MSG-01"
+      },
+      {
+        "id": "messages.basic.stream",
+        "endpoint": "/v1/messages",
+        "feature": "SSE 事件序列",
+        "clause": "ANT-MSG-02"
+      },
+      {
+        "id": "messages.multi_turn.system",
+        "endpoint": "/v1/messages",
+        "feature": "multi-turn + system string"
+      },
+      {
+        "id": "messages.image.base64",
+        "endpoint": "/v1/messages",
+        "feature": "base64 图片",
+        "clause": "ANT-MSG-03"
+      },
+      {
+        "id": "messages.image.url",
+        "endpoint": "/v1/messages",
+        "feature": "URL 图片",
+        "clause": "ANT-MSG-03"
+      },
+      {
+        "id": "messages.image.tool_result",
+        "endpoint": "/v1/messages",
+        "feature": "tool_result 内嵌图片",
+        "clause": "ANT-MSG-04"
+      },
+      {
+        "id": "messages.image.system",
+        "endpoint": "/v1/messages",
+        "feature": "system 数组中的图片",
+        "clause": "ANT-MSG-05",
+        "knownDefect": true
+      },
+      {
+        "id": "messages.tools.forced",
+        "endpoint": "/v1/messages",
+        "feature": "tools + 强制 tool_choice",
+        "clause": "ANT-MSG-06"
+      },
+      {
+        "id": "messages.negative.unknown_model",
+        "endpoint": "/v1/messages",
+        "feature": "未知模型 + 错误信封归一",
+        "clause": "ANT-MSG-07"
+      },
+      {
+        "id": "messages.negative.invalid_json",
+        "endpoint": "/v1/messages",
+        "feature": "非法 JSON 请求体",
+        "clause": "ANT-MSG-07"
+      },
+      {
+        "id": "responses.basic.nonstream",
+        "endpoint": "/v1/responses",
+        "feature": "基础非流式（含 usage）",
+        "clause": "OAI-RESP-01"
+      },
+      {
+        "id": "responses.basic.stream",
+        "endpoint": "/v1/responses",
+        "feature": "SSE 事件序列",
+        "clause": "OAI-RESP-02",
+        "knownDefect": true
+      },
+      {
+        "id": "responses.image.data_url",
+        "endpoint": "/v1/responses",
+        "feature": "input_image data URL",
+        "clause": "OAI-RESP-03",
+        "knownDefect": true
+      },
+      {
+        "id": "responses.tools.forced",
+        "endpoint": "/v1/responses",
+        "feature": "function tools + 强制 tool_choice",
+        "clause": "OAI-RESP-04"
+      },
+      {
+        "id": "responses.negative.unknown_model",
+        "endpoint": "/v1/responses",
+        "feature": "未知模型显式拒绝",
+        "clause": "OAI-RESP-05"
+      },
+      {
+        "id": "models.list",
+        "endpoint": "/v1/models",
+        "feature": "模型列表形状",
+        "clause": "OAI-MODEL-01"
+      }
+    ],
+    "coverage": [
+      {
+        "provider": "codearts",
+        "expected": 28,
+        "actual": 28,
+        "missing": [],
+        "extra": [],
+        "orderMatches": true
+      },
+      {
+        "provider": "codebuddy",
+        "expected": 28,
+        "actual": 28,
+        "missing": [],
+        "extra": [],
+        "orderMatches": true
+      }
+    ]
+  },
+  "results": [
+    {
+      "id": "chat.basic.nonstream",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "基础非流式（含 usage）",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 2440,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "max_tokens": 128
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"20261124185926ab6bb72f316f48b6\",\"object\":\"chat.completion\",\"created\":1795517966,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"The user wants me to reply with exactly \\\"OK\\\". This is a simple instruction to follow. I should just output \\\"OK\\\" with nothing else - no extra punctuation, no explanation, nothing.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":42,\"total_tokens\":59,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":39}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:25.834Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "max_tokens": 128,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.basic.stream",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "SSE 流式 + usage 块",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 1990,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-02",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "max_tokens": 128,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            },
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "text": "data:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"The\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" user\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" wants\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" me\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" to\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" reply\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" with\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" exactly\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" \\\"\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"OK\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"\\\"\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" -\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" nothing\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" more\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\",\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" nothing\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" less\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\".\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" This\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" is\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" a\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" simple\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" instruction\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" to\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" follow.\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"OK\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}],\"service_tier\":\"default\"}\n\ndata:{\"id\":\"2026112418592854a2bf0f416c4df7\",\"created\":1795517968,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":29,\"total_tokens\":46,\"prompt_tokens_details\":{\"cached_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":25}},\"service_tier\":\"default\"}\n\ndata:[DONE]\n\n"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:28.273Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              },
+              "max_tokens": 128
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.image.data_url",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "image_url data URL",
+      "status": "pass",
+      "detail": "图片送达上游且颜色识别正确",
+      "durationMs": 3056,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-04",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"20261124185930e83747c28c8b4e9d\",\"object\":\"chat.completion\",\"created\":1795517970,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Red\",\"reasoning_content\":\"The user has shared an image that appears to be entirely red - it looks like a solid red rectangle. They're asking what the dominant color is, and want a one-word English answer.\\n\\nThe image is clearly red throughout.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":45,\"completion_tokens\":48,\"total_tokens\":93,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":45}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:30.263Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ],
+              "max_tokens": 256,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.image.url",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "image_url 公网 URL",
+      "status": "skipped",
+      "detail": "未设置 E2E_IMAGE_URL",
+      "durationMs": 0,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-04"
+    },
+    {
+      "id": "chat.multi_turn.system",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "multi-turn + system",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 1905,
+      "model": "glm-5.3-flash",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"20261124185933017551a39c724aa4\",\"object\":\"chat.completion\",\"created\":1795517973,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"France.\",\"reasoning_content\":\"The user asked the capital of France (Paris), and now asks to name the country. That's France. Terse response: France.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":34,\"completion_tokens\":32,\"total_tokens\":66,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":28}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:33.319Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ],
+              "max_tokens": 128,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.response_format.json_schema",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "response_format json_schema",
+      "status": "fail",
+      "detail": "上游请求未包含 response_format.json_schema（静默丢弃）",
+      "durationMs": 2061,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-06",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 512,
+              "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                  "name": "answer",
+                  "strict": true,
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "ok": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "ok"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return JSON with ok=true."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"20261124185935596ae50b91ea48e8\",\"object\":\"chat.completion\",\"created\":1795517975,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"```json\\n{\\n  \\\"ok\\\": true\\n}\\n```\",\"reasoning_content\":\"The user is asking me to return JSON with ok=true. This is a simple request for a JSON response. Let me provide that.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":41,\"total_tokens\":59,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":27}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:35.225Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return JSON with ok=true."
+                }
+              ],
+              "max_tokens": 512,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.tools.forced",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "tools + 强制 tool_choice",
+      "status": "not-supported",
+      "detail": "上游显式拒绝，但状态码被映射为 502：{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}",
+      "durationMs": 377,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-05",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "get_color"
+                }
+              }
+            },
+            "response": {
+              "status": 502,
+              "contentType": "application/json",
+              "text": "{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:37.286Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "get_color"
+                }
+              },
+              "max_tokens": 256,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.response_format.json",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "response_format json_object",
+      "status": "fail",
+      "detail": "上游请求未包含 response_format（静默丢弃）",
+      "durationMs": 12275,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-06",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 512,
+              "response_format": {
+                "type": "json_object"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"20261124185937023dbc13667a4bfd\",\"object\":\"chat.completion\",\"created\":1795517977,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\",\"reasoning_content\":\"The user is asking me to return exactly a JSON object: {\\\"ok\\\":true} and nothing else. This is a simple, benign request - likely testing JSON output or API behavior. There's no harm here. I should just return exactly that JSON with nothing else.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":25,\"completion_tokens\":61,\"total_tokens\":86,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":54}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:37.663Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+                }
+              ],
+              "max_tokens": 512,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.logprobs",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "logprobs / top_logprobs",
+      "status": "fail",
+      "detail": "响应缺少 choices[0].logprobs.content（参数被静默丢弃）",
+      "durationMs": 5816,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-07",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 8,
+              "logprobs": true,
+              "top_logprobs": 1,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say OK"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"2026112418595052abacba6e4b41e9\",\"object\":\"chat.completion\",\"created\":1795517990,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user has sent a very simple message\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":14,\"completion_tokens\":8,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":6}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:49.939Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say OK"
+                }
+              ],
+              "max_tokens": 8,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.n",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "n > 1",
+      "status": "fail",
+      "detail": "choices 数量为 1（n=2 被静默丢弃）",
+      "durationMs": 1651,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-08",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 16,
+              "n": 2,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say one word."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"20261124185955e1c4c478bb1c4b5e\",\"object\":\"chat.completion\",\"created\":1795517996,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user is asking me to say one word. This is a simple, direct\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":16,\"completion_tokens\":16,\"total_tokens\":32,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":12}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:55.755Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say one word."
+                }
+              ],
+              "max_tokens": 16,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.negative.unknown_model",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "未知模型显式拒绝",
+      "status": "fail",
+      "detail": "未知模型被静默接受/回退（响应 model=deepseek-v4.1-flash-1017）",
+      "durationMs": 2730,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-03",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "e2e-model-does-not-exist",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "max_tokens": 4
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"as-np808u1aqr\",\"object\":\"chat.completion\",\"created\":1795517997,\"model\":\"deepseek-v4.1-flash-1017\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"We need answer to\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":31,\"completion_tokens\":4,\"total_tokens\":35,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":4}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T10:59:57.407Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "deepseek-v4.1-flash-1017",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "max_tokens": 4,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.negative.invalid_json",
+      "provider": "codearts",
+      "endpoint": "/v1/chat/completions",
+      "feature": "非法 JSON 请求体",
+      "status": "pass",
+      "detail": "HTTP 400；错误信封合规",
+      "durationMs": 1,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-03",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "rawBody": "{",
+            "response": {
+              "status": 400,
+              "contentType": "application/json",
+              "text": "{\"error\":{\"message\":\"invalid_request: messages is required\",\"type\":\"invalid_request_error\",\"code\":null}}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "messages.basic.nonstream",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "基础非流式（含 usage）",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 11252,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_20261124190000c888667490b0438e\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"OK\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":17,\"output_tokens\":31,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:00.139Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "max_tokens": 128,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.basic.stream",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "SSE 事件序列",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 3000,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-02",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "stream": true,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "text": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_e4768949190c40e6ad09a21f2bb55b31\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"OK\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":17,\"output_tokens\":31,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:11.391Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              },
+              "max_tokens": 128
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.multi_turn.system",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "multi-turn + system string",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 2017,
+      "model": "glm-5.3-flash",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "system": "You are terse.",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_20261124190014408537e73e1e4673\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"France.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":34,\"output_tokens\":27,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:14.392Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ],
+              "max_tokens": 128,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.image.base64",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "base64 图片",
+      "status": "pass",
+      "detail": "图片送达上游且颜色识别正确",
+      "durationMs": 1830,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-03",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image",
+                      "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_202611241900168c1269fd9e524f77\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":45,\"output_tokens\":19,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:16.409Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ],
+              "max_tokens": 256,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.image.url",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "URL 图片",
+      "status": "skipped",
+      "detail": "未设置 E2E_IMAGE_URL",
+      "durationMs": 0,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-03"
+    },
+    {
+      "id": "messages.image.tool_result",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "tool_result 内嵌图片",
+      "status": "pass",
+      "detail": "tool_result 图片送达上游且颜色识别正确",
+      "durationMs": 2131,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-04",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Take a screenshot."
+                },
+                {
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "tool_use",
+                      "id": "toolu_e2e",
+                      "name": "screenshot",
+                      "input": {}
+                    }
+                  ]
+                },
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "tool_result",
+                      "tool_use_id": "toolu_e2e",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "screenshot attached"
+                        },
+                        {
+                          "type": "image",
+                          "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_202611241900180a255e474427439f\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":63,\"output_tokens\":27,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:18.239Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Take a screenshot."
+                },
+                {
+                  "role": "assistant",
+                  "tool_calls": [
+                    {
+                      "id": "toolu_e2e",
+                      "type": "function",
+                      "function": {
+                        "name": "screenshot",
+                        "arguments": "{}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "tool",
+                  "tool_call_id": "toolu_e2e",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "screenshot attached"
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ],
+              "max_tokens": 256,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.image.system",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "system 数组中的图片",
+      "status": "fail",
+      "detail": "system 图片未送达上游（静默丢弃）",
+      "durationMs": 2401,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-05",
+      "knownDefect": true,
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "system": [
+                {
+                  "type": "text",
+                  "text": "You are terse."
+                },
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                  }
+                }
+              ],
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_202611241900206a5aefd354504666\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"No image was provided.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":32,\"output_tokens\":71,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:20.370Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ],
+              "max_tokens": 256,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.tools.forced",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "tools + 强制 tool_choice",
+      "status": "not-supported",
+      "detail": "上游显式拒绝，但状态码被映射为 502：{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}",
+      "durationMs": 1436,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-06",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 64,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "tools": [
+                {
+                  "name": "get_color",
+                  "description": "Return the color the user asks about",
+                  "input_schema": {
+                    "type": "object",
+                    "properties": {
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "color"
+                    ]
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "tool",
+                "name": "get_color"
+              }
+            },
+            "response": {
+              "status": 502,
+              "contentType": "application/json",
+              "text": "{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:22.771Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "get_color"
+                }
+              },
+              "max_tokens": 64,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.negative.unknown_model",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "未知模型 + 错误信封归一",
+      "status": "fail",
+      "detail": "未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）",
+      "durationMs": 1065,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-07",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "e2e-model-does-not-exist",
+              "max_tokens": 4,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_as-nckq6d87i0\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"e2e-model-does-not-exist\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":31,\"output_tokens\":4,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:24.208Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "deepseek-v4.1-flash-1017",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "max_tokens": 4,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.negative.invalid_json",
+      "provider": "codearts",
+      "endpoint": "/v1/messages",
+      "feature": "非法 JSON 请求体",
+      "status": "pass",
+      "detail": "HTTP 400；错误信封合规",
+      "durationMs": 1,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-07",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "rawBody": "{",
+            "response": {
+              "status": 400,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"invalid JSON body\"}}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "responses.basic.nonstream",
+      "provider": "codearts",
+      "endpoint": "/v1/responses",
+      "feature": "基础非流式（含 usage）",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 2718,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "input": "Reply with exactly: OK",
+              "max_output_tokens": 128
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"resp_855d8480f6b2446492417ece\",\"object\":\"response\",\"created_at\":1795518027,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_bce478f7d4d0461d8571dfad\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user is asking me to reply with exactly \\\"OK\\\". This is a simple instruction-following request. There's nothing harmful here. I should just reply with exactly \\\"OK\\\" - no extra text, punctuation, or formatting.\"}]},{\"type\":\"message\",\"id\":\"msg_89dace83b0ec4094ace8b241\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":17,\"output_tokens\":49,\"total_tokens\":66,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":46}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:25.274Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "max_tokens": 128,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.basic.stream",
+      "provider": "codearts",
+      "endpoint": "/v1/responses",
+      "feature": "SSE 事件序列",
+      "status": "fail",
+      "detail": "缺少 response.output_text.done",
+      "durationMs": 1853,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-02",
+      "knownDefect": true,
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "input": "Reply with exactly: OK",
+              "max_output_tokens": 128,
+              "stream": true
+            },
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "text": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_561e3316354348d085bd5efc\",\"object\":\"response\",\"created_at\":1795518028,\"status\":\"in_progress\",\"model\":\"glm-5.3-flash\",\"output\":[],\"usage\":{\"input_tokens\":0,\"output_tokens\":0,\"total_tokens\":0,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false},\"sequence_number\":0}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_7d1585993be14170bd4327cd\",\"summary\":[]},\"sequence_number\":1}\n\nevent: response.reasoning_summary_part.added\ndata: {\"type\":\"response.reasoning_summary_part.added\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"\"},\"sequence_number\":2}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\"The\",\"sequence_number\":3}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" user\",\"sequence_number\":4}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" has\",\"sequence_number\":5}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" asked\",\"sequence_number\":6}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" me\",\"sequence_number\":7}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" to\",\"sequence_number\":8}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" reply\",\"sequence_number\":9}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" with\",\"sequence_number\":10}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" exactly\",\"sequence_number\":11}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" \\\"\",\"sequence_number\":12}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\"OK\",\"sequence_number\":13}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\"\\\".\",\"sequence_number\":14}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" This\",\"sequence_number\":15}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" is\",\"sequence_number\":16}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" a\",\"sequence_number\":17}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" simple\",\"sequence_number\":18}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" instruction\",\"sequence_number\":19}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\".\",\"sequence_number\":20}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" I\",\"sequence_number\":21}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" should\",\"sequence_number\":22}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" comply\",\"sequence_number\":23}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" with\",\"sequence_number\":24}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" it\",\"sequence_number\":25}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\".\",\"sequence_number\":26}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" The\",\"sequence_number\":27}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" user\",\"sequence_number\":28}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" wants\",\"sequence_number\":29}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" exactly\",\"sequence_number\":30}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" \\\"\",\"sequence_number\":31}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\"OK\",\"sequence_number\":32}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\"\\\"\",\"sequence_number\":33}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" -\",\"sequence_number\":34}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" no\",\"sequence_number\":35}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" more\",\"sequence_number\":36}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\",\",\"sequence_number\":37}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" no\",\"sequence_number\":38}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_7d1585993be14170bd4327cd\",\"output_index\":0,\"summary_index\":0,\"delta\":\" less.\",\"sequence_number\":39}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_aea4e52604e346ff8620e5c2\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]},\"sequence_number\":40}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"item_id\":\"msg_aea4e52604e346ff8620e5c2\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]},\"sequence_number\":41}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_aea4e52604e346ff8620e5c2\",\"output_index\":1,\"content_index\":0,\"delta\":\"OK\",\"sequence_number\":42}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_7d1585993be14170bd4327cd\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user has asked me to reply with exactly \\\"OK\\\". This is a simple instruction. I should comply with it. The user wants exactly \\\"OK\\\" - no more, no less.\"}]},\"sequence_number\":43}\n\nevent: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"item_id\":\"msg_aea4e52604e346ff8620e5c2\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]},\"sequence_number\":44}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_aea4e52604e346ff8620e5c2\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]},\"sequence_number\":45}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_561e3316354348d085bd5efc\",\"object\":\"response\",\"created_at\":1795518029,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_7d1585993be14170bd4327cd\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user has asked me to reply with exactly \\\"OK\\\". This is a simple instruction. I should comply with it. The user wants exactly \\\"OK\\\" - no more, no less.\"}]},{\"type\":\"message\",\"id\":\"msg_aea4e52604e346ff8620e5c2\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":17,\"output_tokens\":41,\"total_tokens\":58,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":38}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false},\"sequence_number\":46}\n\n"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:27.992Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              },
+              "max_tokens": 128
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.image.data_url",
+      "provider": "codearts",
+      "endpoint": "/v1/responses",
+      "feature": "input_image data URL",
+      "status": "fail",
+      "detail": "上游请求未包含图片字段（input_image 被丢弃）",
+      "durationMs": 4106,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-03",
+      "knownDefect": true,
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_output_tokens": 256,
+              "input": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "input_image",
+                      "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=",
+                      "detail": "auto"
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"resp_1cdba8b001b647f2b53e3723\",\"object\":\"response\",\"created_at\":1795518033,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_235eb1ac91084c2ba427105f\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user is asking about the dominant color of an image. However, I don't see any image in this conversation. There's no image attached to the message. I should let the user know that I don't see an image, or... wait, let me think about this more carefully.\\n\\nThe human message says \\\"What is the dominant color of this image?\\\" but there's no image provided in the conversation. I cannot see any image. I should respond that I don't see an image and ask them to share it.\\n\\nActually, I need to be careful here. The instruction says to answer with one English word, but there's no image. I should honestly say I can't see an image. The appropriate response would be to point out that no image was attached.\"}]},{\"type\":\"message\",\"id\":\"msg_ba0ff4c33e224bb8be235dce\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"I don't see an image in our conversation. Could you please share the image you'd like me to analyze?\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":27,\"output_tokens\":181,\"total_tokens\":208,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":156}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:29.845Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ],
+              "max_tokens": 256,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.tools.forced",
+      "provider": "codearts",
+      "endpoint": "/v1/responses",
+      "feature": "function tools + 强制 tool_choice",
+      "status": "not-supported",
+      "detail": "上游显式拒绝，但状态码被映射为 502：{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}",
+      "durationMs": 366,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-04",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_output_tokens": 64,
+              "input": "Use the get_color tool with color red. Do not answer in text.",
+              "tools": [
+                {
+                  "type": "function",
+                  "name": "get_color",
+                  "description": "Return the color the user asks about",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "color"
+                    ]
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "name": "get_color"
+              }
+            },
+            "response": {
+              "status": 502,
+              "contentType": "application/json",
+              "text": "{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:33.953Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "get_color"
+                }
+              },
+              "max_tokens": 64,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.negative.unknown_model",
+      "provider": "codearts",
+      "endpoint": "/v1/responses",
+      "feature": "未知模型显式拒绝",
+      "status": "fail",
+      "detail": "未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）",
+      "durationMs": 2238,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-05",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "e2e-model-does-not-exist",
+              "input": "hi",
+              "max_output_tokens": 4
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"resp_0c84c43d448a4cb19bf38522\",\"object\":\"response\",\"created_at\":1795518036,\"status\":\"completed\",\"model\":\"e2e-model-does-not-exist\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_4f76867d947f4f4ba1d90824\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"We need answer to\"}]}],\"usage\":{\"input_tokens\":31,\"output_tokens\":4,\"total_tokens\":35,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":4}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:34.318Z",
+            "provider": "codearts",
+            "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+            "body": {
+              "model": "deepseek-v4.1-flash-1017",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "max_tokens": 4,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "models.list",
+      "provider": "codearts",
+      "endpoint": "/v1/models",
+      "feature": "模型列表形状",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 1,
+      "clause": "OAI-MODEL-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "GET",
+            "path": "/v1/models",
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"object\":\"list\",\"data\":[{\"id\":\"deepseek-v4.1-flash-1017\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":1044480},{\"id\":\"glm-5.3-flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":1044480},{\"id\":\"deepseek-v4.1-flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":1044480},{\"id\":\"glm-5.3\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":1044480},{\"id\":\"kimi-k3.1-pro\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":1044480},{\"id\":\"kimi-k3\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":1044480},{\"id\":\"GLM-5.2\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":196608},{\"id\":\"glm-5.2-sft-harmony\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":196608},{\"id\":\"openpangu-2.1-pro\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":512000},{\"id\":\"openpangu-2.0-pro\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":512000},{\"id\":\"openpangu-2.0-flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":512000},{\"id\":\"speed\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codearts\",\"context_length\":1044480}]}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "chat.basic.nonstream",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "基础非流式（含 usage）",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 2104,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "max_tokens": 128
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"2c0a22cab5f64d139f89aaf33e1a4cbb\",\"object\":\"chat.completion\",\"created\":1795518037,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":3,\"total_tokens\":20,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:36.560Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.basic.stream",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "SSE 流式 + usage 块",
+      "status": "fail",
+      "detail": "usage 块应带空 choices",
+      "durationMs": 2076,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-02",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "max_tokens": 128,
+              "stream": true,
+              "stream_options": {
+                "include_usage": true
+              }
+            },
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "text": "data: {\"id\":\"e0bcbd9817ad48d3a72009e5197d3676\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion.chunk\",\"created\":1795518039,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"\",\"function_call\":null,\"refusal\":\"\",\"tool_calls\":[],\"extra_fields\":null},\"logprobs\":null,\"finish_reason\":\"\"}],\"usage\":null}\n\ndata: {\"id\":\"e0bcbd9817ad48d3a72009e5197d3676\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion.chunk\",\"created\":1795518039,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"\",\"function_call\":{\"name\":\"\",\"arguments\":\"\"},\"refusal\":\"\",\"tool_calls\":[],\"extra_fields\":null},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":3,\"total_tokens\":20,\"completion_tokens_details\":{\"accepted_prediction_tokens\":0,\"audio_tokens\":0,\"reasoning_tokens\":0,\"rejected_prediction_tokens\":0,\"cached_tokens\":0},\"prompt_tokens_details\":{\"accepted_prediction_tokens\":0,\"audio_tokens\":0,\"reasoning_tokens\":0,\"rejected_prediction_tokens\":0,\"cached_tokens\":0},\"prompt_cache_hit_tokens\":0,\"prompt_cache_miss_tokens\":17,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0,\"prompt_cache_write_tokens\":0,\"completion_thinking_tokens\":0,\"credit\":0,\"cached_tokens\":0,\"quota\":null}}\n\ndata: [DONE]\n\n"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:38.665Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1,
+              "stream_options": {
+                "include_usage": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.image.data_url",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "image_url data URL",
+      "status": "pass",
+      "detail": "图片送达上游且颜色识别正确",
+      "durationMs": 2105,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-04",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"bbcb61a96de24a73bbb9826c81d1b1fe\",\"object\":\"chat.completion\",\"created\":1795518041,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Red\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":45,\"completion_tokens\":3,\"total_tokens\":48,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:40.741Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ],
+              "stream": true,
+              "max_tokens": 256,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.image.url",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "image_url 公网 URL",
+      "status": "skipped",
+      "detail": "未设置 E2E_IMAGE_URL",
+      "durationMs": 0,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-04"
+    },
+    {
+      "id": "chat.multi_turn.system",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "multi-turn + system",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 5099,
+      "model": "glm-5.3-flash",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"e6fd7da017e84ef4a51981bc7e4dcc1a\",\"object\":\"chat.completion\",\"created\":1795518043,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"France.\",\"reasoning_content\":\"France.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":34,\"completion_tokens\":6,\"total_tokens\":40,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:42.849Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.response_format.json_schema",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "response_format json_schema",
+      "status": "fail",
+      "detail": "json_schema 已送达上游，但 content 不是 JSON（上游未强制结构）：```json {\"ok\": true} ```",
+      "durationMs": 6316,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-06",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 512,
+              "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                  "name": "answer",
+                  "strict": true,
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "ok": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "ok"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return JSON with ok=true."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"62cac725819d4185919bd3a0f8c4d20f\",\"object\":\"chat.completion\",\"created\":1795518049,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"```json\\n{\\\"ok\\\": true}\\n```\",\"reasoning_content\":\"User asks to return JSON with ok=true.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":20,\"total_tokens\":38,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":9}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:47.945Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return JSON with ok=true."
+                }
+              ],
+              "stream": true,
+              "max_tokens": 512,
+              "temperature": 1,
+              "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                  "name": "answer",
+                  "strict": true,
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "ok": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "ok"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.tools.forced",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "tools + 强制 tool_choice",
+      "status": "not-supported",
+      "detail": "上游显式拒绝（HTTP 400）：{\"error\":{\"message\":\"Invalid request. Please retry\",\"type\":\"invalid_request_error\",\"code\":11101}}",
+      "durationMs": 109,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-05",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "get_color"
+                }
+              }
+            },
+            "response": {
+              "status": 400,
+              "contentType": "application/json",
+              "text": "{\"error\":{\"message\":\"Invalid request. Please retry\",\"type\":\"invalid_request_error\",\"code\":11101}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:54.261Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "stream": true,
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "function": {
+                  "name": "get_color"
+                }
+              },
+              "max_tokens": 256,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.response_format.json",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "response_format json_object",
+      "status": "pass",
+      "detail": "response_format 送达上游且输出为 JSON",
+      "durationMs": 1902,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-06",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 512,
+              "response_format": {
+                "type": "json_object"
+              },
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"eca8537a02b9459f8e75393079d64d66\",\"object\":\"chat.completion\",\"created\":1795518055,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\",\"reasoning_content\":\"The user wants exactly the JSON and nothing else.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":25,\"completion_tokens\":17,\"total_tokens\":42,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":10}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:54.370Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 512,
+              "temperature": 1,
+              "response_format": {
+                "type": "json_object"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.logprobs",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "logprobs / top_logprobs",
+      "status": "fail",
+      "detail": "响应缺少 choices[0].logprobs.content（参数被静默丢弃）",
+      "durationMs": 1913,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-07",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 8,
+              "logprobs": true,
+              "top_logprobs": 1,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say OK"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"a98e3c25719f47c6acaad4dfe8118771\",\"object\":\"chat.completion\",\"created\":1795518057,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"I see the user asked me to say\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":14,\"completion_tokens\":8,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":8}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:56.272Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say OK"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 8,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.n",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "n > 1",
+      "status": "fail",
+      "detail": "choices 数量为 1（n=2 被静默丢弃）",
+      "durationMs": 2767,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-08",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 16,
+              "n": 2,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say one word."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "text": "{\"id\":\"f0f3309ebccc419bab61b6d05cc93f5e\",\"object\":\"chat.completion\",\"created\":1795518059,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Okay\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":16,\"completion_tokens\":3,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:00:58.186Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say one word."
+                }
+              ],
+              "stream": true,
+              "max_tokens": 16,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chat.negative.unknown_model",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "未知模型显式拒绝",
+      "status": "pass",
+      "detail": "显式拒绝（HTTP 404）",
+      "durationMs": 1,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-03",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "requestBody": {
+              "model": "e2e-model-does-not-exist",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "max_tokens": 4
+            },
+            "response": {
+              "status": 404,
+              "contentType": "application/json",
+              "text": "{\"error\":{\"message\":\"model_not_found: e2e-model-does-not-exist\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\"}}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "chat.negative.invalid_json",
+      "provider": "codebuddy",
+      "endpoint": "/v1/chat/completions",
+      "feature": "非法 JSON 请求体",
+      "status": "pass",
+      "detail": "HTTP 400；错误信封合规",
+      "durationMs": 1,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-CHAT-03",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/chat/completions",
+            "rawBody": "{",
+            "response": {
+              "status": 400,
+              "contentType": "application/json",
+              "text": "{\"error\":{\"message\":\"invalid JSON body\",\"type\":\"invalid_request_error\",\"code\":null}}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "messages.basic.nonstream",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "基础非流式（含 usage）",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 4933,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_9d9e9f6cd3a44721bb00abc4625feb4f\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"OK\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":17,\"output_tokens\":117,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:00.956Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.basic.stream",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "SSE 事件序列",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 2016,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-02",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "stream": true,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "text": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_c66cb0a8f14f40f78571366154741bfb\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"OK\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":17,\"output_tokens\":14,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:05.889Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.multi_turn.system",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "multi-turn + system string",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 1899,
+      "model": "glm-5.3-flash",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 128,
+              "system": "You are terse.",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_48528dd1a3d7486493206e70d69090a6\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"France.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":34,\"output_tokens\":6,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:07.906Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "Name the capital of France."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Paris."
+                },
+                {
+                  "role": "user",
+                  "content": "Now name the country."
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.image.base64",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "base64 图片",
+      "status": "pass",
+      "detail": "图片送达上游且颜色识别正确",
+      "durationMs": 1823,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-03",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image",
+                      "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_85d84dcaca204a3fb105fcc7bd389310\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":45,\"output_tokens\":3,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:09.805Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                }
+              ],
+              "stream": true,
+              "max_tokens": 256,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.image.url",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "URL 图片",
+      "status": "skipped",
+      "detail": "未设置 E2E_IMAGE_URL",
+      "durationMs": 0,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-03"
+    },
+    {
+      "id": "messages.image.tool_result",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "tool_result 内嵌图片",
+      "status": "pass",
+      "detail": "tool_result 图片送达上游且颜色识别正确",
+      "durationMs": 2576,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-04",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Take a screenshot."
+                },
+                {
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "tool_use",
+                      "id": "toolu_e2e",
+                      "name": "screenshot",
+                      "input": {}
+                    }
+                  ]
+                },
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "tool_result",
+                      "tool_use_id": "toolu_e2e",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "screenshot attached"
+                        },
+                        {
+                          "type": "image",
+                          "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_f4f7f98b49724510a9d5a603ad60b0a0\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":63,\"output_tokens\":5,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:11.632Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Take a screenshot."
+                },
+                {
+                  "role": "assistant",
+                  "tool_calls": [
+                    {
+                      "id": "toolu_e2e",
+                      "type": "function",
+                      "function": {
+                        "name": "screenshot",
+                        "arguments": "{}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "tool",
+                  "tool_call_id": "toolu_e2e",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "screenshot attached"
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ],
+              "stream": true,
+              "max_tokens": 256,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.image.system",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "system 数组中的图片",
+      "status": "fail",
+      "detail": "system 图片未送达上游（静默丢弃）",
+      "durationMs": 6002,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-05",
+      "knownDefect": true,
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 256,
+              "system": [
+                {
+                  "type": "text",
+                  "text": "You are terse."
+                },
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                  }
+                }
+              ],
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_fee14a1a9f6d4d4bb572303244494d07\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Unknown — no image was provided for me to analyze.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":32,\"output_tokens\":34,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:14.206Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are terse."
+                },
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ],
+              "stream": true,
+              "max_tokens": 256,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.tools.forced",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "tools + 强制 tool_choice",
+      "status": "pass",
+      "detail": "强制 tool_choice 生效",
+      "durationMs": 11593,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-06",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_tokens": 64,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "tools": [
+                {
+                  "name": "get_color",
+                  "description": "Return the color the user asks about",
+                  "input_schema": {
+                    "type": "object",
+                    "properties": {
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "color"
+                    ]
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "tool",
+                "name": "get_color"
+              }
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"msg_cbc90b63588e4ece97e225304138914a\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"tool_use\",\"id\":\"call_2067b370f68f4f62a546ca80\",\"name\":\"get_color\",\"input\":{\"color\":\"red\"}}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":170,\"output_tokens\":12,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:20.209Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "stream": true,
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": "auto",
+              "max_tokens": 64,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "messages.negative.unknown_model",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "未知模型 + 错误信封归一",
+      "status": "pass",
+      "detail": "显式拒绝（HTTP 404）",
+      "durationMs": 1,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-07",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "requestBody": {
+              "model": "e2e-model-does-not-exist",
+              "max_tokens": 4,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ]
+            },
+            "response": {
+              "status": 404,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"model_not_found: e2e-model-does-not-exist\"}}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "messages.negative.invalid_json",
+      "provider": "codebuddy",
+      "endpoint": "/v1/messages",
+      "feature": "非法 JSON 请求体",
+      "status": "pass",
+      "detail": "HTTP 400；错误信封合规",
+      "durationMs": 0,
+      "model": "glm-5.3-flash",
+      "clause": "ANT-MSG-07",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/messages",
+            "rawBody": "{",
+            "response": {
+              "status": 400,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"invalid JSON body\"}}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "responses.basic.nonstream",
+      "provider": "codebuddy",
+      "endpoint": "/v1/responses",
+      "feature": "基础非流式（含 usage）",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 1701,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "input": "Reply with exactly: OK",
+              "max_output_tokens": 128
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"resp_1daeb8d75c304c38914ead2f\",\"object\":\"response\",\"created_at\":1795518093,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"message\",\"id\":\"msg_b26345e68493490aa38f0055\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":17,\"output_tokens\":3,\"total_tokens\":20,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:31.801Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.basic.stream",
+      "provider": "codebuddy",
+      "endpoint": "/v1/responses",
+      "feature": "SSE 事件序列",
+      "status": "fail",
+      "detail": "缺少 response.output_text.done",
+      "durationMs": 2399,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-02",
+      "knownDefect": true,
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "input": "Reply with exactly: OK",
+              "max_output_tokens": 128,
+              "stream": true
+            },
+            "response": {
+              "status": 200,
+              "contentType": "text/event-stream",
+              "text": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_f8471aa861f64637a636aeaa\",\"object\":\"response\",\"created_at\":1795518094,\"status\":\"in_progress\",\"model\":\"glm-5.3-flash\",\"output\":[],\"usage\":{\"input_tokens\":0,\"output_tokens\":0,\"total_tokens\":0,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false},\"sequence_number\":0}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"summary\":[]},\"sequence_number\":1}\n\nevent: response.reasoning_summary_part.added\ndata: {\"type\":\"response.reasoning_summary_part.added\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"\"},\"sequence_number\":2}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\"The\",\"sequence_number\":3}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" user\",\"sequence_number\":4}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" has\",\"sequence_number\":5}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" requested\",\"sequence_number\":6}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" a\",\"sequence_number\":7}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" response\",\"sequence_number\":8}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" of\",\"sequence_number\":9}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" exactly\",\"sequence_number\":10}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" \\\"\",\"sequence_number\":11}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\"OK\",\"sequence_number\":12}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\"\\\"\",\"sequence_number\":13}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" with\",\"sequence_number\":14}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" no\",\"sequence_number\":15}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" additional\",\"sequence_number\":16}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" text\",\"sequence_number\":17}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\".\",\"sequence_number\":18}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" Given\",\"sequence_number\":19}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" the\",\"sequence_number\":20}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" clear\",\"sequence_number\":21}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" instruction\",\"sequence_number\":22}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\",\",\"sequence_number\":23}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" I\",\"sequence_number\":24}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\"'ll\",\"sequence_number\":25}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" provide\",\"sequence_number\":26}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" a\",\"sequence_number\":27}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" concise\",\"sequence_number\":28}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" confirmation\",\"sequence_number\":29}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" to\",\"sequence_number\":30}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" precisely\",\"sequence_number\":31}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" match\",\"sequence_number\":32}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" their\",\"sequence_number\":33}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" request\",\"sequence_number\":34}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" without\",\"sequence_number\":35}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" any\",\"sequence_number\":36}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\" elabor\",\"sequence_number\":37}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\"ation\",\"sequence_number\":38}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"output_index\":0,\"summary_index\":0,\"delta\":\".\",\"sequence_number\":39}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_964525ac299c4f5dba02c9bf\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]},\"sequence_number\":40}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"item_id\":\"msg_964525ac299c4f5dba02c9bf\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]},\"sequence_number\":41}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_964525ac299c4f5dba02c9bf\",\"output_index\":1,\"content_index\":0,\"delta\":\"OK\",\"sequence_number\":42}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user has requested a response of exactly \\\"OK\\\" with no additional text. Given the clear instruction, I'll provide a concise confirmation to precisely match their request without any elaboration.\"}]},\"sequence_number\":43}\n\nevent: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"item_id\":\"msg_964525ac299c4f5dba02c9bf\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]},\"sequence_number\":44}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_964525ac299c4f5dba02c9bf\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]},\"sequence_number\":45}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_f8471aa861f64637a636aeaa\",\"object\":\"response\",\"created_at\":1795518095,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_c6c4a1e3ab6344e8ba0b8860\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user has requested a response of exactly \\\"OK\\\" with no additional text. Given the clear instruction, I'll provide a concise confirmation to precisely match their request without any elaboration.\"}]},{\"type\":\"message\",\"id\":\"msg_964525ac299c4f5dba02c9bf\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":17,\"output_tokens\":40,\"total_tokens\":57,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":37}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false},\"sequence_number\":46}\n\n"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:33.503Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Reply with exactly: OK"
+                }
+              ],
+              "stream": true,
+              "max_tokens": 128,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.image.data_url",
+      "provider": "codebuddy",
+      "endpoint": "/v1/responses",
+      "feature": "input_image data URL",
+      "status": "fail",
+      "detail": "上游请求未包含图片字段（input_image 被丢弃）",
+      "durationMs": 2674,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-03",
+      "knownDefect": true,
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_output_tokens": 256,
+              "input": [
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "What is the dominant color of this image? Answer with one English word."
+                    },
+                    {
+                      "type": "input_image",
+                      "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=",
+                      "detail": "auto"
+                    }
+                  ]
+                }
+              ]
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"resp_220d54acd9264b4fbcd4cf6a\",\"object\":\"response\",\"created_at\":1795518098,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_638109adede744848c0ace05\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"No image provided—actually there's no image attached. But the user asks anyway. I should note I can't see an image.\"}]},{\"type\":\"message\",\"id\":\"msg_6c0c21b6f3124156ae095ae3\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"I don't see an image attached to your message. Could you please upload or share the image you'd like me to analyze?\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":27,\"output_tokens\":55,\"total_tokens\":82,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":27}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:35.902Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "What is the dominant color of this image? Answer with one English word."
+                }
+              ],
+              "stream": true,
+              "max_tokens": 256,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.tools.forced",
+      "provider": "codebuddy",
+      "endpoint": "/v1/responses",
+      "feature": "function tools + 强制 tool_choice",
+      "status": "pass",
+      "detail": "强制 tool_choice 生效",
+      "durationMs": 2929,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-04",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "glm-5.3-flash",
+              "max_output_tokens": 64,
+              "input": "Use the get_color tool with color red. Do not answer in text.",
+              "tools": [
+                {
+                  "type": "function",
+                  "name": "get_color",
+                  "description": "Return the color the user asks about",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "color"
+                    ]
+                  }
+                }
+              ],
+              "tool_choice": {
+                "type": "function",
+                "name": "get_color"
+              }
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"id\":\"resp_ed102f0b42ad4e27bf3d9ee7\",\"object\":\"response\",\"created_at\":1795518101,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_4c7b8a3036474ea5afd2ff72\",\"call_id\":\"call_822d7e3c34b8485d8aefe876\",\"name\":\"get_color\",\"arguments\":\"{\\\"color\\\":\\\"red\\\"}\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":170,\"output_tokens\":12,\"total_tokens\":182,\"input_tokens_details\":{\"cached_tokens\":128},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+            }
+          }
+        ],
+        "upstream": [
+          {
+            "ts": "2026-11-24T11:01:38.577Z",
+            "provider": "codebuddy",
+            "url": "https://copilot.tencent.com/v2/chat/completions",
+            "body": {
+              "model": "glm-5.3-flash",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Use the get_color tool with color red. Do not answer in text."
+                }
+              ],
+              "stream": true,
+              "tools": [
+                {
+                  "type": "function",
+                  "function": {
+                    "name": "get_color",
+                    "description": "Return the color the user asks about",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "color"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "tool_choice": "auto",
+              "max_tokens": 64,
+              "temperature": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "responses.negative.unknown_model",
+      "provider": "codebuddy",
+      "endpoint": "/v1/responses",
+      "feature": "未知模型显式拒绝",
+      "status": "pass",
+      "detail": "显式拒绝（HTTP 404）",
+      "durationMs": 1,
+      "model": "glm-5.3-flash",
+      "clause": "OAI-RESP-05",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "POST",
+            "path": "/v1/responses",
+            "requestBody": {
+              "model": "e2e-model-does-not-exist",
+              "input": "hi",
+              "max_output_tokens": 4
+            },
+            "response": {
+              "status": 404,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"error\":{\"message\":\"model_not_found: e2e-model-does-not-exist\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"param\":null}}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "models.list",
+      "provider": "codebuddy",
+      "endpoint": "/v1/models",
+      "feature": "模型列表形状",
+      "status": "pass",
+      "detail": "HTTP 200；契约通过",
+      "durationMs": 5,
+      "clause": "OAI-MODEL-01",
+      "evidence": {
+        "inbound": [
+          {
+            "method": "GET",
+            "path": "/v1/models",
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"object\":\"list\",\"data\":[{\"id\":\"auto\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":256000},{\"id\":\"hy4std\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":960000},{\"id\":\"hy4flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":960000},{\"id\":\"hy4flash-free\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":960000},{\"id\":\"step-5-preview\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"space-bunny\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"deepseek-v4.1-flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"deepseek-v4-pro\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"glm-5.3\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"glm-5.3-flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"glm-5.2\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"kimi-k3.1-pro\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"kimi-k3-1\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"kimi-k2.8-preview\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"minimax-m3.1-flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"mimo-v2.6-pro\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"codewise-completions\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\"},{\"id\":\"codewise-rewrite\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\"},{\"id\":\"deepseek-v4-flash\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":1000000},{\"id\":\"codewise-default-model-v2\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\",\"context_length\":96000},{\"id\":\"hunyuan-image-alpha\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\"},{\"id\":\"nes-gf\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\"},{\"id\":\"codewise-jump\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\"},{\"id\":\"wb-lite\",\"object\":\"model\",\"created\":0,\"owned_by\":\"codebuddy\"}]}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    },
+    {
+      "id": "healthz.aggregate",
+      "provider": "all",
+      "endpoint": "/healthz",
+      "feature": "聚合健康检查",
+      "status": "pass",
+      "detail": "HTTP 200；2 个 provider",
+      "durationMs": 1,
+      "evidence": {
+        "inbound": [
+          {
+            "method": "GET",
+            "path": "/healthz",
+            "response": {
+              "status": 200,
+              "contentType": "application/json;charset=utf-8",
+              "text": "{\"ok\":true,\"providers\":[{\"provider\":\"codearts\",\"ok\":true},{\"provider\":\"codebuddy\",\"ok\":true,\"models\":24,\"credentialSource\":\"keychain\",\"uid\":\"03583f87...\"}]}"
+            }
+          }
+        ],
+        "upstream": []
+      }
+    }
+  ]
+}

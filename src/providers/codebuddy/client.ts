@@ -1,5 +1,6 @@
 // 传输层：头集合、gzip、401 刷新重试 — 对应 RFC-0001 §5.2/§5.7/§5.9
 import { gzipSync } from "node:zlib";
+import { dumpUpstream } from "../../shared/trace";
 import type { Credentials, ProductConfig } from "./types";
 
 export interface HeaderContext {
@@ -101,6 +102,7 @@ export async function postChat(opts: {
   onQueue?: (peek: any) => Promise<boolean>;
 }): Promise<Response> {
   const fetchImpl = opts.fetchImpl ?? fetch;
+  dumpUpstream("codebuddy", opts.url, opts.body);
   const payload = gzipBody(opts.body);
   let headers = { ...opts.headers, "Content-Encoding": "gzip" };
   let resp = await fetchImpl(opts.url, { method: "POST", headers, body: payload });

@@ -1,0 +1,51 @@
+{
+  "scenario": "chat.response_format.json",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T10:59:49.937Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 512,
+        "response_format": {
+          "type": "json_object"
+        },
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"20261124185937023dbc13667a4bfd\",\"object\":\"chat.completion\",\"created\":1795517977,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\",\"reasoning_content\":\"The user is asking me to return exactly a JSON object: {\\\"ok\\\":true} and nothing else. This is a simple, benign request - likely testing JSON output or API behavior. There's no harm here. I should just return exactly that JSON with nothing else.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":25,\"completion_tokens\":61,\"total_tokens\":86,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":54}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:37.663Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+          }
+        ],
+        "max_tokens": 512,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "scenario": "chat.response_format.json_schema",
+  "provider": "codebuddy",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:00:54.260Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 512,
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "answer",
+            "strict": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return JSON with ok=true."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"62cac725819d4185919bd3a0f8c4d20f\",\"object\":\"chat.completion\",\"created\":1795518049,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"```json\\n{\\\"ok\\\": true}\\n```\",\"reasoning_content\":\"User asks to return JSON with ok=true.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":20,\"total_tokens\":38,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":9}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:47.945Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return JSON with ok=true."
+          }
+        ],
+        "stream": true,
+        "max_tokens": 512,
+        "temperature": 1,
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "answer",
+            "strict": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  ]
+}

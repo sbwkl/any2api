@@ -1,0 +1,43 @@
+{
+  "scenario": "responses.basic.nonstream",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:00:27.990Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/responses",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "input": "Reply with exactly: OK",
+        "max_output_tokens": 128
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"resp_855d8480f6b2446492417ece\",\"object\":\"response\",\"created_at\":1795518027,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_bce478f7d4d0461d8571dfad\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user is asking me to reply with exactly \\\"OK\\\". This is a simple instruction-following request. There's nothing harmful here. I should just reply with exactly \\\"OK\\\" - no extra text, punctuation, or formatting.\"}]},{\"type\":\"message\",\"id\":\"msg_89dace83b0ec4094ace8b241\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":17,\"output_tokens\":49,\"total_tokens\":66,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":46}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:25.274Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reply with exactly: OK"
+          }
+        ],
+        "max_tokens": 128,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ]
+}

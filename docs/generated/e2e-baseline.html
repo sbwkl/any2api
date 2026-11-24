@@ -1,0 +1,3425 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>any2api e2e 兼容性报告</title>
+<style>
+:root { color-scheme: light dark; --bg:#f6f7f9; --fg:#1c2024; --muted:#69707a; --line:#d9dde3; --card:#fff; --accent:#1f6feb; --pass:#1a7f37; --fail:#b42318; --ns:#6b7280; --skip:#8a5a00; }
+@media (prefers-color-scheme: dark) { :root { --bg:#14171a; --fg:#e6e9ed; --muted:#9aa3ad; --line:#30363d; --card:#1c2126; } }
+* { box-sizing: border-box; }
+body { margin:0; padding:24px; background:var(--bg); color:var(--fg); font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.page-head h1 { margin:0 0 4px; font-size:22px; }
+.sub { margin:0; color:var(--muted); overflow-wrap:anywhere; }
+.coverage { margin:6px 0 0; font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+.coverage.ok { color:var(--pass); }
+.coverage.bad { color:var(--fail); }
+.overview { margin:20px 0; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+.card h3 { margin:0; font-size:14px; }
+.card-total { margin:2px 0; font-size:20px; font-weight:600; }
+.counts { margin:0; color:var(--muted); font-size:12px; }
+.card.total { border-color:var(--accent); }
+.filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:20px 0 8px; }
+.filter-label { color:var(--muted); font-size:12px; }
+.filters button { border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:999px; padding:4px 12px; cursor:pointer; font:inherit; font-size:12px; }
+.filters button.active { border-color:var(--accent); color:var(--accent); }
+.filters .n { color:var(--muted); }
+section { margin:24px 0; }
+h2 { margin:0 0 2px; font-size:18px; }
+h3 { font-size:15px; margin:20px 0 8px; }
+h4 { margin:0 0 8px; font-size:13px; }
+.muted { color:var(--muted); font-weight:normal; }
+.table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; margin-top:12px; }
+table { border-collapse:collapse; width:100%; min-width:680px; font-size:13px; }
+table.matrix { min-width:900px; }
+th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; font-size:12px; white-space:nowrap; }
+tbody tr:last-child td { border-bottom:0; }
+tr.scenario:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
+td.detail { max-width:360px; overflow-wrap:anywhere; }
+td.provider-cell { min-width:170px; }
+.status-link { color:inherit; text-decoration:none; }
+.status-link:hover .badge { border-color:var(--accent); color:var(--accent); }
+.status-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:999px; }
+.cell-note { display:block; margin-top:3px; color:var(--muted); font-size:11px; line-height:1.4; max-width:240px; overflow-wrap:anywhere; }
+.badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid currentColor; white-space:nowrap; }
+.badge.pass { color:var(--pass); }
+.badge.fail { color:var(--fail); }
+.badge.ns { color:var(--ns); }
+.badge.skipped { color:var(--skip); }
+.badge.missing { color:var(--muted); border-style:dashed; }
+.hint { color:var(--muted); font-size:12px; }
+.evidence-list { display:grid; gap:10px; }
+.evidence { background:var(--card); border:1px solid var(--line); border-radius:8px; }
+.evidence summary { cursor:pointer; padding:10px 12px; }
+.evidence-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; padding:0 12px 12px; }
+.evidence-grid section { margin:0; min-width:0; }
+pre { margin:0; padding:8px; background:color-mix(in srgb, var(--fg) 5%, transparent); border-radius:6px; overflow:auto; max-height:320px; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.call + .call { margin-top:10px; padding-top:8px; border-top:1px dashed var(--line); }
+.call-label { margin:0; color:var(--muted); font-size:11px; }
+.call-line { margin:0 0 6px; overflow-wrap:anywhere; }
+code { font-size:12px; }
+footer { margin-top:28px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+footer a { color:var(--accent); }
+@media (max-width:640px) { body { padding:14px; } table, thead, tbody, tr, td { display:block; width:100%; } thead { display:none; } table, table.matrix { min-width:0; } .table-wrap { overflow:visible; } tbody tr.scenario { padding:10px 12px; border-bottom:1px solid var(--line); } tbody tr.scenario:last-child { border-bottom:0; } td { border:0; padding:2px 0; overflow-wrap:anywhere; } td::before { content:attr(data-label) "："; color:var(--muted); font-size:11px; } td.col-clause { display:none; } td.detail { max-width:none; margin-top:4px; } td.provider-cell { padding-top:6px; } .cell-note { max-width:none; } }
+</style>
+</head>
+<body>
+<header class="page-head">
+<h1>any2api e2e 兼容性报告</h1>
+<p class="sub">生成于 2026-11-24T11:01:41.519Z · 目标 http://127.0.0.1:52841 · 调用预算 50/60 · 模型 codearts=glm-5.3-flash · codebuddy=glm-5.3-flash</p>
+<p class="coverage ok">场景集一致：codearts 28/28 · codebuddy 28/28</p>
+</header>
+<section class="overview" aria-label="总览"><div class="cards"><div class="card"><h3>codearts</h3><p class="card-total">28 场景</p><p class="counts">pass 13 · fail 10 · not-supported 3 · skipped 2</p></div><div class="card"><h3>codebuddy</h3><p class="card-total">28 场景</p><p class="counts">pass 18 · fail 7 · not-supported 1 · skipped 2</p></div><div class="card"><h3>全局</h3><p class="card-total">1 场景</p><p class="counts">pass 1 · fail 0 · not-supported 0 · skipped 0</p></div><div class="card total"><h3>合计</h3><p class="card-total">57 场景</p><p class="counts">pass 32 · fail 17 · not-supported 4 · skipped 4</p></div></div></section>
+<div class="filters" role="group" aria-label="按状态过滤">
+<span class="filter-label">过滤</span>
+<button type="button" data-filter="all" class="active">全部 <span class="n">29</span></button>
+<button type="button" data-filter="fail">fail <span class="n">11</span></button>
+<button type="button" data-filter="not-supported">not-supported <span class="n">3</span></button>
+<button type="button" data-filter="skipped">skipped <span class="n">2</span></button>
+</div>
+<main>
+<section id="matrix">
+<h2>场景对照矩阵 <span class="muted">28 场景 × 2 providers</span></h2>
+<p class="counts">同一场景模板按相同顺序对每个 provider 执行；列内是该 provider 的实际结果。</p>
+<div class="table-wrap"><table class="matrix">
+<thead><tr><th>场景</th><th>接口</th><th>特性</th><th>codearts</th><th>codebuddy</th><th class="col-clause">条款</th></tr></thead>
+<tbody>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>chat.basic.nonstream</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">基础非流式（含 usage）</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-0" data-target="ev-codearts-0" aria-label="查看 codearts 的 chat.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-0" data-target="ev-codebuddy-0" aria-label="查看 codebuddy 的 chat.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-01</td>
+</tr>
+<tr class="scenario" data-statuses="pass fail">
+<td data-label="场景"><code>chat.basic.stream</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">SSE 流式 + usage 块</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-1" data-target="ev-codearts-1" aria-label="查看 codearts 的 chat.basic.stream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-1" data-target="ev-codebuddy-1" aria-label="查看 codebuddy 的 chat.basic.stream 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="usage 块应带空 choices">usage 块应带空 choices</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-02</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>chat.image.data_url</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">image_url data URL</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-2" data-target="ev-codearts-2" aria-label="查看 codearts 的 chat.image.data_url 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-2" data-target="ev-codebuddy-2" aria-label="查看 codebuddy 的 chat.image.data_url 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-04</td>
+</tr>
+<tr class="scenario" data-statuses="skipped skipped">
+<td data-label="场景"><code>chat.image.url</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">image_url 公网 URL</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-3" data-target="ev-codearts-3" aria-label="查看 codearts 的 chat.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-3" data-target="ev-codebuddy-3" aria-label="查看 codebuddy 的 chat.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-04</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>chat.multi_turn.system</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">multi-turn + system</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-4" data-target="ev-codearts-4" aria-label="查看 codearts 的 chat.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-4" data-target="ev-codebuddy-4" aria-label="查看 codebuddy 的 chat.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
+<td class="col-clause" data-label="条款">—</td>
+</tr>
+<tr class="scenario" data-statuses="fail fail">
+<td data-label="场景"><code>chat.response_format.json_schema</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">response_format json_schema</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-5" data-target="ev-codearts-5" aria-label="查看 codearts 的 chat.response_format.json_schema 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="上游请求未包含 response_format.json_schema（静默丢弃）">上游请求未包含 response_format.json_schema（静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-5" data-target="ev-codebuddy-5" aria-label="查看 codebuddy 的 chat.response_format.json_schema 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="json_schema 已送达上游，但 content 不是 JSON（上游未强制结构）：```json {&quot;ok&quot;: true} ```">json_schema 已送达上游，但 content 不是 JSON（上游未强制结构）：```json {&quot;ok&quot;: true} ```</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-06</td>
+</tr>
+<tr class="scenario" data-statuses="not-supported not-supported">
+<td data-label="场景"><code>chat.tools.forced</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">tools + 强制 tool_choice</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-6" data-target="ev-codearts-6" aria-label="查看 codearts 的 chat.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request…</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-6" data-target="ev-codebuddy-6" aria-label="查看 codebuddy 的 chat.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝（HTTP 400）：{&quot;error&quot;:{&quot;message&quot;:&quot;Invalid request. Please retry&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;code&quot;:11101}}">上游显式拒绝（HTTP 400）：{&quot;error&quot;:{&quot;message&quot;:&quot;Invalid request. Please retry&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;code&quot;:11101}}</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-05</td>
+</tr>
+<tr class="scenario" data-statuses="fail pass">
+<td data-label="场景"><code>chat.response_format.json</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">response_format json_object</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-7" data-target="ev-codearts-7" aria-label="查看 codearts 的 chat.response_format.json 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="上游请求未包含 response_format（静默丢弃）">上游请求未包含 response_format（静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-7" data-target="ev-codebuddy-7" aria-label="查看 codebuddy 的 chat.response_format.json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="response_format 送达上游且输出为 JSON">response_format 送达上游且输出为 JSON</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-06</td>
+</tr>
+<tr class="scenario" data-statuses="fail fail">
+<td data-label="场景"><code>chat.logprobs</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">logprobs / top_logprobs</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-8" data-target="ev-codearts-8" aria-label="查看 codearts 的 chat.logprobs 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="响应缺少 choices[0].logprobs.content（参数被静默丢弃）">响应缺少 choices[0].logprobs.content（参数被静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-8" data-target="ev-codebuddy-8" aria-label="查看 codebuddy 的 chat.logprobs 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="响应缺少 choices[0].logprobs.content（参数被静默丢弃）">响应缺少 choices[0].logprobs.content（参数被静默丢弃）</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-07</td>
+</tr>
+<tr class="scenario" data-statuses="fail fail">
+<td data-label="场景"><code>chat.n</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">n &gt; 1</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-9" data-target="ev-codearts-9" aria-label="查看 codearts 的 chat.n 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="choices 数量为 1（n=2 被静默丢弃）">choices 数量为 1（n=2 被静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-9" data-target="ev-codebuddy-9" aria-label="查看 codebuddy 的 chat.n 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="choices 数量为 1（n=2 被静默丢弃）">choices 数量为 1（n=2 被静默丢弃）</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-08</td>
+</tr>
+<tr class="scenario" data-statuses="fail pass">
+<td data-label="场景"><code>chat.negative.unknown_model</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">未知模型显式拒绝</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-10" data-target="ev-codearts-10" aria-label="查看 codearts 的 chat.negative.unknown_model 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="未知模型被静默接受/回退（响应 model=deepseek-v4.1-flash-1017）">未知模型被静默接受/回退（响应 model=deepseek-v4.1-flash-1017）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-10" data-target="ev-codebuddy-10" aria-label="查看 codebuddy 的 chat.negative.unknown_model 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="显式拒绝（HTTP 404）">显式拒绝（HTTP 404）</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-03</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>chat.negative.invalid_json</code></td>
+<td data-label="接口">/v1/chat/completions</td>
+<td data-label="特性">非法 JSON 请求体</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-11" data-target="ev-codearts-11" aria-label="查看 codearts 的 chat.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-11" data-target="ev-codebuddy-11" aria-label="查看 codebuddy 的 chat.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td>
+<td class="col-clause" data-label="条款">OAI-CHAT-03</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>messages.basic.nonstream</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">基础非流式（含 usage）</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-12" data-target="ev-codearts-12" aria-label="查看 codearts 的 messages.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-12" data-target="ev-codebuddy-12" aria-label="查看 codebuddy 的 messages.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-01</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>messages.basic.stream</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">SSE 事件序列</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-13" data-target="ev-codearts-13" aria-label="查看 codearts 的 messages.basic.stream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-13" data-target="ev-codebuddy-13" aria-label="查看 codebuddy 的 messages.basic.stream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-02</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>messages.multi_turn.system</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">multi-turn + system string</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-14" data-target="ev-codearts-14" aria-label="查看 codearts 的 messages.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-14" data-target="ev-codebuddy-14" aria-label="查看 codebuddy 的 messages.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
+<td class="col-clause" data-label="条款">—</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>messages.image.base64</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">base64 图片</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-15" data-target="ev-codearts-15" aria-label="查看 codearts 的 messages.image.base64 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-15" data-target="ev-codebuddy-15" aria-label="查看 codebuddy 的 messages.image.base64 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-03</td>
+</tr>
+<tr class="scenario" data-statuses="skipped skipped">
+<td data-label="场景"><code>messages.image.url</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">URL 图片</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-16" data-target="ev-codearts-16" aria-label="查看 codearts 的 messages.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-16" data-target="ev-codebuddy-16" aria-label="查看 codebuddy 的 messages.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-03</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>messages.image.tool_result</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">tool_result 内嵌图片</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-17" data-target="ev-codearts-17" aria-label="查看 codearts 的 messages.image.tool_result 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="tool_result 图片送达上游且颜色识别正确">tool_result 图片送达上游且颜色识别正确</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-17" data-target="ev-codebuddy-17" aria-label="查看 codebuddy 的 messages.image.tool_result 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="tool_result 图片送达上游且颜色识别正确">tool_result 图片送达上游且颜色识别正确</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-04</td>
+</tr>
+<tr class="scenario" data-statuses="fail fail">
+<td data-label="场景"><code>messages.image.system</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">system 数组中的图片</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-18" data-target="ev-codearts-18" aria-label="查看 codearts 的 messages.image.system 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="system 图片未送达上游（静默丢弃）">system 图片未送达上游（静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-18" data-target="ev-codebuddy-18" aria-label="查看 codebuddy 的 messages.image.system 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="system 图片未送达上游（静默丢弃）">system 图片未送达上游（静默丢弃）</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-05</td>
+</tr>
+<tr class="scenario" data-statuses="not-supported pass">
+<td data-label="场景"><code>messages.tools.forced</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">tools + 强制 tool_choice</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-19" data-target="ev-codearts-19" aria-label="查看 codearts 的 messages.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request…</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-19" data-target="ev-codebuddy-19" aria-label="查看 codebuddy 的 messages.tools.forced 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="强制 tool_choice 生效">强制 tool_choice 生效</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-06</td>
+</tr>
+<tr class="scenario" data-statuses="fail pass">
+<td data-label="场景"><code>messages.negative.unknown_model</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">未知模型 + 错误信封归一</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-20" data-target="ev-codearts-20" aria-label="查看 codearts 的 messages.negative.unknown_model 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）">未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-20" data-target="ev-codebuddy-20" aria-label="查看 codebuddy 的 messages.negative.unknown_model 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="显式拒绝（HTTP 404）">显式拒绝（HTTP 404）</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-07</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>messages.negative.invalid_json</code></td>
+<td data-label="接口">/v1/messages</td>
+<td data-label="特性">非法 JSON 请求体</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-21" data-target="ev-codearts-21" aria-label="查看 codearts 的 messages.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-21" data-target="ev-codebuddy-21" aria-label="查看 codebuddy 的 messages.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td>
+<td class="col-clause" data-label="条款">ANT-MSG-07</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>responses.basic.nonstream</code></td>
+<td data-label="接口">/v1/responses</td>
+<td data-label="特性">基础非流式（含 usage）</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-22" data-target="ev-codearts-22" aria-label="查看 codearts 的 responses.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-22" data-target="ev-codebuddy-22" aria-label="查看 codebuddy 的 responses.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
+<td class="col-clause" data-label="条款">OAI-RESP-01</td>
+</tr>
+<tr class="scenario" data-statuses="fail fail">
+<td data-label="场景"><code>responses.basic.stream</code></td>
+<td data-label="接口">/v1/responses</td>
+<td data-label="特性">SSE 事件序列</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-23" data-target="ev-codearts-23" aria-label="查看 codearts 的 responses.basic.stream 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="缺少 response.output_text.done">缺少 response.output_text.done</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-23" data-target="ev-codebuddy-23" aria-label="查看 codebuddy 的 responses.basic.stream 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="缺少 response.output_text.done">缺少 response.output_text.done</span></td>
+<td class="col-clause" data-label="条款">OAI-RESP-02</td>
+</tr>
+<tr class="scenario" data-statuses="fail fail">
+<td data-label="场景"><code>responses.image.data_url</code></td>
+<td data-label="接口">/v1/responses</td>
+<td data-label="特性">input_image data URL</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-24" data-target="ev-codearts-24" aria-label="查看 codearts 的 responses.image.data_url 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="上游请求未包含图片字段（input_image 被丢弃）">上游请求未包含图片字段（input_image 被丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-24" data-target="ev-codebuddy-24" aria-label="查看 codebuddy 的 responses.image.data_url 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="上游请求未包含图片字段（input_image 被丢弃）">上游请求未包含图片字段（input_image 被丢弃）</span></td>
+<td class="col-clause" data-label="条款">OAI-RESP-03</td>
+</tr>
+<tr class="scenario" data-statuses="not-supported pass">
+<td data-label="场景"><code>responses.tools.forced</code></td>
+<td data-label="接口">/v1/responses</td>
+<td data-label="特性">function tools + 强制 tool_choice</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-25" data-target="ev-codearts-25" aria-label="查看 codearts 的 responses.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request…</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-25" data-target="ev-codebuddy-25" aria-label="查看 codebuddy 的 responses.tools.forced 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="强制 tool_choice 生效">强制 tool_choice 生效</span></td>
+<td class="col-clause" data-label="条款">OAI-RESP-04</td>
+</tr>
+<tr class="scenario" data-statuses="fail pass">
+<td data-label="场景"><code>responses.negative.unknown_model</code></td>
+<td data-label="接口">/v1/responses</td>
+<td data-label="特性">未知模型显式拒绝</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-26" data-target="ev-codearts-26" aria-label="查看 codearts 的 responses.negative.unknown_model 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）">未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-26" data-target="ev-codebuddy-26" aria-label="查看 codebuddy 的 responses.negative.unknown_model 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="显式拒绝（HTTP 404）">显式拒绝（HTTP 404）</span></td>
+<td class="col-clause" data-label="条款">OAI-RESP-05</td>
+</tr>
+<tr class="scenario" data-statuses="pass pass">
+<td data-label="场景"><code>models.list</code></td>
+<td data-label="接口">/v1/models</td>
+<td data-label="特性">模型列表形状</td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-27" data-target="ev-codearts-27" aria-label="查看 codearts 的 models.list 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-27" data-target="ev-codebuddy-27" aria-label="查看 codebuddy 的 models.list 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
+<td class="col-clause" data-label="条款">OAI-MODEL-01</td>
+</tr>
+</tbody>
+</table></div>
+<p class="hint">同一行是两个 provider 的同一场景；点击状态展开对应 provider 的场景证据。</p>
+</section>
+<section id="evidence-codearts">
+<h2>codearts 场景证据 <span class="muted">28 场景</span></h2>
+<p class="counts">pass 13 · fail 10 · not-supported 3 · skipped 2</p>
+<div class="evidence-list">
+<details class="evidence" id="ev-codearts-0" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.basic.nonstream</code> <span class="muted">/v1/chat/completions · 2440ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;20261124185926ab6bb72f316f48b6&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;OK&quot;,
+        &quot;reasoning_content&quot;: &quot;The user wants me to reply with exactly \&quot;OK\&quot;. This is a simple instruction to follow. I should just output \&quot;OK\&quot; with nothing else - no extra punctuation, no explanation, nothing.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 17,
+    &quot;completion_tokens&quot;: 42,
+    &quot;total_tokens&quot;: 59,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 39
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-1" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.basic.stream</code> <span class="muted">/v1/chat/completions · 1990ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  },
+  &quot;max_tokens&quot;: 128
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · text/event-stream</p><pre>{
+  &quot;sse_frames&quot;: 28,
+  &quot;content&quot;: &quot;OK&quot;,
+  &quot;reasoning_content&quot;: &quot;The user wants me to reply with exactly \&quot;OK\&quot; - nothing more, nothing less. This is a simple instruction to follow.&quot;,
+  &quot;finish_reason&quot;: &quot;stop&quot;,
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 17,
+    &quot;completion_tokens&quot;: 29,
+    &quot;total_tokens&quot;: 46,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 25
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-2" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.image.data_url</code> <span class="muted">/v1/chat/completions · 3056ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    }
+  ],
+  &quot;max_tokens&quot;: 256,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;20261124185930e83747c28c8b4e9d&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;Red&quot;,
+        &quot;reasoning_content&quot;: &quot;The user has shared an image that appears to be entirely red - it looks like a solid red rectangle. They&#39;re asking what the dominant color is, and want a one-word English answer.\n\nThe image is clearly red throughout.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 45,
+    &quot;completion_tokens&quot;: 48,
+    &quot;total_tokens&quot;: 93,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 45
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-3" data-status="skipped">
+<summary><span class="badge skipped">skipped</span> <code>chat.image.url</code> <span class="muted">/v1/chat/completions · 0ms</span></summary>
+<p class="muted">未执行：未设置 E2E_IMAGE_URL</p>
+</details>
+<details class="evidence" id="ev-codearts-4" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.multi_turn.system</code> <span class="muted">/v1/chat/completions · 1905ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;20261124185933017551a39c724aa4&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;France.&quot;,
+        &quot;reasoning_content&quot;: &quot;The user asked the capital of France (Paris), and now asks to name the country. That&#39;s France. Terse response: France.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 34,
+    &quot;completion_tokens&quot;: 32,
+    &quot;total_tokens&quot;: 66,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 28
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-5" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.response_format.json_schema</code> <span class="muted">/v1/chat/completions · 2061ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 512,
+  &quot;response_format&quot;: {
+    &quot;type&quot;: &quot;json_schema&quot;,
+    &quot;json_schema&quot;: {
+      &quot;name&quot;: &quot;answer&quot;,
+      &quot;strict&quot;: true,
+      &quot;schema&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+          &quot;ok&quot;: {
+            &quot;type&quot;: &quot;boolean&quot;
+          }
+        },
+        &quot;required&quot;: [
+          &quot;ok&quot;
+        ],
+        &quot;additionalProperties&quot;: false
+      }
+    }
+  },
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return JSON with ok=true.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return JSON with ok=true.&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 512,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;20261124185935596ae50b91ea48e8&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;```json\n{\n  \&quot;ok\&quot;: true\n}\n```&quot;,
+        &quot;reasoning_content&quot;: &quot;The user is asking me to return JSON with ok=true. This is a simple request for a JSON response. Let me provide that.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 18,
+    &quot;completion_tokens&quot;: 41,
+    &quot;total_tokens&quot;: 59,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 27
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-6" data-status="not-supported">
+<summary><span class="badge ns">not-supported</span> <code>chat.tools.forced</code> <span class="muted">/v1/chat/completions · 377ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+      &quot;name&quot;: &quot;get_color&quot;
+    }
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+      &quot;name&quot;: &quot;get_color&quot;
+    }
+  },
+  &quot;max_tokens&quot;: 256,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 502 · application/json</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;upstream_error&quot;,
+    &quot;code&quot;: null,
+    &quot;message&quot;: &quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-7" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.response_format.json</code> <span class="muted">/v1/chat/completions · 12275ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 512,
+  &quot;response_format&quot;: {
+    &quot;type&quot;: &quot;json_object&quot;
+  },
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return exactly this JSON and nothing else: {\&quot;ok\&quot;:true}&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return exactly this JSON and nothing else: {\&quot;ok\&quot;:true}&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 512,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;20261124185937023dbc13667a4bfd&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;{\&quot;ok\&quot;:true}&quot;,
+        &quot;reasoning_content&quot;: &quot;The user is asking me to return exactly a JSON object: {\&quot;ok\&quot;:true} and nothing else. This is a simple, benign request - likely testing JSON output or API behavior. There&#39;s no harm here. I should just return exactly that JSON with nothing else.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 25,
+    &quot;completion_tokens&quot;: 61,
+    &quot;total_tokens&quot;: 86,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 54
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-8" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.logprobs</code> <span class="muted">/v1/chat/completions · 5816ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 8,
+  &quot;logprobs&quot;: true,
+  &quot;top_logprobs&quot;: 1,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say OK&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 8,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;2026112418595052abacba6e4b41e9&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;&quot;,
+        &quot;reasoning_content&quot;: &quot;The user has sent a very simple message&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;length&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 14,
+    &quot;completion_tokens&quot;: 8,
+    &quot;total_tokens&quot;: 22,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 6
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-9" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.n</code> <span class="muted">/v1/chat/completions · 1651ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 16,
+  &quot;n&quot;: 2,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say one word.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say one word.&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 16,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;20261124185955e1c4c478bb1c4b5e&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;&quot;,
+        &quot;reasoning_content&quot;: &quot;The user is asking me to say one word. This is a simple, direct&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;length&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 16,
+    &quot;completion_tokens&quot;: 16,
+    &quot;total_tokens&quot;: 32,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 12
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-10" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.negative.unknown_model</code> <span class="muted">/v1/chat/completions · 2730ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;hi&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 4
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;deepseek-v4.1-flash-1017&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;hi&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 4,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;as-np808u1aqr&quot;,
+  &quot;model&quot;: &quot;deepseek-v4.1-flash-1017&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;&quot;,
+        &quot;reasoning_content&quot;: &quot;We need answer to&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;length&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 31,
+    &quot;completion_tokens&quot;: 4,
+    &quot;total_tokens&quot;: 35,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 4
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-11" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.negative.invalid_json</code> <span class="muted">/v1/chat/completions · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{</pre></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 400 · application/json</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;code&quot;: null,
+    &quot;message&quot;: &quot;invalid_request: messages is required&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-12" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.basic.nonstream</code> <span class="muted">/v1/messages · 11252ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_20261124190000c888667490b0438e&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;OK&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 31,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-13" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.basic.stream</code> <span class="muted">/v1/messages · 3000ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  },
+  &quot;max_tokens&quot;: 128
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · text/event-stream</p><pre>{
+  &quot;event_sequence&quot;: &quot;message_start → content_block_start → content_block_delta → content_block_stop → message_delta → message_stop&quot;,
+  &quot;content&quot;: &quot;OK&quot;,
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 31,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-14" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.multi_turn.system</code> <span class="muted">/v1/messages · 2017ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;system&quot;: &quot;You are terse.&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_20261124190014408537e73e1e4673&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;France.&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 34,
+    &quot;output_tokens&quot;: 27,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-15" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.image.base64</code> <span class="muted">/v1/messages · 1830ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image&quot;,
+          &quot;source&quot;: {
+            &quot;type&quot;: &quot;base64&quot;,
+            &quot;media_type&quot;: &quot;image/png&quot;,
+            &quot;data&quot;: &quot;iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=&quot;
+          }
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    }
+  ],
+  &quot;max_tokens&quot;: 256,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_202611241900168c1269fd9e524f77&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;Red&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 45,
+    &quot;output_tokens&quot;: 19,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-16" data-status="skipped">
+<summary><span class="badge skipped">skipped</span> <code>messages.image.url</code> <span class="muted">/v1/messages · 0ms</span></summary>
+<p class="muted">未执行：未设置 E2E_IMAGE_URL</p>
+</details>
+<details class="evidence" id="ev-codearts-17" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.image.tool_result</code> <span class="muted">/v1/messages · 2131ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Take a screenshot.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;tool_use&quot;,
+          &quot;id&quot;: &quot;toolu_e2e&quot;,
+          &quot;name&quot;: &quot;screenshot&quot;,
+          &quot;input&quot;: {}
+        }
+      ]
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;tool_result&quot;,
+          &quot;tool_use_id&quot;: &quot;toolu_e2e&quot;,
+          &quot;content&quot;: [
+            {
+              &quot;type&quot;: &quot;text&quot;,
+              &quot;text&quot;: &quot;screenshot attached&quot;
+            },
+            {
+              &quot;type&quot;: &quot;image&quot;,
+              &quot;source&quot;: {
+                &quot;type&quot;: &quot;base64&quot;,
+                &quot;media_type&quot;: &quot;image/png&quot;,
+                &quot;data&quot;: &quot;iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=&quot;
+              }
+            }
+          ]
+        },
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Take a screenshot.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;tool_calls&quot;: [
+        {
+          &quot;id&quot;: &quot;toolu_e2e&quot;,
+          &quot;type&quot;: &quot;function&quot;,
+          &quot;function&quot;: {
+            &quot;name&quot;: &quot;screenshot&quot;,
+            &quot;arguments&quot;: &quot;{}&quot;
+          }
+        }
+      ]
+    },
+    {
+      &quot;role&quot;: &quot;tool&quot;,
+      &quot;tool_call_id&quot;: &quot;toolu_e2e&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;screenshot attached&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 256,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_202611241900180a255e474427439f&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;Red&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 63,
+    &quot;output_tokens&quot;: 27,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-18" data-status="fail">
+<summary><span class="badge fail">fail（已知缺陷）</span> <code>messages.image.system</code> <span class="muted">/v1/messages · 2401ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;system&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;type&quot;: &quot;image&quot;,
+      &quot;source&quot;: {
+        &quot;type&quot;: &quot;base64&quot;,
+        &quot;media_type&quot;: &quot;image/png&quot;,
+        &quot;data&quot;: &quot;iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=&quot;
+      }
+    }
+  ],
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 256,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_202611241900206a5aefd354504666&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;No image was provided.&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 32,
+    &quot;output_tokens&quot;: 71,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-19" data-status="not-supported">
+<summary><span class="badge ns">not-supported</span> <code>messages.tools.forced</code> <span class="muted">/v1/messages · 1436ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 64,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;tools&quot;: [
+    {
+      &quot;name&quot;: &quot;get_color&quot;,
+      &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+      &quot;input_schema&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+          &quot;color&quot;: {
+            &quot;type&quot;: &quot;string&quot;
+          }
+        },
+        &quot;required&quot;: [
+          &quot;color&quot;
+        ]
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;tool&quot;,
+    &quot;name&quot;: &quot;get_color&quot;
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+      &quot;name&quot;: &quot;get_color&quot;
+    }
+  },
+  &quot;max_tokens&quot;: 64,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 502 · application/json</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;upstream_error&quot;,
+    &quot;code&quot;: null,
+    &quot;message&quot;: &quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-20" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>messages.negative.unknown_model</code> <span class="muted">/v1/messages · 1065ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;max_tokens&quot;: 4,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;hi&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;deepseek-v4.1-flash-1017&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;hi&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 4,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_as-nckq6d87i0&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;content&quot;: [],
+  &quot;stop_reason&quot;: &quot;max_tokens&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 31,
+    &quot;output_tokens&quot;: 4,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-21" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.negative.invalid_json</code> <span class="muted">/v1/messages · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{</pre></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 400 · application/json;charset=utf-8</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;message&quot;: &quot;invalid JSON body&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-22" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>responses.basic.nonstream</code> <span class="muted">/v1/responses · 2718ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;input&quot;: &quot;Reply with exactly: OK&quot;,
+  &quot;max_output_tokens&quot;: 128
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;resp_855d8480f6b2446492417ece&quot;,
+  &quot;object&quot;: &quot;response&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;output&quot;: [
+    {
+      &quot;type&quot;: &quot;reasoning&quot;,
+      &quot;content&quot;: []
+    },
+    {
+      &quot;type&quot;: &quot;message&quot;,
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;output_text&quot;,
+          &quot;text&quot;: &quot;OK&quot;,
+          &quot;annotations&quot;: []
+        }
+      ]
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 49,
+    &quot;total_tokens&quot;: 66,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 46
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-23" data-status="fail">
+<summary><span class="badge fail">fail（已知缺陷）</span> <code>responses.basic.stream</code> <span class="muted">/v1/responses · 1853ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;input&quot;: &quot;Reply with exactly: OK&quot;,
+  &quot;max_output_tokens&quot;: 128,
+  &quot;stream&quot;: true
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  },
+  &quot;max_tokens&quot;: 128
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · text/event-stream</p><pre>{
+  &quot;event_sequence&quot;: &quot;response.created → response.output_item.added → response.reasoning_summary_part.added → response.reasoning_summary_text.delta ×37 → response.output_item.added → response.content_part.added → response.output_text.delta → response.output_item.done → response.content_part.done → response.output_item.done → response.completed&quot;,
+  &quot;content&quot;: &quot;OK&quot;,
+  &quot;output_text_done&quot;: false,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 41,
+    &quot;total_tokens&quot;: 58,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 38
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-24" data-status="fail">
+<summary><span class="badge fail">fail（已知缺陷）</span> <code>responses.image.data_url</code> <span class="muted">/v1/responses · 4106ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_output_tokens&quot;: 256,
+  &quot;input&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;input_text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;input_image&quot;,
+          &quot;image_url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;,
+          &quot;detail&quot;: &quot;auto&quot;
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 256,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;resp_1cdba8b001b647f2b53e3723&quot;,
+  &quot;object&quot;: &quot;response&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;output&quot;: [
+    {
+      &quot;type&quot;: &quot;reasoning&quot;,
+      &quot;content&quot;: []
+    },
+    {
+      &quot;type&quot;: &quot;message&quot;,
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;output_text&quot;,
+          &quot;text&quot;: &quot;I don&#39;t see an image in our conversation. Could you please share the image you&#39;d like me to analyze?&quot;,
+          &quot;annotations&quot;: []
+        }
+      ]
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 27,
+    &quot;output_tokens&quot;: 181,
+    &quot;total_tokens&quot;: 208,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 156
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-25" data-status="not-supported">
+<summary><span class="badge ns">not-supported</span> <code>responses.tools.forced</code> <span class="muted">/v1/responses · 366ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_output_tokens&quot;: 64,
+  &quot;input&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;,
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;name&quot;: &quot;get_color&quot;,
+      &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+      &quot;parameters&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+          &quot;color&quot;: {
+            &quot;type&quot;: &quot;string&quot;
+          }
+        },
+        &quot;required&quot;: [
+          &quot;color&quot;
+        ]
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;name&quot;: &quot;get_color&quot;
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+      &quot;name&quot;: &quot;get_color&quot;
+    }
+  },
+  &quot;max_tokens&quot;: 64,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 502 · application/json</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;upstream_error&quot;,
+    &quot;code&quot;: null,
+    &quot;message&quot;: &quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-26" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>responses.negative.unknown_model</code> <span class="muted">/v1/responses · 2238ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;input&quot;: &quot;hi&quot;,
+  &quot;max_output_tokens&quot;: 4
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;deepseek-v4.1-flash-1017&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;hi&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 4,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;resp_0c84c43d448a4cb19bf38522&quot;,
+  &quot;object&quot;: &quot;response&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;output&quot;: [
+    {
+      &quot;type&quot;: &quot;reasoning&quot;,
+      &quot;content&quot;: []
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 31,
+    &quot;output_tokens&quot;: 4,
+    &quot;total_tokens&quot;: 35,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 4
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codearts-27" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>models.list</code> <span class="muted">/v1/models · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>GET /v1/models</code></p><p class="muted">（无请求体）</p></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;object&quot;: &quot;list&quot;,
+  &quot;data_count&quot;: 12,
+  &quot;models&quot;: [
+    &quot;deepseek-v4.1-flash-1017&quot;,
+    &quot;glm-5.3-flash&quot;,
+    &quot;deepseek-v4.1-flash&quot;,
+    &quot;glm-5.3&quot;,
+    &quot;kimi-k3.1-pro&quot;,
+    &quot;kimi-k3&quot;,
+    &quot;GLM-5.2&quot;,
+    &quot;glm-5.2-sft-harmony&quot;,
+    &quot;openpangu-2.1-pro&quot;,
+    &quot;openpangu-2.0-pro&quot;
+  ]
+}</pre></div></section>
+</div>
+</details>
+</div>
+</section>
+<section id="evidence-codebuddy">
+<h2>codebuddy 场景证据 <span class="muted">28 场景</span></h2>
+<p class="counts">pass 18 · fail 7 · not-supported 1 · skipped 2</p>
+<div class="evidence-list">
+<details class="evidence" id="ev-codebuddy-0" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.basic.nonstream</code> <span class="muted">/v1/chat/completions · 2104ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;2c0a22cab5f64d139f89aaf33e1a4cbb&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;OK&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 17,
+    &quot;completion_tokens&quot;: 3,
+    &quot;total_tokens&quot;: 20,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 0
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-1" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.basic.stream</code> <span class="muted">/v1/chat/completions · 2076ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1,
+  &quot;stream_options&quot;: {
+    &quot;include_usage&quot;: true
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · text/event-stream</p><pre>{
+  &quot;sse_frames&quot;: 2,
+  &quot;content&quot;: &quot;OK&quot;,
+  &quot;finish_reason&quot;: &quot;stop&quot;,
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 17,
+    &quot;completion_tokens&quot;: 3,
+    &quot;total_tokens&quot;: 20,
+    &quot;completion_tokens_details&quot;: {
+      &quot;accepted_prediction_tokens&quot;: 0,
+      &quot;audio_tokens&quot;: 0,
+      &quot;reasoning_tokens&quot;: 0,
+      &quot;rejected_prediction_tokens&quot;: 0,
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;prompt_tokens_details&quot;: {
+      &quot;accepted_prediction_tokens&quot;: 0,
+      &quot;audio_tokens&quot;: 0,
+      &quot;reasoning_tokens&quot;: 0,
+      &quot;rejected_prediction_tokens&quot;: 0,
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;prompt_cache_hit_tokens&quot;: 0,
+    &quot;prompt_cache_miss_tokens&quot;: 17,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0,
+    &quot;prompt_cache_write_tokens&quot;: 0,
+    &quot;completion_thinking_tokens&quot;: 0,
+    &quot;credit&quot;: 0,
+    &quot;cached_tokens&quot;: 0,
+    &quot;quota&quot;: null
+  },
+  &quot;usage_chunks_with_nonempty_choices&quot;: 1
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-2" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.image.data_url</code> <span class="muted">/v1/chat/completions · 2105ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 256,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;bbcb61a96de24a73bbb9826c81d1b1fe&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;Red&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 45,
+    &quot;completion_tokens&quot;: 3,
+    &quot;total_tokens&quot;: 48,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 0
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-3" data-status="skipped">
+<summary><span class="badge skipped">skipped</span> <code>chat.image.url</code> <span class="muted">/v1/chat/completions · 0ms</span></summary>
+<p class="muted">未执行：未设置 E2E_IMAGE_URL</p>
+</details>
+<details class="evidence" id="ev-codebuddy-4" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.multi_turn.system</code> <span class="muted">/v1/chat/completions · 5099ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;e6fd7da017e84ef4a51981bc7e4dcc1a&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;France.&quot;,
+        &quot;reasoning_content&quot;: &quot;France.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 34,
+    &quot;completion_tokens&quot;: 6,
+    &quot;total_tokens&quot;: 40,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 2
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-5" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.response_format.json_schema</code> <span class="muted">/v1/chat/completions · 6316ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 512,
+  &quot;response_format&quot;: {
+    &quot;type&quot;: &quot;json_schema&quot;,
+    &quot;json_schema&quot;: {
+      &quot;name&quot;: &quot;answer&quot;,
+      &quot;strict&quot;: true,
+      &quot;schema&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+          &quot;ok&quot;: {
+            &quot;type&quot;: &quot;boolean&quot;
+          }
+        },
+        &quot;required&quot;: [
+          &quot;ok&quot;
+        ],
+        &quot;additionalProperties&quot;: false
+      }
+    }
+  },
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return JSON with ok=true.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return JSON with ok=true.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 512,
+  &quot;temperature&quot;: 1,
+  &quot;response_format&quot;: {
+    &quot;type&quot;: &quot;json_schema&quot;,
+    &quot;json_schema&quot;: {
+      &quot;name&quot;: &quot;answer&quot;,
+      &quot;strict&quot;: true,
+      &quot;schema&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+          &quot;ok&quot;: {
+            &quot;type&quot;: &quot;boolean&quot;
+          }
+        },
+        &quot;required&quot;: [
+          &quot;ok&quot;
+        ],
+        &quot;additionalProperties&quot;: false
+      }
+    }
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;62cac725819d4185919bd3a0f8c4d20f&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;```json\n{\&quot;ok\&quot;: true}\n```&quot;,
+        &quot;reasoning_content&quot;: &quot;User asks to return JSON with ok=true.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 18,
+    &quot;completion_tokens&quot;: 20,
+    &quot;total_tokens&quot;: 38,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 9
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-6" data-status="not-supported">
+<summary><span class="badge ns">not-supported</span> <code>chat.tools.forced</code> <span class="muted">/v1/chat/completions · 109ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+      &quot;name&quot;: &quot;get_color&quot;
+    }
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;function&quot;: {
+      &quot;name&quot;: &quot;get_color&quot;
+    }
+  },
+  &quot;max_tokens&quot;: 256,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 400 · application/json</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;code&quot;: 11101,
+    &quot;message&quot;: &quot;Invalid request. Please retry&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-7" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.response_format.json</code> <span class="muted">/v1/chat/completions · 1902ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 512,
+  &quot;response_format&quot;: {
+    &quot;type&quot;: &quot;json_object&quot;
+  },
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return exactly this JSON and nothing else: {\&quot;ok\&quot;:true}&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Return exactly this JSON and nothing else: {\&quot;ok\&quot;:true}&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 512,
+  &quot;temperature&quot;: 1,
+  &quot;response_format&quot;: {
+    &quot;type&quot;: &quot;json_object&quot;
+  }
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;eca8537a02b9459f8e75393079d64d66&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;{\&quot;ok\&quot;:true}&quot;,
+        &quot;reasoning_content&quot;: &quot;The user wants exactly the JSON and nothing else.&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 25,
+    &quot;completion_tokens&quot;: 17,
+    &quot;total_tokens&quot;: 42,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 10
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-8" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.logprobs</code> <span class="muted">/v1/chat/completions · 1913ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 8,
+  &quot;logprobs&quot;: true,
+  &quot;top_logprobs&quot;: 1,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say OK&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 8,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;a98e3c25719f47c6acaad4dfe8118771&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;&quot;,
+        &quot;reasoning_content&quot;: &quot;I see the user asked me to say&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;length&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 14,
+    &quot;completion_tokens&quot;: 8,
+    &quot;total_tokens&quot;: 22,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 8
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-9" data-status="fail">
+<summary><span class="badge fail">fail</span> <code>chat.n</code> <span class="muted">/v1/chat/completions · 2767ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 16,
+  &quot;n&quot;: 2,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say one word.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Say one word.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 16,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json</p><pre>{
+  &quot;id&quot;: &quot;f0f3309ebccc419bab61b6d05cc93f5e&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;choices&quot;: [
+    {
+      &quot;index&quot;: 0,
+      &quot;message&quot;: {
+        &quot;role&quot;: &quot;assistant&quot;,
+        &quot;content&quot;: &quot;Okay&quot;,
+        &quot;tool_calls&quot;: []
+      },
+      &quot;finish_reason&quot;: &quot;stop&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;prompt_tokens&quot;: 16,
+    &quot;completion_tokens&quot;: 3,
+    &quot;total_tokens&quot;: 19,
+    &quot;prompt_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0,
+      &quot;cache_creation_tokens&quot;: 0
+    },
+    &quot;completion_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 0
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-10" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.negative.unknown_model</code> <span class="muted">/v1/chat/completions · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;hi&quot;
+    }
+  ],
+  &quot;max_tokens&quot;: 4
+}</pre></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 404 · application/json</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;code&quot;: &quot;model_not_found&quot;,
+    &quot;message&quot;: &quot;model_not_found: e2e-model-does-not-exist&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-11" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>chat.negative.invalid_json</code> <span class="muted">/v1/chat/completions · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/chat/completions</code></p><pre>{</pre></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 400 · application/json</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;code&quot;: null,
+    &quot;message&quot;: &quot;invalid JSON body&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-12" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.basic.nonstream</code> <span class="muted">/v1/messages · 4933ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_9d9e9f6cd3a44721bb00abc4625feb4f&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;OK&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 117,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-13" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.basic.stream</code> <span class="muted">/v1/messages · 2016ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;stream&quot;: true,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · text/event-stream</p><pre>{
+  &quot;event_sequence&quot;: &quot;message_start → content_block_start → content_block_delta → content_block_stop → message_delta → message_stop&quot;,
+  &quot;content&quot;: &quot;OK&quot;,
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 14,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-14" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.multi_turn.system</code> <span class="muted">/v1/messages · 1899ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 128,
+  &quot;system&quot;: &quot;You are terse.&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Name the capital of France.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: &quot;Paris.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Now name the country.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_48528dd1a3d7486493206e70d69090a6&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;France.&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 34,
+    &quot;output_tokens&quot;: 6,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-15" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.image.base64</code> <span class="muted">/v1/messages · 1823ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image&quot;,
+          &quot;source&quot;: {
+            &quot;type&quot;: &quot;base64&quot;,
+            &quot;media_type&quot;: &quot;image/png&quot;,
+            &quot;data&quot;: &quot;iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=&quot;
+          }
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 256,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_85d84dcaca204a3fb105fcc7bd389310&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;Red&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 45,
+    &quot;output_tokens&quot;: 3,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-16" data-status="skipped">
+<summary><span class="badge skipped">skipped</span> <code>messages.image.url</code> <span class="muted">/v1/messages · 0ms</span></summary>
+<p class="muted">未执行：未设置 E2E_IMAGE_URL</p>
+</details>
+<details class="evidence" id="ev-codebuddy-17" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.image.tool_result</code> <span class="muted">/v1/messages · 2576ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Take a screenshot.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;tool_use&quot;,
+          &quot;id&quot;: &quot;toolu_e2e&quot;,
+          &quot;name&quot;: &quot;screenshot&quot;,
+          &quot;input&quot;: {}
+        }
+      ]
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;tool_result&quot;,
+          &quot;tool_use_id&quot;: &quot;toolu_e2e&quot;,
+          &quot;content&quot;: [
+            {
+              &quot;type&quot;: &quot;text&quot;,
+              &quot;text&quot;: &quot;screenshot attached&quot;
+            },
+            {
+              &quot;type&quot;: &quot;image&quot;,
+              &quot;source&quot;: {
+                &quot;type&quot;: &quot;base64&quot;,
+                &quot;media_type&quot;: &quot;image/png&quot;,
+                &quot;data&quot;: &quot;iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=&quot;
+              }
+            }
+          ]
+        },
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Take a screenshot.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;tool_calls&quot;: [
+        {
+          &quot;id&quot;: &quot;toolu_e2e&quot;,
+          &quot;type&quot;: &quot;function&quot;,
+          &quot;function&quot;: {
+            &quot;name&quot;: &quot;screenshot&quot;,
+            &quot;arguments&quot;: &quot;{}&quot;
+          }
+        }
+      ]
+    },
+    {
+      &quot;role&quot;: &quot;tool&quot;,
+      &quot;tool_call_id&quot;: &quot;toolu_e2e&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;text&quot;,
+          &quot;text&quot;: &quot;screenshot attached&quot;
+        },
+        {
+          &quot;type&quot;: &quot;image_url&quot;,
+          &quot;image_url&quot;: {
+            &quot;url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;
+          }
+        }
+      ]
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 256,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_f4f7f98b49724510a9d5a603ad60b0a0&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;Red&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 63,
+    &quot;output_tokens&quot;: 5,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-18" data-status="fail">
+<summary><span class="badge fail">fail（已知缺陷）</span> <code>messages.image.system</code> <span class="muted">/v1/messages · 6002ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 256,
+  &quot;system&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;type&quot;: &quot;image&quot;,
+      &quot;source&quot;: {
+        &quot;type&quot;: &quot;base64&quot;,
+        &quot;media_type&quot;: &quot;image/png&quot;,
+        &quot;data&quot;: &quot;iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII=&quot;
+      }
+    }
+  ],
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;system&quot;,
+      &quot;content&quot;: &quot;You are terse.&quot;
+    },
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 256,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_fee14a1a9f6d4d4bb572303244494d07&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;text&quot;,
+      &quot;text&quot;: &quot;Unknown — no image was provided for me to analyze.&quot;
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;end_turn&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 32,
+    &quot;output_tokens&quot;: 34,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-19" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.tools.forced</code> <span class="muted">/v1/messages · 11593ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_tokens&quot;: 64,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;tools&quot;: [
+    {
+      &quot;name&quot;: &quot;get_color&quot;,
+      &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+      &quot;input_schema&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+          &quot;color&quot;: {
+            &quot;type&quot;: &quot;string&quot;
+          }
+        },
+        &quot;required&quot;: [
+          &quot;color&quot;
+        ]
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;tool&quot;,
+    &quot;name&quot;: &quot;get_color&quot;
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: &quot;auto&quot;,
+  &quot;max_tokens&quot;: 64,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;msg_cbc90b63588e4ece97e225304138914a&quot;,
+  &quot;type&quot;: &quot;message&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;content&quot;: [
+    {
+      &quot;type&quot;: &quot;tool_use&quot;,
+      &quot;id&quot;: &quot;call_2067b370f68f4f62a546ca80&quot;,
+      &quot;name&quot;: &quot;get_color&quot;,
+      &quot;input&quot;: {
+        &quot;color&quot;: &quot;red&quot;
+      }
+    }
+  ],
+  &quot;stop_reason&quot;: &quot;tool_use&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 170,
+    &quot;output_tokens&quot;: 12,
+    &quot;cache_read_input_tokens&quot;: 0,
+    &quot;cache_creation_input_tokens&quot;: 0
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-20" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.negative.unknown_model</code> <span class="muted">/v1/messages · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;max_tokens&quot;: 4,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;hi&quot;
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 404 · application/json;charset=utf-8</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;message&quot;: &quot;model_not_found: e2e-model-does-not-exist&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-21" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>messages.negative.invalid_json</code> <span class="muted">/v1/messages · 0ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/messages</code></p><pre>{</pre></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 400 · application/json;charset=utf-8</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;message&quot;: &quot;invalid JSON body&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-22" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>responses.basic.nonstream</code> <span class="muted">/v1/responses · 1701ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;input&quot;: &quot;Reply with exactly: OK&quot;,
+  &quot;max_output_tokens&quot;: 128
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;resp_1daeb8d75c304c38914ead2f&quot;,
+  &quot;object&quot;: &quot;response&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;output&quot;: [
+    {
+      &quot;type&quot;: &quot;message&quot;,
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;output_text&quot;,
+          &quot;text&quot;: &quot;OK&quot;,
+          &quot;annotations&quot;: []
+        }
+      ]
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 3,
+    &quot;total_tokens&quot;: 20,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 0
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-23" data-status="fail">
+<summary><span class="badge fail">fail（已知缺陷）</span> <code>responses.basic.stream</code> <span class="muted">/v1/responses · 2399ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;input&quot;: &quot;Reply with exactly: OK&quot;,
+  &quot;max_output_tokens&quot;: 128,
+  &quot;stream&quot;: true
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Reply with exactly: OK&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 128,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · text/event-stream</p><pre>{
+  &quot;event_sequence&quot;: &quot;response.created → response.output_item.added → response.reasoning_summary_part.added → response.reasoning_summary_text.delta ×37 → response.output_item.added → response.content_part.added → response.output_text.delta → response.output_item.done → response.content_part.done → response.output_item.done → response.completed&quot;,
+  &quot;content&quot;: &quot;OK&quot;,
+  &quot;output_text_done&quot;: false,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 17,
+    &quot;output_tokens&quot;: 40,
+    &quot;total_tokens&quot;: 57,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 37
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-24" data-status="fail">
+<summary><span class="badge fail">fail（已知缺陷）</span> <code>responses.image.data_url</code> <span class="muted">/v1/responses · 2674ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_output_tokens&quot;: 256,
+  &quot;input&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;input_text&quot;,
+          &quot;text&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+        },
+        {
+          &quot;type&quot;: &quot;input_image&quot;,
+          &quot;image_url&quot;: &quot;data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK…(len=166)&quot;,
+          &quot;detail&quot;: &quot;auto&quot;
+        }
+      ]
+    }
+  ]
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;What is the dominant color of this image? Answer with one English word.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;max_tokens&quot;: 256,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;resp_220d54acd9264b4fbcd4cf6a&quot;,
+  &quot;object&quot;: &quot;response&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;output&quot;: [
+    {
+      &quot;type&quot;: &quot;reasoning&quot;,
+      &quot;content&quot;: []
+    },
+    {
+      &quot;type&quot;: &quot;message&quot;,
+      &quot;role&quot;: &quot;assistant&quot;,
+      &quot;content&quot;: [
+        {
+          &quot;type&quot;: &quot;output_text&quot;,
+          &quot;text&quot;: &quot;I don&#39;t see an image attached to your message. Could you please upload or share the image you&#39;d like me to analyze?&quot;,
+          &quot;annotations&quot;: []
+        }
+      ]
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 27,
+    &quot;output_tokens&quot;: 55,
+    &quot;total_tokens&quot;: 82,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 0
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 27
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-25" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>responses.tools.forced</code> <span class="muted">/v1/responses · 2929ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;max_output_tokens&quot;: 64,
+  &quot;input&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;,
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;name&quot;: &quot;get_color&quot;,
+      &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+      &quot;parameters&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+          &quot;color&quot;: {
+            &quot;type&quot;: &quot;string&quot;
+          }
+        },
+        &quot;required&quot;: [
+          &quot;color&quot;
+        ]
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: {
+    &quot;type&quot;: &quot;function&quot;,
+    &quot;name&quot;: &quot;get_color&quot;
+  }
+}</pre></div></section>
+<section><h4>上游请求</h4><div class="call"><p class="call-label">上游 1/1</p><p class="call-line"><code>https://copilot.tencent.com/v2/chat/completions</code></p><pre>{
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;messages&quot;: [
+    {
+      &quot;role&quot;: &quot;user&quot;,
+      &quot;content&quot;: &quot;Use the get_color tool with color red. Do not answer in text.&quot;
+    }
+  ],
+  &quot;stream&quot;: true,
+  &quot;tools&quot;: [
+    {
+      &quot;type&quot;: &quot;function&quot;,
+      &quot;function&quot;: {
+        &quot;name&quot;: &quot;get_color&quot;,
+        &quot;description&quot;: &quot;Return the color the user asks about&quot;,
+        &quot;parameters&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;properties&quot;: {
+            &quot;color&quot;: {
+              &quot;type&quot;: &quot;string&quot;
+            }
+          },
+          &quot;required&quot;: [
+            &quot;color&quot;
+          ]
+        }
+      }
+    }
+  ],
+  &quot;tool_choice&quot;: &quot;auto&quot;,
+  &quot;max_tokens&quot;: 64,
+  &quot;temperature&quot;: 1
+}</pre></div></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;id&quot;: &quot;resp_ed102f0b42ad4e27bf3d9ee7&quot;,
+  &quot;object&quot;: &quot;response&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;model&quot;: &quot;glm-5.3-flash&quot;,
+  &quot;output&quot;: [
+    {
+      &quot;type&quot;: &quot;function_call&quot;,
+      &quot;content&quot;: [],
+      &quot;name&quot;: &quot;get_color&quot;,
+      &quot;arguments&quot;: &quot;{\&quot;color\&quot;:\&quot;red\&quot;}&quot;
+    }
+  ],
+  &quot;usage&quot;: {
+    &quot;input_tokens&quot;: 170,
+    &quot;output_tokens&quot;: 12,
+    &quot;total_tokens&quot;: 182,
+    &quot;input_tokens_details&quot;: {
+      &quot;cached_tokens&quot;: 128
+    },
+    &quot;output_tokens_details&quot;: {
+      &quot;reasoning_tokens&quot;: 0
+    }
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-26" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>responses.negative.unknown_model</code> <span class="muted">/v1/responses · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>POST /v1/responses</code></p><pre>{
+  &quot;model&quot;: &quot;e2e-model-does-not-exist&quot;,
+  &quot;input&quot;: &quot;hi&quot;,
+  &quot;max_output_tokens&quot;: 4
+}</pre></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 404 · application/json;charset=utf-8</p><pre>{
+  &quot;error&quot;: {
+    &quot;type&quot;: &quot;invalid_request_error&quot;,
+    &quot;code&quot;: &quot;model_not_found&quot;,
+    &quot;message&quot;: &quot;model_not_found: e2e-model-does-not-exist&quot;
+  }
+}</pre></div></section>
+</div>
+</details>
+<details class="evidence" id="ev-codebuddy-27" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>models.list</code> <span class="muted">/v1/models · 5ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>GET /v1/models</code></p><p class="muted">（无请求体）</p></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;object&quot;: &quot;list&quot;,
+  &quot;data_count&quot;: 24,
+  &quot;models&quot;: [
+    &quot;auto&quot;,
+    &quot;hy4std&quot;,
+    &quot;hy4flash&quot;,
+    &quot;hy4flash-free&quot;,
+    &quot;step-5-preview&quot;,
+    &quot;space-bunny&quot;,
+    &quot;deepseek-v4.1-flash&quot;,
+    &quot;deepseek-v4-pro&quot;,
+    &quot;glm-5.3&quot;,
+    &quot;glm-5.3-flash&quot;
+  ]
+}</pre></div></section>
+</div>
+</details>
+</div>
+</section>
+<section id="global">
+<h2>全局接口 <span class="muted">1 场景</span></h2>
+<p class="counts">pass 1 · fail 0 · not-supported 0 · skipped 0</p>
+<div class="table-wrap"><table>
+<thead><tr><th>场景</th><th>接口</th><th>特性</th><th>状态</th><th class="col-clause">条款</th><th>说明</th></tr></thead>
+<tbody>
+<tr class="scenario" data-statuses="pass">
+<td data-label="场景"><code>healthz.aggregate</code></td>
+<td data-label="接口">/healthz</td>
+<td data-label="特性">聚合健康检查</td>
+<td data-label="状态"><a class="status-link" href="#ev-global-0" data-target="ev-global-0" aria-label="查看 healthz.aggregate 场景证据"><span class="badge pass">pass</span></a></td>
+<td class="col-clause" data-label="条款">—</td>
+<td class="detail" data-label="说明">HTTP 200；2 个 provider</td>
+</tr>
+</tbody>
+</table></div>
+<h3>场景证据</h3>
+<div class="evidence-list">
+<details class="evidence" id="ev-global-0" data-status="pass">
+<summary><span class="badge pass">pass</span> <code>healthz.aggregate</code> <span class="muted">/healthz · 1ms</span></summary>
+<div class="evidence-grid">
+<section><h4>输入</h4><div class="call"><p class="call-line"><code>GET /healthz</code></p><p class="muted">（无请求体）</p></div></section>
+<section><h4>上游请求</h4><p class="muted">（无上游请求转储）</p></section>
+<section><h4>输出</h4><div class="call"><p class="call-line">HTTP 200 · application/json;charset=utf-8</p><pre>{
+  &quot;ok&quot;: true,
+  &quot;providers&quot;: [
+    {
+      &quot;provider&quot;: &quot;codearts&quot;,
+      &quot;ok&quot;: true
+    },
+    {
+      &quot;provider&quot;: &quot;codebuddy&quot;,
+      &quot;ok&quot;: true,
+      &quot;models&quot;: 24,
+      &quot;credentialSource&quot;: &quot;keychain&quot;,
+      &quot;uid&quot;: &quot;03583f87...&quot;
+    }
+  ]
+}</pre></div></section>
+</div>
+</details>
+</div>
+</section>
+</main>
+<footer>机器可读原始数据：<a href="e2e-baseline.json">e2e-baseline.json</a>（含入站请求、上游请求与响应原文；HTML 仅含展示摘要）。</footer>
+<script>
+(function () {
+  var buttons = document.querySelectorAll("[data-filter]");
+  function apply(filter) {
+    buttons.forEach(function (button) { button.classList.toggle("active", button.getAttribute("data-filter") === filter); });
+    document.querySelectorAll("tr.scenario").forEach(function (row) {
+      var statuses = (row.getAttribute("data-statuses") || "").split(/\s+/);
+      row.hidden = filter !== "all" && statuses.indexOf(filter) === -1;
+    });
+    document.querySelectorAll("details.evidence").forEach(function (item) {
+      item.hidden = filter !== "all" && item.getAttribute("data-status") !== filter;
+    });
+  }
+  buttons.forEach(function (button) {
+    button.addEventListener("click", function () { apply(button.getAttribute("data-filter") || "all"); });
+  });
+  document.querySelectorAll("a.status-link").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      var target = document.getElementById(link.getAttribute("data-target") || "");
+      if (!target) return;
+      event.preventDefault();
+      if (target.hidden) apply("all");
+      target.open = true;
+      target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  });
+})();
+</script>
+</body>
+</html>

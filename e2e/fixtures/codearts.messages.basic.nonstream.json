@@ -1,0 +1,48 @@
+{
+  "scenario": "messages.basic.nonstream",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:00:11.390Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/messages",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 128,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reply with exactly: OK"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"msg_20261124190000c888667490b0438e\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"OK\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":17,\"output_tokens\":31,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:00.139Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reply with exactly: OK"
+          }
+        ],
+        "max_tokens": 128,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ]
+}

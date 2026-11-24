@@ -1,0 +1,84 @@
+{
+  "scenario": "responses.tools.forced",
+  "provider": "codebuddy",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:01:41.505Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/responses",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_output_tokens": 64,
+        "input": "Use the get_color tool with color red. Do not answer in text.",
+        "tools": [
+          {
+            "type": "function",
+            "name": "get_color",
+            "description": "Return the color the user asks about",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "color"
+              ]
+            }
+          }
+        ],
+        "tool_choice": {
+          "type": "function",
+          "name": "get_color"
+        }
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"resp_ed102f0b42ad4e27bf3d9ee7\",\"object\":\"response\",\"created_at\":1795518101,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_4c7b8a3036474ea5afd2ff72\",\"call_id\":\"call_822d7e3c34b8485d8aefe876\",\"name\":\"get_color\",\"arguments\":\"{\\\"color\\\":\\\"red\\\"}\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":170,\"output_tokens\":12,\"total_tokens\":182,\"input_tokens_details\":{\"cached_tokens\":128},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:01:38.577Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Use the get_color tool with color red. Do not answer in text."
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_color",
+              "description": "Return the color the user asks about",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "color"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "max_tokens": 64,
+        "temperature": 1
+      }
+    }
+  ]
+}

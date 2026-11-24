@@ -1,0 +1,49 @@
+{
+  "scenario": "chat.n",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T10:59:57.405Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 16,
+        "n": 2,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Say one word."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"20261124185955e1c4c478bb1c4b5e\",\"object\":\"chat.completion\",\"created\":1795517996,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user is asking me to say one word. This is a simple, direct\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":16,\"completion_tokens\":16,\"total_tokens\":32,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":12}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:55.755Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Say one word."
+          }
+        ],
+        "max_tokens": 16,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ]
+}

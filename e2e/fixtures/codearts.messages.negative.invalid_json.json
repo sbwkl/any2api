@@ -1,0 +1,19 @@
+{
+  "scenario": "messages.negative.invalid_json",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T11:00:25.272Z",
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/v1/messages",
+      "rawBody": "{",
+      "response": {
+        "status": 400,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"invalid JSON body\"}}"
+      }
+    }
+  ],
+  "upstream": []
+}

@@ -12,6 +12,6 @@
 
 ## 变更追溯
 
-- 进行中：[`2026-11-22-align-doc-knowledge-base.md`](../exec-plans/completed/2026-11-22-align-doc-knowledge-base.md)
+- 进行中（已验证，待合并）：[`2026-11-24-e2e-conformance-suite.md`](../exec-plans/active/2026-11-24-e2e-conformance-suite.md)（实弹 e2e 相似度矩阵与基线）
 - 已完成：[`docs/exec-plans/completed/`](../exec-plans/completed)
 - 状态以变更文档首部为准；验证后从 `active/` 移入 `completed/`。
