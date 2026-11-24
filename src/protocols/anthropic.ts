@@ -3,7 +3,7 @@
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
 import { errorTypeForStatus } from "../shared/errors";
-import { sseData, upstreamErrorFromChunk } from "../shared/sse";
+import { sseData, upstreamErrorFromChunk, NO_CHOICES } from "../shared/sse";
 
 function systemToMessage(system: any): any | null {
   if (!system) return null;
@@ -21,6 +21,15 @@ function imageSourceToUrl(source: any): string | null {
     return `data:${source.media_type ?? "image/png"};base64,${source.data}`;
   if (source.type === "url" && typeof source.url === "string" && source.url) return source.url;
   return null;
+}
+
+// 顶层图片与 tool_result 内嵌图片走同一条路径：能取到 URL 就发 image_url，
+// 取不到才写占位文本（带上源类型，便于诊断是哪种未知 source）。
+function imagePart(block: any): any {
+  const url = imageSourceToUrl(block?.source);
+  if (url) return { type: "image_url", image_url: { url } };
+  const sourceType = block?.source && typeof block.source === "object" ? block.source.type ?? null : null;
+  return `[image omitted: unsupported source ${JSON.stringify(sourceType)}]`;
 }
 
 // 一份 content 里的文本与图片按原顺序合并：纯文本压成字符串，含图片时用 parts 数组。
@@ -72,17 +81,13 @@ function contentToOpenAi(role: string, content: any): any[] {
         if (typeof block.content === "string") nested.push(block.content);
         else for (const b of block.content ?? []) {
           if (b?.type === "text") nested.push(b.text ?? "");
-          else if (b?.type === "image") {
-            const url = imageSourceToUrl(b.source);
-            if (url) nested.push({ type: "image_url", image_url: { url } });
-          }
+          else if (b?.type === "image") nested.push(imagePart(b));
         }
         results.push({ role: "tool", tool_call_id: block.tool_use_id, content: joinParts(nested) });
         break;
       }
       case "image": {
-        const url = imageSourceToUrl(block.source);
-        textParts.push(url ? { type: "image_url", image_url: { url } } : `[image omitted: unsupported source ${JSON.stringify(block.source?.type ?? null)}]`);
+        textParts.push(imagePart(block));
         break;
       }
       default: break;
@@ -93,9 +98,11 @@ function contentToOpenAi(role: string, content: any): any[] {
   if (role === "assistant") {
     const message: any = { role };
     if (text) message.content = text;
-    if (reasoning) message.reasoning = reasoning;
+    // 用 `reasoning_content` 而不是 `reasoning`：两个上游的 SSE 与仓库自己的聚合层都用这个名字，
+    // 换成别的拼写大概率被上游当成未知字段忽略，思考内容在回放里就白丢了。
+    if (reasoning) message.reasoning_content = reasoning;
     if (toolCalls.length) message.tool_calls = toolCalls;
-    if (message.content !== undefined || message.tool_calls || message.reasoning) out.push(message);
+    if (message.content !== undefined || message.tool_calls || message.reasoning_content) out.push(message);
     out.push(...results);
   } else {
     out.push(...results);
@@ -127,8 +134,7 @@ function anthropicThinkingToEffort(thinking: any): string | undefined {
 // 前者会让上游看到非法顺序，后者会以未知 tool_call_id 被拒，两者都表现为「模型忽然只说不做」。
 function normalizeToolPairs(messages: any[]): any[] {
   const out: any[] = [];
-  // 未闭合的调用按「最后一个调用在前」入栈：同一轮里 tool_result 通常按调用顺序到达，
-  // 用队列会在批量返回时把结果配到错误的调用上。
+  // 未闭合的调用按 id 配对（`lastIndexOf`：同一 id 被客户端重试重复提交时，配到最近的一次）。
   let open: string[] = [];
   const closeOpen = () => {
     for (const id of open) out.push({ role: "tool", tool_call_id: id, content: MISSING_TOOL_RESULT });
@@ -145,8 +151,9 @@ function normalizeToolPairs(messages: any[]): any[] {
       out.push({ role: "user", content: m.content });
       continue;
     }
-    // user 文本夹在未闭合的调用中间：先补齐结果，否则调用会被后来的文本挤成悬空。
-    if (m.role !== "assistant" && m.role !== "system" && open.length) closeOpen();
+    // 任何非 tool 消息打断未闭合的调用：assistant 插话意味着上一轮客户端没交回结果，
+    // 不先补齐的话该调用会跨越一条 assistant 悬空，上游看到非法顺序。
+    if (open.length) closeOpen();
     out.push(m);
     if (m.role === "assistant" && Array.isArray(m.tool_calls))
       for (const tc of m.tool_calls) if (tc?.id) open.push(tc.id);
@@ -159,10 +166,12 @@ function normalizeToolPairs(messages: any[]): any[] {
 // 直接续写上一句，而不是回答这一轮。
 const EMPTY_USER_CONTENT = "(no content)";
 
-function keepTrailingUserTurn(messages: any[], lastRole: string | undefined): any[] {
+function keepTrailingUserTurn(messages: any[], lastRole: string | undefined, lastTurnProduced: boolean): any[] {
   if (lastRole !== "user") return messages;
   const last = messages.at(-1);
-  if (last && (last.role === "user" || last.role === "tool")) return messages;
+  if (last && last.role === "user") return messages;
+  // 末轮留下了工具结果：这是工具循环的合法中间态，不能再塞一条 user 文本打断它。
+  if (last && last.role === "tool" && lastTurnProduced) return messages;
   return [...messages, { role: "user", content: EMPTY_USER_CONTENT }];
 }
 
@@ -170,9 +179,15 @@ export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   const messages: any[] = [];
   const sys = systemToMessage(body.system);
   if (sys) messages.push(sys);
-  for (const m of body.messages ?? []) messages.push(...contentToOpenAi(m.role, m.content));
-  const messages2 = keepTrailingUserTurn(normalizeToolPairs(messages), body.messages?.at(-1)?.role);
-  const out: any = { model: body.model, messages: messages2 };
+  const turns = body.messages ?? [];
+  let lastTurnProduced = false;
+  for (const turn of turns) {
+    const produced = contentToOpenAi(turn.role, turn.content);
+    lastTurnProduced = produced.length > 0;
+    messages.push(...produced);
+  }
+  const finalMessages = keepTrailingUserTurn(normalizeToolPairs(messages), turns.at(-1)?.role, lastTurnProduced);
+  const out: any = { model: body.model, messages: finalMessages };
   const thinkingEffort =
     caps.thinkingToEffort === false ? undefined : anthropicThinkingToEffort(body.thinking);
   if (thinkingEffort) out.reasoning_effort = thinkingEffort;
@@ -417,7 +432,8 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         }
         // 一个 choice 都没有的流不是「模型什么也没说」，而是上游没给出回答。
         // 报成 end_turn + 空 content 会让客户端把这次失败当成正常回合收下。
-        if (!sawChoice) throw new Error("upstream stream produced no choices");
+        // HTTP 200 的 SSE 头已经发出去了，这里只能用 error 事件（与 R43 一致）。
+        if (!sawChoice) throw new Error(NO_CHOICES);
         stopBlock(ctrl);
         ev(ctrl, "message_delta", {
           type: "message_delta",

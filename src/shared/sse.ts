@@ -53,10 +53,12 @@ export function upstreamErrorFromChunk(chunk: any): string | null {
   }
   if (chunk.error_code !== undefined || chunk.error_msg !== undefined)
     return `${chunk.error_code ?? "error"}${chunk.error_msg ? `: ${chunk.error_msg}` : ""}`;
-  if (chunk.code !== undefined && chunk.code !== 0 && chunk.msg !== undefined)
-    return `${chunk.code}: ${chunk.msg}`;
   return null;
 }
+
+// 空流与「只有错误帧」的流都归到同一条报错，但把上游原话带出去——
+// 通用的一句「no choices」会让调用方查不到任何线索。
+export const NO_CHOICES = "no choices in upstream SSE";
 
 export function mapFinishReason(reason: any): string {
   if (reason === "content-filter" || reason === "content_filter") return "content_filter";
@@ -78,6 +80,7 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
   let finish: string | undefined;
   let usage: any;
   const slots = new Map<number, Slot>();
+  let upstreamError: string | null = null;
 
   for await (const data of sseData(body)) {
     if (!data || data === "[DONE]") continue;
@@ -90,6 +93,7 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
     if (!id && chunk.id) id = chunk.id;
     if (!model && chunk.model) model = chunk.model;
     if (!created && chunk.created) created = chunk.created;
+    upstreamError ??= upstreamErrorFromChunk(chunk);
     if (chunk.usage) {
       const prev = usage ?? {};
       usage = {
@@ -127,8 +131,8 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
     }
   }
 
-  // 空流 / 只有错误事件的流不是成功响应
-  if (slots.size === 0) throw new Error("no choices in upstream SSE");
+  // 空流 / 只有错误事件的流不是成功响应。错误帧优先：它比通用文案更能说明发生了什么。
+  if (slots.size === 0) throw new Error(upstreamError ? `${NO_CHOICES}: ${upstreamError}` : NO_CHOICES);
 
   const choices = [...slots.keys()].sort((a, b) => a - b).map((idx) => {
     const s = slots.get(idx)!;

@@ -4,7 +4,7 @@
 状态：开发中（本地验证通过，未合并）
 Owner：wayne
 所属模块/入口：`src/protocols/anthropic.ts`、`src/shared/sse.ts`
-关联：[R12 / R21 / R29](../../product-specs/codebuddy-provider.md)、[CHG-0007](CHG-0007-responses-null-content.md)、[CHG-0008](CHG-0008-responses-parallel-tool-calls.md)
+关联：[R12 / R21 / R29 / R40 / R41 / R42 / R43](../../product-specs/codebuddy-provider.md)、[CHG-0007](CHG-0007-responses-null-content.md)、[CHG-0008](CHG-0008-responses-parallel-tool-calls.md)
 
 ## 1. 摘要
 
@@ -34,25 +34,26 @@ Owner：wayne
 ## 3. 行为 / AC delta
 
 - **修改**：`image` 块（含 `tool_result` 内嵌图片）映射为 OpenAI `image_url`（base64 → `data:` URL，url 源原样）。仅当 `source` 缺失或类型未知时写占位文本，并在占位符里带上源类型以便诊断。
-- **修改**：同一轮 Anthropic 消息始终产出**一条** assistant 消息，同时携带文本、`reasoning`（来自 `thinking` 块）与 `tool_calls`；assistant 轮中的 `tool_result` 排在该消息之后。
+- **修改**：同一轮 Anthropic 消息始终产出**一条** assistant 消息，同时携带文本、`reasoning_content`（来自 `thinking` 块）与 `tool_calls`；assistant 轮中的 `tool_result` 排在该消息之后。字段名用 `reasoning_content`（两个上游 SSE 与仓库聚合层都叫这个名字），不是 `reasoning`。
 - **修改**：`tool_result` 块内的文本与图片按原顺序合并；只含文本时仍是字符串（保持旧形态）。
-- **新增**：`normalizeToolPairs` 修复配对——未收到结果的 `tool_use` 补一条合成 tool 消息（内容说明该调用未返回、应视为失败）；找不到对应调用的 `tool_result` 降级为 user 文本而不是裸 tool 消息；user 文本夹在未闭合调用中间时先补齐再继续。
-- **新增**：末尾 user 轮被翻译成空时补 `(no content)` 占位，避免请求以 assistant 结尾被上游当作预填续写。
+- **新增**：`normalizeToolPairs` 修复配对——任何非 tool 消息（含 assistant 插话）打断未闭合调用时，先在该调用之后补合成结果；找不到对应调用的 `tool_result` 降级为 user 文本而不是裸 tool 消息。
+- **新增**：末尾 user 轮被翻译成空时补 `(no content)` 占位，避免请求以 assistant 结尾被上游当作预填续写；末尾轮留下了工具结果时不补（那是工具循环的合法中间态，占位文本会打断它）。
 - **修改**：`content_filter` 映射为 Anthropic `refusal`（原为 `end_turn`）。
 - **修改**：流式 `thinking: {type:"adaptive"}` 也输出 thinking 块（原只认 `enabled`，而翻译层已把 adaptive 换成 `reasoning_effort`，推理内容被整段丢弃）。
 - **修改**：`tool_use` 的 `content_block_start` 携带 `input: {}`（Anthropic 规范要求起始为空对象），后续以 `input_json_delta` 填充。
-- **新增**：上游 SSE 帧带 `error_code`/`error_msg`（或 `error.{code,message}`）且无 choices 时，转为 Anthropic `error` 事件；整条流没有任何 choices 时同样报错。两者都不再发 `end_turn`。
-- **不影响**：请求体校验、模型解析、usage 语义（R37）、错误信封归一化、Responses 路径、provider 私有逻辑。
+- **新增**：上游 SSE 帧带 `error_code`/`error_msg`（或 `error.{code,message}`）且无 choices 时，转为 Anthropic `error` 事件；整条流没有任何 choices 时同样报错。两者都不再发 `end_turn`。错误判定收敛在 `upstreamErrorFromChunk` 一处，非流式的 `aggregateSseToCompletion` 也复用它（把上游原话拼进 502 的错误信息）。
+- **不影响**：请求体校验、模型解析、usage 语义（R37）、错误信封归一化、Responses 路径（本次未接入 `upstreamErrorFromChunk`）、provider 私有逻辑。
 
 ## 4. 影响范围与非目标
 
 **受影响**
 
 - `src/protocols/anthropic.ts`
-- `src/shared/sse.ts`（新增 `upstreamErrorFromChunk`，供三协议共用）
-- `src/protocols/anthropic-assembly.test.ts`（新增 15 条回归测试）
+- `src/shared/sse.ts`（新增 `upstreamErrorFromChunk`；Anthropic 流式与 `aggregateSseToCompletion` 两处共用）
+- `src/protocols/anthropic-assembly.test.ts`（新增 19 条回归测试）
+- `src/shared/sse.test.ts`（新增 2 条：错误帧原话透传、判定只认无 choices 的帧）
 - `src/providers/codebuddy/anthropic.test.ts`（原断言「文本与工具调用拆两条消息」，与本次修复相反，改为断言合并）
-- 产品规格 R12 / R21 / R29 的验收细化；本变更记录。
+- 产品规格新增 R40–R43，并细化 R12 / R21 / R29；本变更记录。
 
 **本次明确不做**
 
@@ -63,8 +64,8 @@ Owner：wayne
 
 ## 5. 验证与观测
 
-- **失败测试先行**：`src/protocols/anthropic-assembly.test.ts` 共 15 条，覆盖文本+工具同一消息、并行调用、结果顺序、悬空调用、孤立结果、顶层图片、工具结果内嵌图片、thinking 回放、空 user 轮、无文本 assistant 轮、`input: {}`、adaptive thinking、`refusal`、in-band 错误、空流。修复前这些用例均为红（旧实现下 13 条失败）。
-- **全套测试**：`bun test` → **151 pass / 0 fail / 487 expect() calls**（16 个文件）。
+- **失败测试先行**：`src/protocols/anthropic-assembly.test.ts` 共 19 条，覆盖文本+工具同一消息、并行调用、结果顺序、悬空调用、悬空后被 assistant 插话、孤立结果、顶层图片、工具结果内嵌图片、未知 source 占位、thinking 回放、空 user 轮（含悬空调用后）、末尾工具结果、无文本 assistant 轮、`input: {}`、adaptive thinking、`refusal`、in-band 错误、空流。把当前测试套到修复前提交 `2dc85c5` 实跑：**17 fail / 2 pass**（旧代码即通过的 2 条是「无文本 assistant 轮仍带工具调用」与「末尾 tool_result 保持末位」）。`src/shared/sse.test.ts` 新增的 2 条在旧提交上因 `upstreamErrorFromChunk` 尚未导出而无法加载，属预期。
+- **全套测试**：`bun test` → **157 pass / 0 fail / 499 expect() calls**（16 个文件）。
 - **构建**：`bun build src/index.ts --target=bun` → 成功。
 - **真实上游 A/B**（同一请求分别打到旧进程 8787 与新进程 8788）：
   - `/codearts/v1/messages` 真实历史回放（40 条消息、1.18MB）：两侧都是 `stop_reason=tool_use`，工具调用参数正常（旧实现给出的是与历史无关的 `ls`，新实现续上了用户正在做的 GUI 点击动作）。
@@ -87,6 +88,14 @@ Owner：wayne
 
   该对照只覆盖组装层（不含上游行为），因此旧实现在真实客户端里的最终表现仍属**推断**（依据：截图被丢弃后模型只看到空结果）；「新版不再出现只宣布不执行」则由上面的两次真实会话直接证明。
 - **未做 / 待补**：codebuddy 图片路径的模型侧行为不稳定（同一张图纯文本提问也会编造截图内容），因此不以 codebuddy 作为图片投递的判定依据；本次端到端只用 codearts 通道。
+- **审查后修正的偏差（本文件此前的说法已随之更正）**：
+  - R40：`tool_result` 内嵌图片在 `source` 缺失/未知时静默丢弃，与顶层路径不一致；现两条路径共用 `imagePart`，都写 `[image omitted: unsupported source …]` 占位。
+  - R42 末尾占位在「悬空调用 + 空 user 轮」下失效（`keepTrailingUserTurn` 因末条是 `tool` 提前返回，请求以 tool 收尾）。现按「末轮本身是否产出消息」判断：末轮为空才补占位，末轮留下工具结果则保留原样。
+  - R42 调用未在 assistant 插话前补齐：原逻辑只对非 assistant/system 消息 `closeOpen()`，`tool_use → assistant → tool_result` 会产出 `assistant(tool_calls) → assistant → tool`。现在任何非 tool 消息都先补齐未闭合调用。
+  - R21 与 R43 的冲突：R21 原文「无 choices → 502」只描述非流式聚合路径（`aggregateSseToCompletion` 抛错 → provider 转 502，已有测试覆盖）；流式路径 HTTP 头已发出，只能发 `error` 事件。两处报错现在共用 `NO_CHOICES` 常量。
+  - `reasoning` → `reasoning_content`：旧字段名与两个上游 SSE、仓库聚合层都不一致。**注意这仍是新增行为**（修复前的组装层回放 thinking 时完全不发该字段），上游是否接受**待验证**。
+  - 从 `upstreamErrorFromChunk` 删除未在规格内的 `{code, msg}` 启发式（scope creep）。
+  - `sse.ts` 原先只被 Anthropic 流式调用一处使用，文档「三协议共用」不实；现在非流式聚合也用（把错误原话带进 502 信息）。Responses 路径仍未接入。
 
 ## 6. 回滚方案
 
@@ -103,10 +112,12 @@ Owner：wayne
 | 孤立 `tool_result` 降级为 user 文本 | 极少数客户端可能把该文本当成用户发言 | 优于上游以未知 `tool_call_id` 拒绝整个请求 |
 | codebuddy 模型对图片的响应不稳定 | 无法用 codebuddy 判定图片投递正确性 | 以 codearts 实测为准；codebuddy 侧**待验证** |
 | 旧实现的客户端对照缺失 | 旧版行为只能以组装层 A/B 佐证，非完整会话复现 | 上游并发限制导致旧版重放失败；如需闭环，待并发额度空闲时重跑（**待验证**） |
+| 历史 thinking 以 `reasoning_content` 回放 | 上游若不认该字段，思考内容在后续轮次里等于丢失（与修复前的效果相同，但现在是显式发送） | 新增行为、无上游证据；下一次真实会话中观察是否被接受（**待验证**） |
+| 去掉 `{code, msg}` 启发式 | 若某个上游真以该形态在 SSE 里报错，现在会落到「无 choices」通用报错，丢失原话 | 全仓库无该形态的实测证据；如后续遇到再按实测补回 |
 
 ## 8. 关联与证据
 
-- 产品规格：[codebuddy-provider.md](../../product-specs/codebuddy-provider.md)（R12、R21、R29）
+- 产品规格：[codebuddy-provider.md](../../product-specs/codebuddy-provider.md)（R12、R21、R29、R40–R43）
 - 上游证据：本机会话 transcript `/Users/wayne/.claude/projects/-Users-wayne-workspace-perch/e99811f6-8fe7-4bf2-8c0f-244c90e96efb.jsonl`，第 946–958 条
 - A/B 脚本与回放数据保留在 `/tmp/a2a-audit/`（`replay_messages.py`、`ab_messages.mjs`、`img_anthropic.mjs`、`pairs.mjs`）；属于临时工作区，不入库
 - 端到端脚本与素材在 `/tmp/a2a-e2e/`（`card.png`、`run.sh`、`check_session.py`、`rebuilt_request.json`、`asm_cmp.ts`）；同样不入库。客户端 transcript 位于 `/Users/wayne/.claude/projects/-private-tmp-a2a-e2e/`（`c53592f7-…`、`0b76e587-…`）
@@ -115,5 +126,6 @@ Owner：wayne
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 开发中 | wayne | 15 条新测试 TDD 红→绿；151 tests 全绿；build 成功；真实上游 A/B 已完成；Claude Code 端到端两次通过（单步 / 多步，均正确读出像素中的 CODE）；未合并、未部署 |
+| 开发中 | wayne | 19 条新测试 TDD 红→绿（旧提交实跑 17 fail / 2 pass）；157 tests 全绿；build 成功；真实上游 A/B 已完成；Claude Code 端到端两次通过（单步 / 多步，均正确读出像素中的 CODE）；未合并、未部署 |
 | 开发中 | wayne | 2026-11-24 补记端到端证据与旧实现对照限制（上游并发限制），见 §5、§7 |
+| 开发中 | wayne | 2026-11-24 PR #3 审查后修正：R40 内嵌占位、R42 末尾占位与 assistant 插话、R21/R43 报错统一、`reasoning_content`、删除 scope creep；测试 157 pass / build 成功；«13 条失败» 更正为实跑的 17 fail / 2 pass |

@@ -142,7 +142,7 @@ describe("anthropic contentToOpenAi assembly", () => {
     expect(tool.content[1]).toEqual({ type: "image_url", image_url: { url: "data:image/png;base64,QUJD" } });
   });
 
-  test("thinking blocks are replayed as reasoning on the message they belong to", () => {
+  test("thinking blocks are replayed as reasoning_content on the message they belong to", () => {
     const out = anthropicToOpenAi({
       ...BASE,
       messages: [
@@ -151,9 +151,10 @@ describe("anthropic contentToOpenAi assembly", () => {
         { role: "user", content: [RESULT("tu1")] },
       ],
     }, CAPS);
-    expect(out.messages[1].reasoning).toBe("ponder");
+    expect(out.messages[1].reasoning_content).toBe("ponder");
+    expect(out.messages[1].reasoning).toBeUndefined();
     expect(out.messages[1].content).toBe("hello");
-    expect(out.messages.filter((m: any) => m.reasoning !== undefined)).toHaveLength(1);
+    expect(out.messages.filter((m: any) => m.reasoning_content !== undefined)).toHaveLength(1);
   });
 
   test("a trailing user turn that maps to nothing keeps the request ending on user", () => {
@@ -165,7 +166,59 @@ describe("anthropic contentToOpenAi assembly", () => {
         { role: "user", content: [{ type: "thinking", thinking: "x" }] },
       ],
     }, CAPS);
-    expect(out.messages.at(-1)?.role).toBe("user");
+    expect(out.messages.at(-1)).toEqual({ role: "user", content: "(no content)" });
+  });
+
+  test("an empty trailing user turn still ends on user after a dangling call was closed", () => {
+    const out = anthropicToOpenAi({
+      ...BASE,
+      messages: [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: [TOOL("tu1")] },
+        { role: "user", content: [{ type: "thinking", thinking: "x" }] },
+      ],
+    }, CAPS);
+    expect(out.messages.map((m: any) => m.role)).toEqual(["user", "assistant", "tool", "user"]);
+    expect(out.messages.at(-1)).toEqual({ role: "user", content: "(no content)" });
+  });
+
+  test("a trailing tool_result stays the last message — the tool loop is not interrupted", () => {
+    const out = anthropicToOpenAi({
+      ...BASE,
+      messages: [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: [TOOL("tu1")] },
+        { role: "user", content: [RESULT("tu1")] },
+      ],
+    }, CAPS);
+    expect(out.messages.map((m: any) => m.role)).toEqual(["user", "assistant", "tool"]);
+  });
+
+  test("an assistant message interjecting between a call and its result still closes the call first", () => {
+    const out = anthropicToOpenAi({
+      ...BASE,
+      messages: [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: [TOOL("tu1")] },
+        { role: "assistant", content: [{ type: "text", text: "interrupt" }] },
+        { role: "user", content: [RESULT("tu1")] },
+      ],
+    }, CAPS);
+    expect(out.messages.slice(1).map((m: any) => m.role)).toEqual(["assistant", "tool", "assistant", "user"]);
+  });
+
+  test("an image with an unknown source inside a tool_result keeps a diagnostic placeholder", () => {
+    const out = anthropicToOpenAi({
+      ...BASE,
+      messages: [
+        { role: "user", content: "screenshot?" },
+        { role: "assistant", content: [TOOL("tu1", "Read")] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "tu1", content: [{ type: "image", source: { type: "file" } }] }] },
+      ],
+    }, CAPS);
+    const tool = out.messages.find((m: any) => m.role === "tool");
+    expect(JSON.stringify(tool.content)).toContain("[image omitted");
+    expect(JSON.stringify(tool.content)).toContain("file");
   });
 
   test("assistant turn without text still carries its tool calls", () => {
@@ -180,13 +233,6 @@ describe("anthropic contentToOpenAi assembly", () => {
 });
 
 describe("anthropic streaming edge cases", () => {
-  const SSE_TEXT = [
-    `data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":"stop"}]}`,
-    "",
-    "data: [DONE]",
-    "",
-  ].join("\n");
-
   test("tool_use block starts with an empty object input", async () => {
     const sse = [
       `data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"f","arguments":""}}]}}]}`,

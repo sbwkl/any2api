@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { aggregateSseToCompletion } from "./sse";
+import { aggregateSseToCompletion, upstreamErrorFromChunk } from "./sse";
 
 function streamOf(text: string): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -100,5 +100,17 @@ describe("sse aggregation", () => {
   test("error-only stream is an error", async () => {
     const text = 'data: {"error":{"message":"bad","code":1}}\n\n';
     await expect(aggregateSseToCompletion(streamOf(text))).rejects.toThrow("no choices");
+  });
+
+  test("an error frame's own message survives into the thrown error", async () => {
+    const text = 'data: {"text":"[DONE]","error_code":"InferHub.001001014.406","error_msg":"Tool type is invalid"}\n\n';
+    await expect(aggregateSseToCompletion(streamOf(text))).rejects.toThrow("Tool type is invalid");
+  });
+
+  test("upstreamErrorFromChunk ignores frames that carry choices", () => {
+    expect(upstreamErrorFromChunk({ choices: [{ delta: { content: "x" } }], error_code: "nope" })).toBeNull();
+    expect(upstreamErrorFromChunk({ error_code: "E1", error_msg: "boom" })).toBe("E1: boom");
+    expect(upstreamErrorFromChunk({ error: { code: "E2", message: "kaput" } })).toBe("E2: kaput");
+    expect(upstreamErrorFromChunk({ text: "[DONE]" })).toBeNull();
   });
 });
