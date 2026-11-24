@@ -114,6 +114,10 @@ Owner：wayne
 - **R37**：When provider 声明 `promptTokensIncludeCache`（当前仅 codebuddy，已实测上游 `prompt_tokens` 为总输入）, the system shall 在 Anthropic usage 中令 `input_tokens` 只表示未缓存输入（`max(0, prompt_tokens - cached_tokens - cache_creation_tokens)`），并保留 `cache_read_input_tokens` / `cache_creation_input_tokens` 为缓存分项；其他 provider 保持上游 `prompt_tokens` 原值。流式多帧 usage 应按字段合并，避免缺失字段把已采集值归零。
 - **R38**：When OpenAI Chat SSE 被聚合为非流式 completion, the system shall 在 `usage.prompt_tokens_details` 中保留上游 `cache_creation_tokens`；上游多帧 usage 时按字段合并，缺失字段不覆盖先前值。
 - **R39**：When Responses 流式响应创建时, the system shall 在初始 `usage` 中包含 `input_tokens_details.cached_tokens` 与 `output_tokens_details.reasoning_tokens`，并在终态事件中携带完整 usage；多帧 usage 按字段合并，缺失字段不覆盖先前值。
+- **R40**：When Anthropic 消息含 `image` 块（顶层或 `tool_result` 内嵌）, the system shall 将其映射为 OpenAI `image_url` 随请求发送（base64 → `data:` URL），不得以文本占位符替代；仅当 `source` 缺失或类型未知时才写占位文本。
+- **R41**：When 一条 Anthropic 消息同时含文本、`thinking` 与 `tool_use` 块, the system shall 产出同一条 assistant 消息，携带 `content`、`reasoning` 与 `tool_calls`；不得拆成多条 assistant 消息。
+- **R42**：When 工具调用缺少对应 `tool_result`, the system shall 在该调用之后补一条合成 tool 消息（内容说明结果缺失、按失败处理）；when `tool_result` 找不到对应 `tool_use`, the system shall 将其降级为 user 文本而非裸 tool 消息；末尾 user 轮翻译为空时补 `(no content)` 占位，请求不得以 assistant 结尾被当作预填。
+- **R43**：When 上游 SSE 帧携带 `error_code`/`error_msg`（或 `error.code`/`error.message`）且无 choices，或整条流没有任何 choices, the system shall 发出 Anthropic `error` 事件，不得以 `message_delta{stop_reason:"end_turn"}` 收尾；`content_filter` 映射为 `refusal` 而非 `end_turn`。
 
 每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
 
@@ -160,6 +164,7 @@ Owner：wayne
 | 2026-11-22-codebuddy-sanitize-whitespace | 兼容 Claude Code preamble 的空白/撇号变体 | 进行中 | [2026-11-22-codebuddy-sanitize-whitespace](../exec-plans/active/2026-11-22-codebuddy-sanitize-whitespace.md) |
 | 2026-11-22-codebuddy-claude-feedback-line | 清理 Claude Code 反馈链接行，修复 Claude Desktop 400 | 进行中 | [2026-11-22-codebuddy-claude-feedback-line](../exec-plans/active/2026-11-22-codebuddy-claude-feedback-line.md) |
 | 2026-11-23-usage-field-semantics | 修复三协议 usage 字段语义（Anthropic / Chat / Responses） | 进行中 | [2026-11-23-usage-field-semantics](../exec-plans/active/2026-11-23-usage-field-semantics.md) |
+| 2026-11-24-anthropic-tool-assembly | 修复 Anthropic 消息组装：图片丢失、工具调用拆分、静默空回答（R40–R43） | 进行中 | [2026-11-24-anthropic-tool-assembly](../exec-plans/active/2026-11-24-anthropic-tool-assembly.md) |
 
 ## 11. 链接
 

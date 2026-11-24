@@ -40,6 +40,24 @@ export function mapUsage(usage: any): any | undefined {
   };
 }
 
+// 上游可能把错误塞进 HTTP 200 的 SSE（codearts 实测：`{"text":"[DONE]","error_code":"InferHub.…","error_msg":"…"}`）。
+// 这种帧没有 choices；若当作空回答处理，客户端会看到一次「什么都没发」的正常结束。
+// 判定从严：只认明确带错误字段的形态，避免把上游的心跳/计数帧当成错误。
+export function upstreamErrorFromChunk(chunk: any): string | null {
+  if (!chunk || typeof chunk !== "object") return null;
+  if (Array.isArray(chunk.choices) && chunk.choices.length > 0) return null;
+  if (chunk.error && typeof chunk.error === "object") {
+    const msg = chunk.error.message ?? chunk.error.msg;
+    if (chunk.error.code !== undefined || msg !== undefined)
+      return `${chunk.error.code ?? "error"}${msg ? `: ${msg}` : ""}`;
+  }
+  if (chunk.error_code !== undefined || chunk.error_msg !== undefined)
+    return `${chunk.error_code ?? "error"}${chunk.error_msg ? `: ${chunk.error_msg}` : ""}`;
+  if (chunk.code !== undefined && chunk.code !== 0 && chunk.msg !== undefined)
+    return `${chunk.code}: ${chunk.msg}`;
+  return null;
+}
+
 export function mapFinishReason(reason: any): string {
   if (reason === "content-filter" || reason === "content_filter") return "content_filter";
   if (reason === "tool_calls" || reason === "function_call" || reason === "tool_call") return "tool_calls";

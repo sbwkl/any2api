@@ -88,9 +88,10 @@ describe("anthropic adapter", () => {
     }, CAPS);
     expect(out.messages[0]).toEqual({ role: "system", content: "sys" });
     expect(out.messages[1]).toEqual({ role: "user", content: "hi" });
-    expect(out.messages[2]).toEqual({ role: "assistant", content: "hello" });
-    expect(out.messages[3].tool_calls[0].function.name).toBe("f");
-    expect(out.messages[4]).toEqual({ role: "tool", tool_call_id: "tu1", content: "ok" });
+    // 同一轮的文本与 tool_calls 必须仍是同一条 assistant 消息
+    expect(out.messages[2].content).toBe("hello");
+    expect(out.messages[2].tool_calls[0].function.name).toBe("f");
+    expect(out.messages[3]).toEqual({ role: "tool", tool_call_id: "tu1", content: "ok" });
     expect(out.tools[0].function.parameters).toEqual({ type: "object" });
     expect(out.tool_choice).toBe("auto");
   });

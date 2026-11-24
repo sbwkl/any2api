@@ -3,7 +3,7 @@
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { safeRespond } from "./util";
 import { errorTypeForStatus } from "../shared/errors";
-import { sseData } from "../shared/sse";
+import { sseData, upstreamErrorFromChunk } from "../shared/sse";
 
 function systemToMessage(system: any): any | null {
   if (!system) return null;
@@ -13,19 +13,52 @@ function systemToMessage(system: any): any | null {
   return null;
 }
 
+// Anthropic image block → OpenAI image_url 值。图片必须真的送达上游：
+// 换成「[image omitted]」会让读图工具的结果变成一句空话，模型只能看到「我拿到了一张图」的占位符。
+function imageSourceToUrl(source: any): string | null {
+  if (!source || typeof source !== "object") return null;
+  if (source.type === "base64" && typeof source.data === "string" && source.data)
+    return `data:${source.media_type ?? "image/png"};base64,${source.data}`;
+  if (source.type === "url" && typeof source.url === "string" && source.url) return source.url;
+  return null;
+}
+
+// 一份 content 里的文本与图片按原顺序合并：纯文本压成字符串，含图片时用 parts 数组。
+function joinParts(parts: any[]): any {
+  if (!parts.some((p) => typeof p !== "string")) return parts.join("\n");
+  const out: any[] = [];
+  for (const p of parts) {
+    if (typeof p !== "string") { out.push(p); continue; }
+    const last = out.at(-1);
+    if (last?.type === "text") last.text += (last.text ? "\n" : "") + p;
+    else out.push({ type: "text", text: p });
+  }
+  return out;
+}
+
+function appendParts(target: any[], value: any): void {
+  if (typeof value === "string") { if (value) target.push(value); return; }
+  if (Array.isArray(value)) { for (const v of value) appendParts(target, v); return; }
+  if (value) target.push(value);
+}
+
+// 一次 Anthropic 消息 → 一到多条 OpenAI chat 消息。
+//
+// 同一轮里文本 + tool_use 必须仍是**一条** assistant 消息：拆成「文本消息 + 仅带 tool_calls 的
+// 消息」会让上游把第二条当成预填（prefill），于是模型只学会了「先说一句要做，然后结束」。
 function contentToOpenAi(role: string, content: any): any[] {
   if (typeof content === "string") return [{ role, content }];
-  const out: any[] = [];
-  let text = "";
+  const textParts: any[] = [];
   const toolCalls: any[] = [];
-  const flushText = () => {
-    if (text) { out.push({ role, content: text }); text = ""; }
-  };
+  const results: any[] = [];
+  let reasoning = "";
   for (const block of content ?? []) {
     switch (block?.type) {
-      case "text": text += (text ? "\n" : "") + (block.text ?? ""); break;
+      case "text": appendParts(textParts, block.text ?? ""); break;
+      case "thinking":
+        if (typeof block.thinking === "string") reasoning += block.thinking;
+        break;
       case "tool_use":
-        flushText();
         toolCalls.push({
           id: block.id, type: "function",
           function: {
@@ -34,26 +67,47 @@ function contentToOpenAi(role: string, content: any): any[] {
           },
         });
         break;
-      case "tool_result":
-        flushText();
-        if (toolCalls.length) out.push({ role: "assistant", tool_calls: toolCalls.splice(0) });
-        out.push({
-          role: "tool",
-          tool_call_id: block.tool_use_id,
-          content: typeof block.content === "string"
-            ? block.content
-            : (block.content ?? []).filter((b: any) => b?.type === "text").map((b: any) => b.text).join("\n"),
-        });
+      case "tool_result": {
+        const nested: any[] = [];
+        if (typeof block.content === "string") nested.push(block.content);
+        else for (const b of block.content ?? []) {
+          if (b?.type === "text") nested.push(b.text ?? "");
+          else if (b?.type === "image") {
+            const url = imageSourceToUrl(b.source);
+            if (url) nested.push({ type: "image_url", image_url: { url } });
+          }
+        }
+        results.push({ role: "tool", tool_call_id: block.tool_use_id, content: joinParts(nested) });
         break;
-      case "image": text += (text ? "\n" : "") + "[image omitted]"; break;
-      case "thinking": break;
+      }
+      case "image": {
+        const url = imageSourceToUrl(block.source);
+        textParts.push(url ? { type: "image_url", image_url: { url } } : `[image omitted: unsupported source ${JSON.stringify(block.source?.type ?? null)}]`);
+        break;
+      }
       default: break;
     }
   }
-  flushText();
-  if (toolCalls.length) out.push({ role: "assistant", tool_calls: toolCalls });
+  const out: any[] = [];
+  const text = joinParts(textParts);
+  if (role === "assistant") {
+    const message: any = { role };
+    if (text) message.content = text;
+    if (reasoning) message.reasoning = reasoning;
+    if (toolCalls.length) message.tool_calls = toolCalls;
+    if (message.content !== undefined || message.tool_calls || message.reasoning) out.push(message);
+    out.push(...results);
+  } else {
+    out.push(...results);
+    if (text) out.push({ role, content: text });
+  }
   return out;
 }
+
+// 一次工具调用没有对应的 tool_result 时补一条合成结果。
+// 不补的话上游会看到「assistant 带 tool_calls 之后紧跟 user 文本」，多数后端直接 400，
+// 或把整轮工具结果当作从未发生，模型于是重说一遍「我这就去做」。
+const MISSING_TOOL_RESULT = "Tool result was not provided by the client; treat the call as failed and continue without its output.";
 
 function anthropicThinkingToEffort(thinking: any): string | undefined {
   if (!thinking || typeof thinking !== "object") return undefined;
@@ -67,12 +121,58 @@ function anthropicThinkingToEffort(thinking: any): string | undefined {
   return "high";
 }
 
+// 工具调用与工具结果配对修复。两种破损在真实会话里都会出现：
+//   - 悬空 tool_use：客户端中断/重试后，下一轮带着未完成的调用直接接 user 文本；
+//   - 孤立 tool_result：历史被裁剪或客户端补发，找不到对应的 tool_call。
+// 前者会让上游看到非法顺序，后者会以未知 tool_call_id 被拒，两者都表现为「模型忽然只说不做」。
+function normalizeToolPairs(messages: any[]): any[] {
+  const out: any[] = [];
+  // 未闭合的调用按「最后一个调用在前」入栈：同一轮里 tool_result 通常按调用顺序到达，
+  // 用队列会在批量返回时把结果配到错误的调用上。
+  let open: string[] = [];
+  const closeOpen = () => {
+    for (const id of open) out.push({ role: "tool", tool_call_id: id, content: MISSING_TOOL_RESULT });
+    open = [];
+  };
+  for (const m of messages) {
+    // tool 消息无条件先处理：调用可能就在它前面一条，不能因为「上一条不是 assistant」而漏配。
+    if (m.role === "tool") {
+      const at = open.lastIndexOf(m.tool_call_id);
+      if (at >= 0) { open.splice(at, 1); out.push(m); continue; }
+      closeOpen();
+      // 孤立结果降级为用户文本：直接发裸 tool 消息会被上游以未知 tool_call_id 拒绝，
+      // 而它承载的内容往往是模型唯一拿得到的线索，不能整条丢掉。
+      out.push({ role: "user", content: m.content });
+      continue;
+    }
+    // user 文本夹在未闭合的调用中间：先补齐结果，否则调用会被后来的文本挤成悬空。
+    if (m.role !== "assistant" && m.role !== "system" && open.length) closeOpen();
+    out.push(m);
+    if (m.role === "assistant" && Array.isArray(m.tool_calls))
+      for (const tc of m.tool_calls) if (tc?.id) open.push(tc.id);
+  }
+  closeOpen();
+  return out;
+}
+
+// 末尾 user 轮被翻译成空时补回占位内容：以 assistant 结尾的请求会被上游当成预填，
+// 直接续写上一句，而不是回答这一轮。
+const EMPTY_USER_CONTENT = "(no content)";
+
+function keepTrailingUserTurn(messages: any[], lastRole: string | undefined): any[] {
+  if (lastRole !== "user") return messages;
+  const last = messages.at(-1);
+  if (last && (last.role === "user" || last.role === "tool")) return messages;
+  return [...messages, { role: "user", content: EMPTY_USER_CONTENT }];
+}
+
 export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): any {
   const messages: any[] = [];
   const sys = systemToMessage(body.system);
   if (sys) messages.push(sys);
   for (const m of body.messages ?? []) messages.push(...contentToOpenAi(m.role, m.content));
-  const out: any = { model: body.model, messages };
+  const messages2 = keepTrailingUserTurn(normalizeToolPairs(messages), body.messages?.at(-1)?.role);
+  const out: any = { model: body.model, messages: messages2 };
   const thinkingEffort =
     caps.thinkingToEffort === false ? undefined : anthropicThinkingToEffort(body.thinking);
   if (thinkingEffort) out.reasoning_effort = thinkingEffort;
@@ -99,8 +199,10 @@ export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   return out;
 }
 
+// content_filter 不能映射成 end_turn：那等于告诉客户端「模型正常说完了」，
+// Anthropic 侧有独立的 refusal，丢掉它会让被安全策略拦下的回答看起来像一次正常空响应。
 const STOP_REASON: Record<string, string> = {
-  stop: "end_turn", tool_calls: "tool_use", length: "max_tokens", content_filter: "end_turn",
+  stop: "end_turn", tool_calls: "tool_use", length: "max_tokens", content_filter: "refusal",
 };
 
 function anthropicUsage(usage: any, promptTokensIncludeCache = false): { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number } {
@@ -158,7 +260,10 @@ export async function handleAnthropicMessages(
   ).slice(0, 128);
   const profile = backend.profileFor?.(req);
   const openaiBody = anthropicToOpenAi(body, caps);
-  const thinking = caps.thinking !== false && body.thinking?.type === "enabled";
+  // adaptive 也是要求思考：翻译层已经把它换成 reasoning_effort，这里不同样开启 thinking 块的话，
+  // 上游的推理内容会被整段丢弃，客户端拿到的回答没有任何思考痕迹。
+  const thinkingType = String(body.thinking?.type ?? "").toLowerCase();
+  const thinking = caps.thinking !== false && (thinkingType === "enabled" || thinkingType === "adaptive");
   const model = body.model ?? undefined;
 
   if (body.stream !== true) {
@@ -231,13 +336,14 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
   let cacheCreationTokens = 0;
   const toolCalls = new Map<number, { id: string; name: string }>();
   let stopReason: string | null = null;
+  let sawChoice = false;
 
   const startBlock = (ctrl: ReadableStreamDefaultController, type: "text" | "thinking" | "tool_use", extra?: any) => {
     blockIdx += 1;
     curBlock = type;
     const start: any = {
       type: "content_block_start", index: blockIdx,
-      content_block: { type, ...(type === "text" ? { text: "" } : type === "thinking" ? { thinking: "" } : extra) },
+      content_block: { type, ...(type === "text" ? { text: "" } : type === "thinking" ? { thinking: "" } : { input: {}, ...extra }) },
     };
     ctrl.enqueue(enc.encode(`event: content_block_start\ndata: ${JSON.stringify(start)}\n\n`));
   };
@@ -265,6 +371,10 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         let chunk: any;
         try { chunk = JSON.parse(data); } catch { continue; }
           if (chunk.model && !outModel) outModel = chunk.model;
+          // 上游把错误塞进 200 的 SSE 时，帧里没有 choices。当成正常空回答收尾，
+          // 客户端只会看到一次「什么都没说就 end_turn」，于是重试同一句话——这正是「只宣布不执行」的来源。
+          const upstreamError = upstreamErrorFromChunk(chunk);
+          if (upstreamError) throw new Error(`upstream error: ${upstreamError}`);
           if (chunk.usage) {
             if (chunk.usage.prompt_tokens !== undefined) promptTokens = chunk.usage.prompt_tokens;
             if (chunk.usage.completion_tokens !== undefined) outputTokens = chunk.usage.completion_tokens;
@@ -279,6 +389,7 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
             inputTokens = parsed.input_tokens;
           }
           const choice = chunk.choices?.[0];
+          if (choice) sawChoice = true;
           const delta = choice?.delta ?? {};
           if (thinking && typeof delta.reasoning_content === "string" && delta.reasoning_content) {
             if (curBlock !== "thinking") { stopBlock(ctrl); startBlock(ctrl, "thinking"); }
@@ -295,7 +406,7 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
               stopBlock(ctrl);
               slot = { id: tc.id ?? `toolu_${crypto.randomUUID().replaceAll("-", "")}`, name: tc.function?.name ?? "" };
               toolCalls.set(idx, slot);
-              startBlock(ctrl, "tool_use", { id: slot.id, name: slot.name, input: "" });
+              startBlock(ctrl, "tool_use", { id: slot.id, name: slot.name });
             } else if (tc.function?.name && !slot.name) {
               slot.name = tc.function.name;
             }
@@ -304,6 +415,9 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
           }
           if (choice?.finish_reason) stopReason = STOP_REASON[choice.finish_reason] ?? "end_turn";
         }
+        // 一个 choice 都没有的流不是「模型什么也没说」，而是上游没给出回答。
+        // 报成 end_turn + 空 content 会让客户端把这次失败当成正常回合收下。
+        if (!sawChoice) throw new Error("upstream stream produced no choices");
         stopBlock(ctrl);
         ev(ctrl, "message_delta", {
           type: "message_delta",
