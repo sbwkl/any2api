@@ -1,7 +1,7 @@
 # 实弹 e2e 一致性测试体系：接口相似度矩阵
 
 类型：测试基础设施（跨 provider / 协议层）
-状态：开发中（未合并、未验证）
+状态：已验证（未合并；测试暴露的缺陷另开分支修复）
 Owner：wayne
 所属模块/入口：`scripts/e2e/`、`src/registry.ts`、`src/shared/trace.ts`、两 provider 出站请求点
 关联：[README](../../../README.md)、[产品规格](../../product-specs/codebuddy-provider.md)、[官方条款清单](../../references/official-api/README.md)、[GLOSSARY](../../../GLOSSARY.md)
@@ -85,14 +85,16 @@ Owner：wayne
 - **报告**：`e2e/reports/latest.{md,json}`（gitignored）；`--baseline` 复制到 `docs/generated/e2e-baseline.md`。
 - **语料评估**：`bun run e2e:corpus` 读取采集目录，按端点契约做 L1 校验并输出差异报告（手动执行，写入 runbook）。
 
-## 7. 验证与证据（待补）
+## 7. 验证与证据（2026-11-24）
 
-- [ ] 单测：新增逻辑 TDD 红→绿；`bun test` 全绿
-- [ ] 静态检查：`bun build src/index.ts --target=bun` 零错误
-- [ ] 实弹：`E2E_MAX_CALLS=40 bun run e2e --record` 完成一轮，预算未超
-- [ ] 基线：`docs/generated/e2e-baseline.md` 入库，矩阵每格有状态与证据
-- [ ] 缺陷：已知缺陷（Responses 丢图、CodeArts 模型回退、静默丢字段）在基线上可见
-- [ ] 文档结构 / 链接检查：仓库未配置；待补
+- [x] 单测：`bun test` → 202 pass / 0 fail（25 files，636 assertions）。覆盖 SSE 解析、模型选择、配置、报告格式化、合成图片、契约校验、场景判定、语料评估。
+- [x] 静态检查：`bun build src/index.ts --target=bun`、`bun build scripts/e2e/run.ts --target=bun`、`bun build scripts/e2e/corpus.ts --target=bun` 均零错误。
+- [x] 实弹：`E2E_MAX_CALLS=60 E2E_RECORD=1 bun run e2e --baseline`（2026-11-24）；50/60 次上游调用，未超预算；57 格：32 pass / 17 fail / 4 not-supported / 4 skipped。
+- [x] 基线：[`docs/generated/e2e-baseline.md`](../../generated/e2e-baseline.md) 已入库，每格含状态、说明与条款号；失败格可从 `e2e/reports/latest.json` 回溯响应片段。
+- [x] 已知缺陷可检出：Responses `input_image` 丢弃（两家）、Anthropic `system` 数组图片丢弃（两家）、Responses 流缺 `response.output_text.done`（两家）、codearts 未知模型静默回退（chat/messages/responses）、`logprobs` 与 `n` 静默丢弃（两家）、codearts `response_format` 静默丢弃。
+- [x] 图片 pilot：`chat.image.data_url`、`messages.image.base64`、`messages.image.tool_result` 两家均 pass（模型回答 Red）；`responses.image.data_url`、`messages.image.system` 两家均 fail，证明探测能通过正确链路也能捕获真实缺陷。
+- [x] fixture：`e2e/fixtures/` 53 个文件 / 232KB（≤2MB），Authorization / x-api-key / cookie 已脱敏；日常报告在 gitignored 的 `e2e/reports/`。
+- [ ] 文档结构 / 链接检查：仓库未配置项目级检查；待补。本轮用一次性脚本核对仓库内相对链接 0 broken；`README` / `AGENTS` 指向的工作区根 `../AGENTS.md` 在当前工作区不存在，属既有跨项目约定。
 
 ## 8. 风险与未决问题
 
@@ -105,8 +107,35 @@ Owner：wayne
 | 采集含敏感内容 | 隐私风险 | 默认关闭；本地目录不入库；脱敏与限额 |
 | 模型升级导致偏好失效 | 矩阵被 skip | 报告显式列出 skipped 原因，改 `E2E_MODEL_PREFERENCE` |
 
-## 9. 变更记录
+## 9. 基线暴露的缺陷（修复不在本次范围）
+
+优先级为建议值，由后续修复分支确认。状态均为基线当时行为。
+
+| 缺陷 | 范围 | 基线证据 | 影响 | 建议 |
+|---|---|---|---|---|
+| Responses `input_image` 静默丢弃 | codearts、codebuddy | `responses.image.data_url` fail；上游转储无图片字段 | 图片请求被当纯文本处理，客户端无感知 | P0 |
+| Anthropic `system` 数组中的图片静默丢弃 | codearts、codebuddy | `messages.image.system` fail；上游转储无图片字段 | 同上 | P0 |
+| Responses 流缺 `response.output_text.done` | codearts、codebuddy | `responses.basic.stream` fail | 依赖该事件收尾的客户端拿不到最终文本 | P1 |
+| codearts `response_format` 静默丢弃 | codearts | `chat.response_format.json` / `json_schema` fail；上游转储无字段 | json_object / json_schema 契约不成立 | P1 |
+| codearts 未知模型静默回退 | codearts | 三个 `negative.unknown_model` fail；请求被接受，chat 响应 `model` 变为 `deepseek-v4.1-flash-1017`，messages/responses 回显请求值（回退被掩盖） | 以为在用 A 实际在用 B，质量与计费不可控 | P1 |
+| codearts 强制 `tool_choice` 的上游 400 被映射为 502 | codearts | `chat/messages/responses.tools.forced` 为 not-supported，但错误体为 `upstream_error` + 502 | 客户端无法区分「不支持」与「上游故障」，重试策略错误 | P1 |
+| `logprobs` / `top_logprobs` 静默丢弃 | codearts、codebuddy | `chat.logprobs` fail | 依赖概率的客户端拿到空结果 | P2 |
+| `n > 1` 静默丢弃 | codearts、codebuddy | `chat.n` fail（choices 长度 1） | 请求 2 条只返回 1 条 | P2 |
+| `include_usage` 块带非空 `choices` | codebuddy | `chat.basic.stream` fail | 严格按官方语义解析 usage 的 SDK 可能重复计数 | P2 |
+| `json_schema` 送达但上游输出带 markdown 围栏 | codebuddy | `chat.response_format.json_schema` fail | 200 但内容不可按 JSON 解析；需代理侧校验/重试或声明不支持 | P1 |
+
+### 9.1 覆盖缺口（下一轮矩阵补充）
+
+- 采样参数（temperature / top_p / stop / seed）与 `max_tokens` 互斥未单列。
+- 并行工具调用、多图、Anthropic `system` 文本数组、thinking / reasoning 入参与回放未单列。
+- usage 的缓存与 reasoning 分项只做形状校验，未断言数值语义；Anthropic cache 分项在真实上游的取值未覆盖。
+- provider 级 `/v1/healthz` 未单列（全局聚合已覆盖）。
+- 流中错误帧、排队 6020/429、401 刷新路径需要可控触发，本期未覆盖。
+- URL 图片场景依赖 `E2E_IMAGE_URL`，本期 skipped；图片缺陷修复后需回归。
+
+## 10. 变更记录
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
 | 开发中 | wayne | 2026-11-24 决策锁定（D1–D17，见 §3）；本文件创建 |
+| 已验证（未合并） | wayne | 2026-11-24 最终基线：50/60 调用，32 pass / 17 fail / 4 not-supported / 4 skipped；`bun test` 202 pass；三处 `bun build` 零错误；fixtures 53 文件 / 232KB；缺陷与缺口见 §9 |

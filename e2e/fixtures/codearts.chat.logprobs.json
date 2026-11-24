@@ -1,0 +1,28 @@
+{
+  "scenario": "chat.logprobs",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:11:44.893Z",
+  "calls": [
+    {
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 8,
+        "logprobs": true,
+        "top_logprobs": 1,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Say OK"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"2026112417114137e1ab9f22fd4651\",\"object\":\"chat.completion\",\"created\":1795511501,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user is asking me to say \\\"\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":14,\"completion_tokens\":8,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":8}}}"
+      }
+    }
+  ]
+}

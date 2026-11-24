@@ -1,0 +1,26 @@
+{
+  "scenario": "messages.negative.unknown_model",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:12:12.424Z",
+  "calls": [
+    {
+      "path": "/v1/messages",
+      "requestBody": {
+        "model": "e2e-model-does-not-exist",
+        "max_tokens": 4,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"msg_as-5juu2drk61\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"e2e-model-does-not-exist\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":31,\"output_tokens\":4,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "scenario": "chat.response_format.json",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:11:41.246Z",
+  "calls": [
+    {
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 128,
+        "response_format": {
+          "type": "json_object"
+        },
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"202611241711398b0099a6025a417f\",\"object\":\"chat.completion\",\"created\":1795511499,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\",\"reasoning_content\":\"The user wants me to return exactly the JSON `{\\\"ok\\\":true}` and nothing else. No markdown, no explanation, no code blocks. Just the raw JSON text.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":25,\"completion_tokens\":42,\"total_tokens\":67,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":35}}}"
+      }
+    }
+  ]
+}

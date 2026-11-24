@@ -1,0 +1,26 @@
+{
+  "scenario": "messages.negative.unknown_model",
+  "provider": "codebuddy",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:13:19.622Z",
+  "calls": [
+    {
+      "path": "/v1/messages",
+      "requestBody": {
+        "model": "e2e-model-does-not-exist",
+        "max_tokens": 4,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      },
+      "response": {
+        "status": 404,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"model_not_found: e2e-model-does-not-exist\"}}"
+      }
+    }
+  ]
+}

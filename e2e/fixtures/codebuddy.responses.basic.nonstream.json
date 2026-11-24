@@ -1,0 +1,21 @@
+{
+  "scenario": "responses.basic.nonstream",
+  "provider": "codebuddy",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:13:26.375Z",
+  "calls": [
+    {
+      "path": "/v1/responses",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "input": "Reply with exactly: OK",
+        "max_output_tokens": 128
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"resp_3eda15a8580149c8800c0677\",\"object\":\"response\",\"created_at\":1795511606,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"message\",\"id\":\"msg_c9696f0f8ece472383428531\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":17,\"output_tokens\":3,\"total_tokens\":20,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+      }
+    }
+  ]
+}

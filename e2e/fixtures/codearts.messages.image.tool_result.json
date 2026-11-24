@@ -1,0 +1,64 @@
+{
+  "scenario": "messages.image.tool_result",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:12:06.989Z",
+  "calls": [
+    {
+      "path": "/v1/messages",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 256,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Take a screenshot."
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_e2e",
+                "name": "screenshot",
+                "input": {}
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_e2e",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "screenshot attached"
+                  },
+                  {
+                    "type": "image",
+                    "source": {
+                      "type": "base64",
+                      "media_type": "image/png",
+                      "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "What is the dominant color of this image? Answer with one English word."
+              }
+            ]
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"msg_20261124171205b581f00297954bce\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":63,\"output_tokens\":17,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ]
+}

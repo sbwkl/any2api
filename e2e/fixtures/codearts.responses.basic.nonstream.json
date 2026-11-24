@@ -1,0 +1,21 @@
+{
+  "scenario": "responses.basic.nonstream",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:12:15.833Z",
+  "calls": [
+    {
+      "path": "/v1/responses",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "input": "Reply with exactly: OK",
+        "max_output_tokens": 128
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "text": "{\"id\":\"resp_1d4d1210d7ff4782881913ac\",\"object\":\"response\",\"created_at\":1795511535,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_b2e8f667b4fa40e0a6c0bfbb\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user wants me to reply with exactly \\\"OK\\\". This is a simple instruction test. I should just reply with \\\"OK\\\" and nothing else.\"}]},{\"type\":\"message\",\"id\":\"msg_1eca878be719453e93d39455\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":17,\"output_tokens\":33,\"total_tokens\":50,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":30}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+      }
+    }
+  ]
+}

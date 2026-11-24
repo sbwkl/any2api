@@ -1,0 +1,26 @@
+{
+  "scenario": "chat.negative.unknown_model",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:11:54.102Z",
+  "calls": [
+    {
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "e2e-model-does-not-exist",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ],
+        "max_tokens": 4
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"as-1wjhzqqf7t\",\"object\":\"chat.completion\",\"created\":1795511513,\"model\":\"deepseek-v4.1-flash-1017\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"We need answer.\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":31,\"completion_tokens\":4,\"total_tokens\":35,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":7}}}"
+      }
+    }
+  ]
+}

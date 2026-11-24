@@ -1,0 +1,7 @@
+{
+  "scenario": "healthz.aggregate",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:13:48.404Z",
+  "calls": []
+}

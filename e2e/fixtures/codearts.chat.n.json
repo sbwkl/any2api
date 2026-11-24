@@ -1,0 +1,27 @@
+{
+  "scenario": "chat.n",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:11:53.150Z",
+  "calls": [
+    {
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 16,
+        "n": 2,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Say one word."
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"202611241711453ae9f7adbc6e4ac1\",\"object\":\"chat.completion\",\"created\":1795511505,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user is asking me to say one word. This is a simple request.\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":16,\"completion_tokens\":16,\"total_tokens\":32,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":15}}}"
+      }
+    }
+  ]
+}

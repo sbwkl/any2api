@@ -14,7 +14,8 @@ src/
 ├── registry.ts               # ProviderModule 注册表、前缀路由、404/405/503、聚合 health
 ├── shared/
 │   ├── ids.ts                # 通用 ID 生成（跨 provider 复用）
-│   └── sse.ts                # 通用 SSE 解析 + chat.completion 聚合
+│   ├── sse.ts                # 通用 SSE 解析 + chat.completion 聚合
+│   └── trace.ts              # 入站流量采集 + 上游请求转储（opt-in）
 ├── protocols/                # 共享协议层（只依赖 ChatBackend，不感知 provider 名称）
 │   ├── index.ts              # createProtocolRoutes（models/chat/messages/responses/health）
 │   ├── types.ts              # ChatBackend / ProtocolCapabilities
@@ -136,7 +137,7 @@ resp = client.chat.completions.create(
 - `POST /codebuddy/v1/chat/completions` — 流式/非流式、标准 OpenAI 工具调用往返。
 - `POST /codebuddy/v1/messages` — Anthropic Messages（Claude Code / Claude Desktop），text/thinking/tool_use/tool_result 块。
 - `POST /codebuddy/v1/responses` — OpenAI Responses（Codex CLI），instructions/input items、function_call 往返、reasoning summary。
-- `GET /codebuddy/healthz` — 凭证来源、模型数。
+- `GET /codebuddy/v1/healthz` — 凭证来源、模型数。
 - profile：请求头 `x-codebuddy-agent: chat|ask|craft`（默认 `chat`）；`ask`/`craft` 会注入 IDE 的系统提示词。
 - 凭证：自动从 Keychain + `state.vscdb` 提取（需登录过一次），也可用 `CODEBUDDY_TOKEN` / `CODEBUDDY_UID`。
 
@@ -154,11 +155,37 @@ resp = client.chat.completions.create(
 - token 过期：401 时调用 `/v2/plugin/auth/token/refresh` 刷新并重试一次；失败提示重新登录。
 - 无需 IDE 在线；Keychain 授权只需一次。
 
+## 一致性 e2e（实弹）
+
+`bun test` 只跑离线单测；实弹矩阵会启动本地服务并真实调用 CodeBuddy / CodeArts 上游，**消耗真实 token**。当前状态以 [`docs/generated/e2e-baseline.md`](docs/generated/e2e-baseline.md) 与 [`docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md`](docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md) 的缺陷清单为准。
+
+```bash
+E2E_MAX_CALLS=60 bun run e2e --baseline   # 一轮全矩阵，基线写入 docs/generated/
+E2E_ONLY=image bun run e2e                # 只跑 id 含 image 的场景
+bun run e2e:corpus [dir]                  # 对入站采集 JSONL 做 L1 校验（默认 e2e/corpus）
+```
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `E2E_MAX_CALLS` | `40` | 模型调用硬上限；`models` / `healthz` 不计。全矩阵约 54 次，建议基线用 60 |
+| `E2E_PROVIDERS` | `codearts,codebuddy` | 参与矩阵的 provider |
+| `E2E_MODEL_PREFERENCE` | `GLM-5.3-Flash,DeepSeek-v4.1-Flash(1017)` | 优先模型，逗号分隔；大小写不敏感、容忍括号后缀 |
+| `E2E_MODEL_FALLBACK` | 空 | 偏好都不存在时的指定模型；仍无则启发式选 flash/mini/lite/small，绝不静默取 `models[0]` |
+| `E2E_ONLY` | 空 | 只运行场景 id 含该子串的格子（调试 / 定点复测） |
+| `E2E_TIMEOUT_MS` | `120000` | 单次请求超时 |
+| `E2E_PORT` | `0` | 子进程监听端口；0 为随机 |
+| `E2E_RECORD` / `--record` | 关 | 录制脱敏 fixture 到 `e2e/fixtures/`（总量 ≤2MB） |
+| `E2E_IMAGE_URL` | 空 | 公网图片 URL；未设置时 URL 图片场景标 skipped |
+| `E2E_FIXTURES_DIR` / `E2E_REPORTS_DIR` | `e2e/fixtures` / `e2e/reports` | 产物目录；`e2e/reports/` 已 gitignore |
+
+报告写入 `e2e/reports/latest.{md,json}`。观测开关：`TRACE_CAPTURE_DIR` 采集入站 JSONL（Authorization / x-api-key / cookie 等记为 `<redacted>`，单条 ≤256KB，按天轮转）；`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求 JSONL，供「字段是否被静默丢弃」的结构断言。
+
 ## 已知限制
 
 - 服务无鉴权：默认只绑 `127.0.0.1`，仅本机可用；改 `HOST=0.0.0.0` 前请评估风险
 - 模型池为启动时动态发现（见上），失败回退观测池
 - 协议适配边界：图像块（含 `tool_result` 内嵌）映射为 OpenAI `image_url` 发送，仅当 `source` 未知时写占位符；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）
+- 实弹基线（2026-11-24：32 pass / 17 fail / 4 not-supported / 4 skipped）暴露的现行缺口（修复另开分支）：Responses `input_image` 与 Anthropic `system` 数组中的图片被丢弃；Responses 流缺少 `response.output_text.done`；`logprobs` / `n` 在两家都静默忽略；codearts 的 `response_format`（json_object / json_schema）被静默丢弃，未知模型静默回退（`models[0]`），强制 `tool_choice` 的上游 400 被映射为 502；codebuddy 的 `include_usage` 块带非空 `choices`，`json_schema` 已送达但上游输出仍带 markdown 围栏。详见基线报告与 exec-plan 缺陷清单。
 - 残余可识别特征：Bun 与内核（Node）的 TLS 指纹差异、OTLP service.name 为占位值
 - 明文回退为死路径：chat 后端硬性要求加密通道（实测 415 Unsupported Media Type），密钥协商失败即不可用（代理已实现换 key 重试）
 - codebuddy 支持 OpenAI Chat + Anthropic Messages + OpenAI Responses；遥测（`/v2/report`、`/llm/data/report`、`/v1/traces`）未做，消息中心轮询需 `CODEBUDDY_MSG_CENTER=1` 显式开启
@@ -187,4 +214,4 @@ resp = client.chat.completions.create(
 
 ## 开发约定
 
-跨项目流程见 [工作区根 AGENTS.md](../AGENTS.md)：`main` 保护、新特性走 `feat/<特性名>`、脏工作区用 worktree、TDD、提交前静态检查、临时集成分支、PR / 合并前用户同意。项目级测试：`bun test`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`。未配置的检查保持「待补」，不得用跳过规则压掉告警。
+跨项目流程见 [工作区根 AGENTS.md](../AGENTS.md)：`main` 保护、新特性走 `feat/<特性名>`、脏工作区用 worktree、TDD、提交前静态检查、临时集成分支、PR / 合并前用户同意。项目级测试：`bun test`（离线）；实弹一致性见上节 `bun run e2e`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`。未配置的检查保持「待补」，不得用跳过规则压掉告警。

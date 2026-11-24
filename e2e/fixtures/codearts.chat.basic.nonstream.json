@@ -1,0 +1,26 @@
+{
+  "scenario": "chat.basic.nonstream",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:11:25.152Z",
+  "calls": [
+    {
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reply with exactly: OK"
+          }
+        ],
+        "max_tokens": 128
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "text": "{\"id\":\"20261124171119ac54951fc4864625\",\"object\":\"chat.completion\",\"created\":1795511479,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"The user has given me a very simple instruction: \\\"Reply with exactly: OK\\\"\\n\\nThis is a clear, unambiguous request. They want my response to be exactly the text \\\"OK\\\" - nothing more, nothing less.\\n\\nI should follow this instruction precisely and reply with just \\\"OK\\\".\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":61,\"total_tokens\":78,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":58}}}"
+      }
+    }
+  ]
+}

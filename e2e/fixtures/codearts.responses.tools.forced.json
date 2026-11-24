@@ -1,0 +1,43 @@
+{
+  "scenario": "responses.tools.forced",
+  "provider": "codearts",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:12:25.642Z",
+  "calls": [
+    {
+      "path": "/v1/responses",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_output_tokens": 64,
+        "input": "Use the get_color tool with color red. Do not answer in text.",
+        "tools": [
+          {
+            "type": "function",
+            "name": "get_color",
+            "description": "Return the color the user asks about",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "color"
+              ]
+            }
+          }
+        ],
+        "tool_choice": {
+          "type": "function",
+          "name": "get_color"
+        }
+      },
+      "response": {
+        "status": 502,
+        "contentType": "application/json",
+        "text": "{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "scenario": "chat.tools.forced",
+  "provider": "codebuddy",
+  "model": "glm-5.3-flash",
+  "capturedAt": "2026-11-24T09:12:38.368Z",
+  "calls": [
+    {
+      "path": "/v1/chat/completions",
+      "requestBody": {
+        "model": "glm-5.3-flash",
+        "max_tokens": 256,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Use the get_color tool with color red. Do not answer in text."
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_color",
+              "description": "Return the color the user asks about",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "color"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": {
+          "type": "function",
+          "function": {
+            "name": "get_color"
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "contentType": "application/json",
+        "text": "{\"error\":{\"message\":\"Invalid request. Please retry\",\"type\":\"invalid_request_error\",\"code\":11101}}"
+      }
+    }
+  ]
+}
