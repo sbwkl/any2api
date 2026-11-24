@@ -2,9 +2,10 @@
   "scenario": "chat.image.data_url",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:33.807Z",
+  "capturedAt": "2026-11-24T11:00:42.845Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -30,7 +31,37 @@
       "response": {
         "status": 200,
         "contentType": "application/json",
-        "text": "{\"id\":\"eadb332e1b254335bd3be7272b05086a\",\"object\":\"chat.completion\",\"created\":1795511551,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Red\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":45,\"completion_tokens\":3,\"total_tokens\":48,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+        "text": "{\"id\":\"bbcb61a96de24a73bbb9826c81d1b1fe\",\"object\":\"chat.completion\",\"created\":1795518041,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Red\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":45,\"completion_tokens\":3,\"total_tokens\":48,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:40.741Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "What is the dominant color of this image? Answer with one English word."
+              },
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                }
+              }
+            ]
+          }
+        ],
+        "stream": true,
+        "max_tokens": 256,
+        "temperature": 1
       }
     }
   ]

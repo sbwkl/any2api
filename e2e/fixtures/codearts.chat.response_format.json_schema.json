@@ -2,13 +2,14 @@
   "scenario": "chat.response_format.json_schema",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:11:38.537Z",
+  "capturedAt": "2026-11-24T10:59:37.285Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
-        "max_tokens": 128,
+        "max_tokens": 512,
         "response_format": {
           "type": "json_schema",
           "json_schema": {
@@ -38,7 +39,28 @@
       "response": {
         "status": 200,
         "contentType": "application/json",
-        "text": "{\"id\":\"20261124171133220a0c65088040e1\",\"object\":\"chat.completion\",\"created\":1795511493,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user wants me to return JSON with ok=true. This is a simple, benign request - they just want a JSON object with a key \\\"ok\\\" set to true.\\n\\nThe format should be JSON. The simplest correct response is:\\n\\n```json\\n{\\\"ok\\\": true}\\n```\\n\\nShould I wrap it in a code block? The user asked to \\\"Return JSON\\\" — a code block makes it easy to copy and clearly delineates the JSON. Given this is a likely programmatic use case, providing just the JSON in a code block is appropriate. I shouldn't add extra prose since they may be parsing the output.\\n\\nKeep it minimal\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":128,\"total_tokens\":146,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":126}}}"
+        "text": "{\"id\":\"20261124185935596ae50b91ea48e8\",\"object\":\"chat.completion\",\"created\":1795517975,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"```json\\n{\\n  \\\"ok\\\": true\\n}\\n```\",\"reasoning_content\":\"The user is asking me to return JSON with ok=true. This is a simple request for a JSON response. Let me provide that.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":41,\"total_tokens\":59,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":27}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:35.225Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return JSON with ok=true."
+          }
+        ],
+        "max_tokens": 512,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

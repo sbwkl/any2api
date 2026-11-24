@@ -2,9 +2,10 @@
   "scenario": "chat.multi_turn.system",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:35.638Z",
+  "capturedAt": "2026-11-24T11:00:47.944Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -31,7 +32,38 @@
       "response": {
         "status": 200,
         "contentType": "application/json",
-        "text": "{\"id\":\"17fd1f26939a4453962f271581ebb717\",\"object\":\"chat.completion\",\"created\":1795511554,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"France.\",\"reasoning_content\":\"Capital of France is Paris; country is France.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":34,\"completion_tokens\":14,\"total_tokens\":48,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":10}}}"
+        "text": "{\"id\":\"e6fd7da017e84ef4a51981bc7e4dcc1a\",\"object\":\"chat.completion\",\"created\":1795518043,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"France.\",\"reasoning_content\":\"France.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":34,\"completion_tokens\":6,\"total_tokens\":40,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:42.849Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are terse."
+          },
+          {
+            "role": "user",
+            "content": "Name the capital of France."
+          },
+          {
+            "role": "assistant",
+            "content": "Paris."
+          },
+          {
+            "role": "user",
+            "content": "Now name the country."
+          }
+        ],
+        "stream": true,
+        "max_tokens": 128,
+        "temperature": 1
       }
     }
   ]

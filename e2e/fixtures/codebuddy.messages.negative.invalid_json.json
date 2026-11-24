@@ -2,9 +2,10 @@
   "scenario": "messages.negative.invalid_json",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:13:19.623Z",
+  "capturedAt": "2026-11-24T11:01:31.801Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/messages",
       "rawBody": "{",
       "response": {
@@ -13,5 +14,6 @@
         "text": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"invalid JSON body\"}}"
       }
     }
-  ]
+  ],
+  "upstream": []
 }

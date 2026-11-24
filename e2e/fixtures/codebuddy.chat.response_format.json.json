@@ -2,13 +2,14 @@
   "scenario": "chat.response_format.json",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:40.279Z",
+  "capturedAt": "2026-11-24T11:00:56.271Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
-        "max_tokens": 128,
+        "max_tokens": 512,
         "response_format": {
           "type": "json_object"
         },
@@ -22,7 +23,29 @@
       "response": {
         "status": 200,
         "contentType": "application/json",
-        "text": "{\"id\":\"e1af5f5c057646519bd8e4fcb6c6e5b8\",\"object\":\"chat.completion\",\"created\":1795511559,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\",\"reasoning_content\":\"User wants exact output, nothing else.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":25,\"completion_tokens\":15,\"total_tokens\":40,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":8}}}"
+        "text": "{\"id\":\"eca8537a02b9459f8e75393079d64d66\",\"object\":\"chat.completion\",\"created\":1795518055,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"ok\\\":true}\",\"reasoning_content\":\"The user wants exactly the JSON and nothing else.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":25,\"completion_tokens\":17,\"total_tokens\":42,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":10}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:54.370Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return exactly this JSON and nothing else: {\"ok\":true}"
+          }
+        ],
+        "stream": true,
+        "max_tokens": 512,
+        "temperature": 1,
+        "response_format": {
+          "type": "json_object"
+        }
       }
     }
   ]

@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig } from "./config";
-import { dumpSize } from "./dump";
+import { dumpSize, readDumpRecordsSince } from "./dump";
 import { selectModel } from "./models";
-import { renderMarkdown, summarize, type ScenarioResult } from "./report";
+import { renderBaselineIndex, renderHtml, summarize, type ReportData, type ScenarioResult } from "./report";
 import { buildScenarios, type Scenario, type ScenarioContext, type Verdict } from "./scenarios";
 import { startServer } from "./server";
 
@@ -86,13 +86,24 @@ export async function main(): Promise<void> {
       } catch (e: any) {
         verdict = { status: "fail", detail: `调用异常：${e?.message ?? e}` };
       }
-      const result = toResult(scenario, selected, verdict.status, verdict.detail, Date.now() - started);
+      const upstream = await readDumpRecordsSince(server.dumpDir, ctx.dumpMark);
+      const result = toResult(scenario, selected, verdict.status, verdict.detail, Date.now() - started, {
+        inbound: ctx.capture,
+        upstream,
+      });
       results.push(result);
       console.log(`[e2e] ${verdict.status.toUpperCase().padEnd(13)} ${scenario.provider}/${scenario.id} (${result.durationMs}ms) ${verdict.detail}`);
 
       if (cfg.record) {
         const payload = JSON.stringify(
-          { scenario: scenario.id, provider, model: ctx.model, capturedAt: new Date().toISOString(), calls: ctx.capture },
+          {
+            scenario: scenario.id,
+            provider,
+            model: ctx.model,
+            capturedAt: new Date().toISOString(),
+            calls: ctx.capture,
+            upstream,
+          },
           null,
           2,
         );
@@ -118,14 +129,20 @@ export async function main(): Promise<void> {
       providers: cfg.providers,
       models: selected,
     };
-    const markdown = renderMarkdown(meta, results);
+    const data: ReportData = { schema: "any2api-e2e-report/v1", meta, results };
     mkdirSync(cfg.reportsDir, { recursive: true });
-    writeFileSync(join(cfg.reportsDir, "latest.md"), markdown);
-    writeFileSync(join(cfg.reportsDir, "latest.json"), JSON.stringify({ meta, results }, null, 2));
+    writeFileSync(join(cfg.reportsDir, "latest.html"), renderHtml(meta, results, { dataFile: "latest.json" }));
+    writeFileSync(join(cfg.reportsDir, "latest.json"), JSON.stringify(data, null, 2));
+    rmSync(join(cfg.reportsDir, "latest.md"), { force: true });
     if (cfg.baseline) {
       mkdirSync("docs/generated", { recursive: true });
-      writeFileSync("docs/generated/e2e-baseline.md", markdown);
-      console.log(`[e2e] 基线已写入 docs/generated/e2e-baseline.md`);
+      writeFileSync(
+        "docs/generated/e2e-baseline.html",
+        renderHtml(meta, results, { dataFile: "e2e-baseline.json" }),
+      );
+      writeFileSync("docs/generated/e2e-baseline.json", JSON.stringify(data, null, 2));
+      writeFileSync("docs/generated/e2e-baseline.md", renderBaselineIndex(meta, results));
+      console.log(`[e2e] 基线已写入 docs/generated/e2e-baseline.{html,json,md}`);
     }
 
     const counts = summarize(results);
@@ -137,7 +154,7 @@ export async function main(): Promise<void> {
       console.log("[e2e] 失败场景：");
       for (const r of failed) console.log(`  - ${r.provider}/${r.id}: ${r.detail}`);
     }
-    console.log(`[e2e] 报告：${join(cfg.reportsDir, "latest.md")}`);
+    console.log(`[e2e] 报告：${join(cfg.reportsDir, "latest.html")}`);
   } finally {
     await server.stop();
   }
@@ -165,6 +182,7 @@ function toResult(
   status: ScenarioResult["status"],
   detail: string,
   durationMs: number,
+  evidence?: ScenarioResult["evidence"],
 ): ScenarioResult {
   const provider = scenario.provider === "all" ? "all" : scenario.provider;
   return {
@@ -178,6 +196,7 @@ function toResult(
     model: scenario.needsModel === false ? undefined : selected[provider],
     clause: scenario.clause,
     knownDefect: scenario.knownDefect,
+    evidence,
   };
 }
 

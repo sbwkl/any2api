@@ -2,9 +2,10 @@
   "scenario": "responses.negative.unknown_model",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:27.731Z",
+  "capturedAt": "2026-11-24T11:00:36.556Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/responses",
       "requestBody": {
         "model": "e2e-model-does-not-exist",
@@ -14,7 +15,28 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"resp_baa5fe78006e458bbf4f518b\",\"object\":\"response\",\"created_at\":1795511547,\"status\":\"completed\",\"model\":\"e2e-model-does-not-exist\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_a0c11bc7b8d84720a90286b8\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"We need answer greeting\"}]}],\"usage\":{\"input_tokens\":31,\"output_tokens\":4,\"total_tokens\":35,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":4}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+        "text": "{\"id\":\"resp_0c84c43d448a4cb19bf38522\",\"object\":\"response\",\"created_at\":1795518036,\"status\":\"completed\",\"model\":\"e2e-model-does-not-exist\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_4f76867d947f4f4ba1d90824\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"We need answer to\"}]}],\"usage\":{\"input_tokens\":31,\"output_tokens\":4,\"total_tokens\":35,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":4}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:34.318Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "deepseek-v4.1-flash-1017",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ],
+        "max_tokens": 4,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

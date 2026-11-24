@@ -2,9 +2,10 @@
   "scenario": "messages.negative.unknown_model",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:12.424Z",
+  "capturedAt": "2026-11-24T11:00:25.271Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/messages",
       "requestBody": {
         "model": "e2e-model-does-not-exist",
@@ -19,7 +20,28 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"msg_as-5juu2drk61\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"e2e-model-does-not-exist\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":31,\"output_tokens\":4,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+        "text": "{\"id\":\"msg_as-nckq6d87i0\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"e2e-model-does-not-exist\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":31,\"output_tokens\":4,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:24.208Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "deepseek-v4.1-flash-1017",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ],
+        "max_tokens": 4,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

@@ -2,9 +2,10 @@
   "scenario": "chat.basic.nonstream",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:11:25.152Z",
+  "capturedAt": "2026-11-24T10:59:28.272Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -19,7 +20,28 @@
       "response": {
         "status": 200,
         "contentType": "application/json",
-        "text": "{\"id\":\"20261124171119ac54951fc4864625\",\"object\":\"chat.completion\",\"created\":1795511479,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"The user has given me a very simple instruction: \\\"Reply with exactly: OK\\\"\\n\\nThis is a clear, unambiguous request. They want my response to be exactly the text \\\"OK\\\" - nothing more, nothing less.\\n\\nI should follow this instruction precisely and reply with just \\\"OK\\\".\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":61,\"total_tokens\":78,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":58}}}"
+        "text": "{\"id\":\"20261124185926ab6bb72f316f48b6\",\"object\":\"chat.completion\",\"created\":1795517966,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"The user wants me to reply with exactly \\\"OK\\\". This is a simple instruction to follow. I should just output \\\"OK\\\" with nothing else - no extra punctuation, no explanation, nothing.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":42,\"total_tokens\":59,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":39}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:25.834Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reply with exactly: OK"
+          }
+        ],
+        "max_tokens": 128,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

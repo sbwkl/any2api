@@ -2,9 +2,10 @@
   "scenario": "messages.image.tool_result",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:13:01.584Z",
+  "capturedAt": "2026-11-24T11:01:14.204Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/messages",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -57,7 +58,59 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"msg_13853bb3039d445f9842b38575820d03\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":63,\"output_tokens\":5,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+        "text": "{\"id\":\"msg_f4f7f98b49724510a9d5a603ad60b0a0\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":63,\"output_tokens\":5,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:01:11.632Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Take a screenshot."
+          },
+          {
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "id": "toolu_e2e",
+                "type": "function",
+                "function": {
+                  "name": "screenshot",
+                  "arguments": "{}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "toolu_e2e",
+            "content": [
+              {
+                "type": "text",
+                "text": "screenshot attached"
+              },
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": "What is the dominant color of this image? Answer with one English word."
+          }
+        ],
+        "stream": true,
+        "max_tokens": 256,
+        "temperature": 1
       }
     }
   ]

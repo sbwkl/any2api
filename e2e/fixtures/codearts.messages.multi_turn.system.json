@@ -2,9 +2,10 @@
   "scenario": "messages.multi_turn.system",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:01.407Z",
+  "capturedAt": "2026-11-24T11:00:16.407Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/messages",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -28,7 +29,40 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"msg_2026112417115955740f5a4bd04e8f\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"France.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":34,\"output_tokens\":43,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+        "text": "{\"id\":\"msg_20261124190014408537e73e1e4673\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"France.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":34,\"output_tokens\":27,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:14.392Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are terse."
+          },
+          {
+            "role": "user",
+            "content": "Name the capital of France."
+          },
+          {
+            "role": "assistant",
+            "content": "Paris."
+          },
+          {
+            "role": "user",
+            "content": "Now name the country."
+          }
+        ],
+        "max_tokens": 128,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

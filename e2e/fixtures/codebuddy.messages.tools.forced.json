@@ -2,9 +2,10 @@
   "scenario": "messages.tools.forced",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:13:19.621Z",
+  "capturedAt": "2026-11-24T11:01:31.800Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/messages",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -40,7 +41,47 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"msg_62f292f7fc6a4479ab8f12e218cba667\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"tool_use\",\"id\":\"call_c43914539258423d936ea370\",\"name\":\"get_color\",\"input\":{\"color\":\"red\"}}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":170,\"output_tokens\":12,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+        "text": "{\"id\":\"msg_cbc90b63588e4ece97e225304138914a\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"tool_use\",\"id\":\"call_2067b370f68f4f62a546ca80\",\"name\":\"get_color\",\"input\":{\"color\":\"red\"}}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":170,\"output_tokens\":12,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:01:20.209Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Use the get_color tool with color red. Do not answer in text."
+          }
+        ],
+        "stream": true,
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_color",
+              "description": "Return the color the user asks about",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "color"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "max_tokens": 64,
+        "temperature": 1
       }
     }
   ]

@@ -2,9 +2,10 @@
   "scenario": "chat.negative.invalid_json",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:44.817Z",
+  "capturedAt": "2026-11-24T11:01:00.955Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "rawBody": "{",
       "response": {
@@ -13,5 +14,6 @@
         "text": "{\"error\":{\"message\":\"invalid JSON body\",\"type\":\"invalid_request_error\",\"code\":null}}"
       }
     }
-  ]
+  ],
+  "upstream": []
 }

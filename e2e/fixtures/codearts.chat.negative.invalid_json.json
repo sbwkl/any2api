@@ -2,9 +2,10 @@
   "scenario": "chat.negative.invalid_json",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:11:54.103Z",
+  "capturedAt": "2026-11-24T11:00:00.138Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "rawBody": "{",
       "response": {
@@ -13,5 +14,6 @@
         "text": "{\"error\":{\"message\":\"invalid_request: messages is required\",\"type\":\"invalid_request_error\",\"code\":null}}"
       }
     }
-  ]
+  ],
+  "upstream": []
 }

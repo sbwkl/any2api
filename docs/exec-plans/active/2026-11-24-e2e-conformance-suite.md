@@ -34,7 +34,7 @@ Owner：wayne
 | D11 | 矩阵内容 | 见 §5；`not-supported` 期望显式编码 |
 | D12 | 官方参照物 | `docs/references/official-api/` 条款清单（URL + 条款 ID），机器 schema 后置 |
 | D13 | 客户端冒烟 | 手动清单：Claude Code / Codex 直连 any2api；不经 cc-switch 代理、不作为测试依赖 |
-| D14 | 报告 | 基线入 `docs/generated/e2e-baseline.md`；日常运行本地 gitignored |
+| D14 | 报告 | 基线入库三件套：`docs/generated/e2e-baseline.html`（人类可读，按 provider 分表 + 场景证据）、`e2e-baseline.json`（机器可读，含入站/上游/响应原文）、`e2e-baseline.md`（最小入口）；日常运行写 gitignored 的 `e2e/reports/latest.{html,json}` |
 | D15 | 定期评估 | 手动 `bun run e2e:corpus` + runbook；不设定时任务 |
 | D16 | 采集 | `TRACE_CAPTURE_DIR` opt-in 入站 JSONL（默认关闭、脱敏、限额）纳入 v1；Claude Code 会话重组器后置 |
 | D17 | 客户端证据 | cc-switch 日志无 body，否定为证据源；自身采集为准 |
@@ -43,7 +43,7 @@ Owner：wayne
 
 **受影响**
 
-- 新增：`scripts/e2e/`（runner、矩阵、场景、报告、合成图片生成）、`src/shared/trace.ts`（入站采集与上游转储）、`e2e/fixtures/`、`docs/references/official-api/`、`docs/generated/e2e-baseline.md`
+- 新增：`scripts/e2e/`（runner、矩阵、场景、证据摘要与报告、合成图片生成）、`src/shared/trace.ts`（入站采集与上游转储）、`e2e/fixtures/`、`docs/references/official-api/`、`docs/generated/e2e-baseline.{html,json,md}`
 - 修改：`src/registry.ts`（采集挂钩）、两 provider 出站请求点（上游转储）、`package.json`（`e2e` / `e2e:corpus` 脚本）、README（命令、healthz 路径纠错）、product-spec 状态同步
 - 新增单测：采集/转储、SSE 解析、矩阵状态、模型选择、脱敏、报告格式化
 
@@ -82,19 +82,20 @@ Owner：wayne
 - **模型选择**：`GET /{provider}/v1/models` → 偏好序列（大小写不敏感、兼容 `(1017)` 后缀）→ `E2E_MODEL_FALLBACK` → 启发式（flash/mini/lite/small）→ skipped；报告记录实际模型。
 - **观测**：`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求（JSONL）供 L2 断言字段未被丢弃；`TRACE_CAPTURE_DIR` 采集入站流量（JSONL，脱敏 Authorization/x-api-key，单条 ≤256KB，按天轮转）。
 - **图片探测**：程序生成纯色 PNG（无三方依赖），要求模型回答主色；同时保留「已知会失败」的格子验证 harness 检出能力。
-- **报告**：`e2e/reports/latest.{md,json}`（gitignored）；`--baseline` 复制到 `docs/generated/e2e-baseline.md`。
+- **报告**：`e2e/reports/latest.html` + `latest.json`（gitignored）。HTML 按 provider 分节展示矩阵与筛选，点击行跳转场景证据（输入 / 上游请求 / 输出摘要）；JSON 保留入站请求、上游请求与响应原文（单条 ≤64KB）。`--baseline` 写 `docs/generated/e2e-baseline.{html,json,md}`，其中 MD 仅作入口与链接。
 - **语料评估**：`bun run e2e:corpus` 读取采集目录，按端点契约做 L1 校验并输出差异报告（手动执行，写入 runbook）。
 
 ## 7. 验证与证据（2026-11-24）
 
-- [x] 单测：`bun test` → 202 pass / 0 fail（25 files，636 assertions）。覆盖 SSE 解析、模型选择、配置、报告格式化、合成图片、契约校验、场景判定、语料评估。
+- [x] 单测：`bun test` → 219 pass / 0 fail（27 files，687 assertions）。覆盖 SSE 解析、模型选择、配置、证据摘要、HTML/JSON 报告、上游转储解析、合成图片、契约校验、场景判定、语料评估。
 - [x] 静态检查：`bun build src/index.ts --target=bun`、`bun build scripts/e2e/run.ts --target=bun`、`bun build scripts/e2e/corpus.ts --target=bun` 均零错误。
-- [x] 实弹：`E2E_MAX_CALLS=60 E2E_RECORD=1 bun run e2e --baseline`（2026-11-24）；50/60 次上游调用，未超预算；57 格：32 pass / 17 fail / 4 not-supported / 4 skipped。
-- [x] 基线：[`docs/generated/e2e-baseline.md`](../../generated/e2e-baseline.md) 已入库，每格含状态、说明与条款号；失败格可从 `e2e/reports/latest.json` 回溯响应片段。
+- [x] 实弹：`E2E_MAX_CALLS=60 E2E_RECORD=1 bun run e2e --baseline`（2026-11-24）；50/60 次上游调用，未超预算；57 格：32 pass / 17 fail / 4 not-supported / 4 skipped。首轮曾因 `response_format` 场景 128 token 被 reasoning 吃满误判 codebuddy `json_object` fail；调至 512 后定点复测通过并重跑全矩阵，最终基线以此轮为准。
+- [x] 基线产物：[`e2e-baseline.html`](../../generated/e2e-baseline.html)（155KB，按 provider 分表、状态筛选、点击行展开场景证据）、[`e2e-baseline.json`](../../generated/e2e-baseline.json)（156KB，含入站 / 上游 / 响应原文）、[`e2e-baseline.md`](../../generated/e2e-baseline.md)（620B 入口）。49 个非 skipped 场景均有入站证据；4 个 skipped 均为未设置 `E2E_IMAGE_URL`。
+- [x] 报告交互验证：Chrome 1440px 表格与三列证据布局正常；500px 表格折叠为带字段标签的卡片，无横向溢出（viewport 525 时 body scrollWidth 525）；`fail` 筛选同时隐藏表格行与证据详情（17/17）。
 - [x] 已知缺陷可检出：Responses `input_image` 丢弃（两家）、Anthropic `system` 数组图片丢弃（两家）、Responses 流缺 `response.output_text.done`（两家）、codearts 未知模型静默回退（chat/messages/responses）、`logprobs` 与 `n` 静默丢弃（两家）、codearts `response_format` 静默丢弃。
 - [x] 图片 pilot：`chat.image.data_url`、`messages.image.base64`、`messages.image.tool_result` 两家均 pass（模型回答 Red）；`responses.image.data_url`、`messages.image.system` 两家均 fail，证明探测能通过正确链路也能捕获真实缺陷。
-- [x] fixture：`e2e/fixtures/` 53 个文件 / 232KB（≤2MB），Authorization / x-api-key / cookie 已脱敏；日常报告在 gitignored 的 `e2e/reports/`。
-- [ ] 客户端直连冒烟：手动清单见 §11；本轮未执行，不作为矩阵基线的一部分。
+- [x] fixture：`e2e/fixtures/` 53 个文件 / 244KB（≤2MB），含入站调用与上游请求；Authorization / x-api-key / cookie 已脱敏；日常报告在 gitignored 的 `e2e/reports/`。
+- [ ] 客户端直连冒烟：手动清单见 §10；本轮未执行，不作为矩阵基线的一部分。
 - [ ] 文档结构 / 链接检查：仓库未配置项目级检查；待补。本轮用一次性脚本核对仓库内相对链接 0 broken；`README` / `AGENTS` 指向的工作区根 `../AGENTS.md` 在当前工作区不存在，属既有跨项目约定。
 
 ## 8. 风险与未决问题
@@ -152,4 +153,4 @@ D13 约定：客户端只直连 any2api，**不经 cc-switch 代理、不新增�
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
 | 开发中 | wayne | 2026-11-24 决策锁定（D1–D17，见 §3）；本文件创建 |
-| 已验证（未合并） | wayne | 2026-11-24 最终基线：50/60 调用，32 pass / 17 fail / 4 not-supported / 4 skipped；`bun test` 202 pass；三处 `bun build` 零错误；fixtures 53 文件 / 232KB；缺陷与缺口见 §9；客户端冒烟待执行（§10） |
+| 已验证（未合并） | wayne | 2026-11-24 最终基线：50/60 调用，32 pass / 17 fail / 4 not-supported / 4 skipped；报告改为 HTML + JSON + 最小 MD（D14 更新），49 个非 skipped 场景带场景证据；`bun test` 219 pass；三处 `bun build` 零错误；fixtures 53 文件 / 244KB；1440px / 500px 布局与筛选已验证；缺陷与缺口见 §9；客户端冒烟待执行（§10） |

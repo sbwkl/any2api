@@ -160,7 +160,7 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
         const res = await call(ctx, "/v1/chat/completions", {
           body: {
             model: ctx.model,
-            max_tokens: 128,
+            max_tokens: 512,
             response_format: {
               type: "json_schema",
               json_schema: {
@@ -244,7 +244,7 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
         const res = await call(ctx, "/v1/chat/completions", {
           body: {
             model: ctx.model,
-            max_tokens: 128,
+            max_tokens: 512,
             response_format: { type: "json_object" },
             messages: [{ role: "user", content: 'Return exactly this JSON and nothing else: {"ok":true}' }],
           },

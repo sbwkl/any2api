@@ -2,9 +2,10 @@
   "scenario": "chat.logprobs",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:11:44.893Z",
+  "capturedAt": "2026-11-24T10:59:55.753Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -21,7 +22,28 @@
       "response": {
         "status": 200,
         "contentType": "application/json",
-        "text": "{\"id\":\"2026112417114137e1ab9f22fd4651\",\"object\":\"chat.completion\",\"created\":1795511501,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user is asking me to say \\\"\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":14,\"completion_tokens\":8,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":8}}}"
+        "text": "{\"id\":\"2026112418595052abacba6e4b41e9\",\"object\":\"chat.completion\",\"created\":1795517990,\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"The user has sent a very simple message\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":14,\"completion_tokens\":8,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_creation_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":6}}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:49.939Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Say OK"
+          }
+        ],
+        "max_tokens": 8,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

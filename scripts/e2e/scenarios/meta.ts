@@ -1,7 +1,6 @@
-import { httpRequest } from "../http";
 import type { ProviderName } from "../types";
 import { checkModels } from "../verify";
-import { assess, call, fail, jsonOf, pass, type Scenario } from "./shared";
+import { assess, call, callGlobal, fail, jsonOf, pass, type Scenario } from "./shared";
 
 export function modelListScenario(provider: ProviderName): Scenario {
   return {
@@ -29,7 +28,7 @@ export function healthzScenario(): Scenario {
     needsModel: false,
     needsProvider: false,
     run: async (ctx) => {
-      const res = await httpRequest(ctx.baseUrl, "/healthz", { timeoutMs: ctx.timeoutMs });
+      const res = await callGlobal(ctx, "/healthz");
       const { json, error } = jsonOf(res);
       if (res.status !== 200) return fail(`HTTP ${res.status}：${res.text.slice(0, 160)}`);
       if (error) return fail(error);

@@ -2,9 +2,10 @@
   "scenario": "messages.image.base64",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:04.992Z",
+  "capturedAt": "2026-11-24T11:00:18.237Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/messages",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -32,7 +33,39 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"msg_20261124171201eb84363091b941b6\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":45,\"output_tokens\":30,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+        "text": "{\"id\":\"msg_202611241900168c1269fd9e524f77\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Red\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":45,\"output_tokens\":19,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:16.409Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "What is the dominant color of this image? Answer with one English word."
+              },
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAMklEQVR4nGP4z8BAU0Rb00ctGA2i0VQ0mg9Gi4rR0nS0PhitMkdbFaPtotGm43/q5QMAMsP8LqKijEUAAAAASUVORK5CYII="
+                }
+              }
+            ]
+          }
+        ],
+        "max_tokens": 256,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

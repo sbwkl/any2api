@@ -2,9 +2,10 @@
   "scenario": "responses.image.data_url",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:25.111Z",
+  "capturedAt": "2026-11-24T11:00:33.950Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/responses",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -29,7 +30,28 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"resp_56d1034b39f5496ba7d838f7\",\"object\":\"response\",\"created_at\":1795511545,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_c45586b0b2df4b08a1f978f2\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user is asking about the dominant color of an image, but I don't see any image attached to this conversation. There's no image in the conversation that I can analyze.\\n\\nI should let the user know that I don't see an image in our conversation. I can't answer a question about an image that hasn't been shared with me.\\n\\nThe format should be brief - just explaining that no image was provided. No need for a long response.\"}]},{\"type\":\"message\",\"id\":\"msg_9a5452012ad940a79e2238b9\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"I don't see an image in our conversation. Could you please share the image you'd like me to analyze? Once you attach it, I'll be happy to tell you its dominant color.\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":27,\"output_tokens\":132,\"total_tokens\":159,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":91}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+        "text": "{\"id\":\"resp_1cdba8b001b647f2b53e3723\",\"object\":\"response\",\"created_at\":1795518033,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_235eb1ac91084c2ba427105f\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user is asking about the dominant color of an image. However, I don't see any image in this conversation. There's no image attached to the message. I should let the user know that I don't see an image, or... wait, let me think about this more carefully.\\n\\nThe human message says \\\"What is the dominant color of this image?\\\" but there's no image provided in the conversation. I cannot see any image. I should respond that I don't see an image and ask them to share it.\\n\\nActually, I need to be careful here. The instruction says to answer with one English word, but there's no image. I should honestly say I can't see an image. The appropriate response would be to point out that no image was attached.\"}]},{\"type\":\"message\",\"id\":\"msg_ba0ff4c33e224bb8be235dce\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"I don't see an image in our conversation. Could you please share the image you'd like me to analyze?\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":27,\"output_tokens\":181,\"total_tokens\":208,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":156}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:29.845Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is the dominant color of this image? Answer with one English word."
+          }
+        ],
+        "max_tokens": 256,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

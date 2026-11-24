@@ -2,9 +2,10 @@
   "scenario": "chat.basic.stream",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:12:31.239Z",
+  "capturedAt": "2026-11-24T11:00:40.740Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -23,7 +24,29 @@
       "response": {
         "status": 200,
         "contentType": "text/event-stream",
-        "text": "data: {\"id\":\"d3bf6af175ea4611a4d5aba2f551027b\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion.chunk\",\"created\":1795511550,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"\",\"function_call\":null,\"refusal\":\"\",\"tool_calls\":[],\"extra_fields\":null},\"logprobs\":null,\"finish_reason\":\"\"}],\"usage\":null}\n\ndata: {\"id\":\"d3bf6af175ea4611a4d5aba2f551027b\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion.chunk\",\"created\":1795511550,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"\",\"function_call\":{\"name\":\"\",\"arguments\":\"\"},\"refusal\":\"\",\"tool_calls\":[],\"extra_fields\":null},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":3,\"total_tokens\":20,\"completion_tokens_details\":{\"accepted_prediction_tokens\":0,\"audio_tokens\":0,\"reasoning_tokens\":0,\"rejected_prediction_tokens\":0,\"cached_tokens\":0},\"prompt_tokens_details\":{\"accepted_prediction_tokens\":0,\"audio_tokens\":0,\"reasoning_tokens\":0,\"rejected_prediction_tokens\":0,\"cached_tokens\":0},\"prompt_cache_hit_tokens\":0,\"prompt_cache_miss_tokens\":17,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0,\"prompt_cache_write_tokens\":0,\"completion_thinking_tokens\":0,\"credit\":0,\"cached_tokens\":0,\"quota\":null}}\n\ndata: [DONE]\n\n"
+        "text": "data: {\"id\":\"e0bcbd9817ad48d3a72009e5197d3676\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion.chunk\",\"created\":1795518039,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"\",\"function_call\":null,\"refusal\":\"\",\"tool_calls\":[],\"extra_fields\":null},\"logprobs\":null,\"finish_reason\":\"\"}],\"usage\":null}\n\ndata: {\"id\":\"e0bcbd9817ad48d3a72009e5197d3676\",\"model\":\"glm-5.3-flash\",\"object\":\"chat.completion.chunk\",\"created\":1795518039,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"\",\"function_call\":{\"name\":\"\",\"arguments\":\"\"},\"refusal\":\"\",\"tool_calls\":[],\"extra_fields\":null},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":3,\"total_tokens\":20,\"completion_tokens_details\":{\"accepted_prediction_tokens\":0,\"audio_tokens\":0,\"reasoning_tokens\":0,\"rejected_prediction_tokens\":0,\"cached_tokens\":0},\"prompt_tokens_details\":{\"accepted_prediction_tokens\":0,\"audio_tokens\":0,\"reasoning_tokens\":0,\"rejected_prediction_tokens\":0,\"cached_tokens\":0},\"prompt_cache_hit_tokens\":0,\"prompt_cache_miss_tokens\":17,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0,\"prompt_cache_write_tokens\":0,\"completion_thinking_tokens\":0,\"credit\":0,\"cached_tokens\":0,\"quota\":null}}\n\ndata: [DONE]\n\n"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:00:38.665Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reply with exactly: OK"
+          }
+        ],
+        "stream": true,
+        "max_tokens": 128,
+        "temperature": 1,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

@@ -2,9 +2,10 @@
   "scenario": "responses.image.data_url",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:13:43.725Z",
+  "capturedAt": "2026-11-24T11:01:38.575Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/responses",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -29,7 +30,26 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"resp_74324523099646078c27c935\",\"object\":\"response\",\"created_at\":1795511623,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_faf0407c9d8f4454aab428de\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user asks about the dominant color of \\\"this image\\\" but no image is provided.\"}]},{\"type\":\"message\",\"id\":\"msg_73090476cb6f4fad8cbce3fd\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"I don't see an image in our conversation. Could you upload or attach the image you'd like me to analyze? Once you share it, I'll be happy to tell you its dominant color.\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":27,\"output_tokens\":60,\"total_tokens\":87,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":18}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+        "text": "{\"id\":\"resp_220d54acd9264b4fbcd4cf6a\",\"object\":\"response\",\"created_at\":1795518098,\"status\":\"completed\",\"model\":\"glm-5.3-flash\",\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_638109adede744848c0ace05\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"No image provided—actually there's no image attached. But the user asks anyway. I should note I can't see an image.\"}]},{\"type\":\"message\",\"id\":\"msg_6c0c21b6f3124156ae095ae3\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"I don't see an image attached to your message. Could you please upload or share the image you'd like me to analyze?\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":27,\"output_tokens\":55,\"total_tokens\":82,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":27}},\"incomplete_details\":null,\"error\":null,\"metadata\":{},\"store\":false}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:01:35.902Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is the dominant color of this image? Answer with one English word."
+          }
+        ],
+        "stream": true,
+        "max_tokens": 256,
+        "temperature": 1
       }
     }
   ]

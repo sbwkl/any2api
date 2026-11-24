@@ -157,12 +157,12 @@ resp = client.chat.completions.create(
 
 ## 一致性 e2e（实弹）
 
-`bun test` 只跑离线单测；实弹矩阵会启动本地服务并真实调用 CodeBuddy / CodeArts 上游，**消耗真实 token**。当前状态以 [`docs/generated/e2e-baseline.md`](docs/generated/e2e-baseline.md) 与 [`docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md`](docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md) 的缺陷清单为准。
+`bun test` 只跑离线单测；实弹矩阵会启动本地服务并真实调用 CodeBuddy / CodeArts 上游，**消耗真实 token**。当前状态以 [`docs/generated/e2e-baseline.html`](docs/generated/e2e-baseline.html)（人类可读，按 provider 分表，可展开场景证据）与 [`docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md`](docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md) 的缺陷清单为准；[`e2e-baseline.json`](docs/generated/e2e-baseline.json) 保留机器可读原文，[`e2e-baseline.md`](docs/generated/e2e-baseline.md) 只是入口。
 
 ```bash
-E2E_MAX_CALLS=60 bun run e2e --baseline   # 一轮全矩阵，基线写入 docs/generated/
-E2E_ONLY=image bun run e2e                # 只跑 id 含 image 的场景
-bun run e2e:corpus [dir]                  # 对入站采集 JSONL 做 L1 校验（默认 e2e/corpus）
+E2E_MAX_CALLS=60 E2E_RECORD=1 bun run e2e --baseline   # 一轮全矩阵，基线写入 docs/generated/
+E2E_ONLY=image bun run e2e                             # 只跑 id 含 image 的场景
+bun run e2e:corpus [dir]                               # 对入站采集 JSONL 做 L1 校验（默认 e2e/corpus）
 ```
 
 | 环境变量 | 默认 | 说明 |
@@ -178,7 +178,7 @@ bun run e2e:corpus [dir]                  # 对入站采集 JSONL 做 L1 校验�
 | `E2E_IMAGE_URL` | 空 | 公网图片 URL；未设置时 URL 图片场景标 skipped |
 | `E2E_FIXTURES_DIR` / `E2E_REPORTS_DIR` | `e2e/fixtures` / `e2e/reports` | 产物目录；`e2e/reports/` 已 gitignore |
 
-报告写入 `e2e/reports/latest.{md,json}`。观测开关：`TRACE_CAPTURE_DIR` 采集入站 JSONL（Authorization / x-api-key / cookie 等记为 `<redacted>`，单条 ≤256KB，按天轮转）；`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求 JSONL，供「字段是否被静默丢弃」的结构断言。
+报告写入 `e2e/reports/latest.html`（按 provider 分表、状态筛选、点击行展开输入 / 上游请求 / 输出摘要）与 `latest.json`（含入站请求、上游请求与响应原文，单条 ≤64KB）。观测开关：`TRACE_CAPTURE_DIR` 采集入站 JSONL（Authorization / x-api-key / cookie 等记为 `<redacted>`，单条 ≤256KB，按天轮转）；`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求 JSONL，供「字段是否被静默丢弃」的结构断言。
 
 ## 已知限制
 

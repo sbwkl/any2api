@@ -2,9 +2,10 @@
   "scenario": "messages.image.system",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:13:04.691Z",
+  "capturedAt": "2026-11-24T11:01:20.207Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/messages",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -33,7 +34,30 @@
       "response": {
         "status": 200,
         "contentType": "application/json;charset=utf-8",
-        "text": "{\"id\":\"msg_a80e51f4a7874776905c61cf13d2e7ae\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"I don't see an image in our conversation — it may not have attached successfully. Could you re-upload it?\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":32,\"output_tokens\":29,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+        "text": "{\"id\":\"msg_fee14a1a9f6d4d4bb572303244494d07\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[{\"type\":\"text\",\"text\":\"Unknown — no image was provided for me to analyze.\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":32,\"output_tokens\":34,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T11:01:14.206Z",
+      "provider": "codebuddy",
+      "url": "https://copilot.tencent.com/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are terse."
+          },
+          {
+            "role": "user",
+            "content": "What is the dominant color of this image? Answer with one English word."
+          }
+        ],
+        "stream": true,
+        "max_tokens": 256,
+        "temperature": 1
       }
     }
   ]

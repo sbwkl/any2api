@@ -2,9 +2,10 @@
   "scenario": "chat.tools.forced",
   "provider": "codearts",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:11:38.974Z",
+  "capturedAt": "2026-11-24T10:59:37.662Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/chat/completions",
       "requestBody": {
         "model": "glm-5.3-flash",
@@ -46,6 +47,53 @@
         "status": 502,
         "contentType": "application/json",
         "text": "{\"error\":{\"message\":\"upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it\",\"type\":\"upstream_error\",\"code\":null}}"
+      }
+    }
+  ],
+  "upstream": [
+    {
+      "ts": "2026-11-24T10:59:37.286Z",
+      "provider": "codearts",
+      "url": "https://snap-access.cn-north-4.myhuaweicloud.com/api/v2/chat/completions",
+      "body": {
+        "model": "glm-5.3-flash",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Use the get_color tool with color red. Do not answer in text."
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_color",
+              "description": "Return the color the user asks about",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "color"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": {
+          "type": "function",
+          "function": {
+            "name": "get_color"
+          }
+        },
+        "max_tokens": 256,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
       }
     }
   ]

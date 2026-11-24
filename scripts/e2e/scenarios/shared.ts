@@ -1,15 +1,19 @@
 import type { HttpResult } from "../http";
 import { httpRequest } from "../http";
 import { readDumpSince } from "../dump";
+import { capJsonBody } from "../evidence";
 import type { Check } from "../verify";
 import { checkErrorEnvelope } from "../verify";
 import type { ProviderName } from "../types";
 
+const MAX_EVIDENCE_TEXT = 65536;
+
 export interface CapturedCall {
+  method: "GET" | "POST";
   path: string;
   requestBody?: unknown;
   rawBody?: string;
-  response: { status: number; contentType: string; text: string };
+  response: { status: number; contentType: string; text: string; textTruncated?: boolean };
 }
 
 export interface ScenarioContext {
@@ -55,17 +59,37 @@ export function truncate(s: string, n = 240): string {
 export async function call(
   ctx: ScenarioContext,
   path: string,
-  opts: { body?: unknown; rawBody?: string; headers?: Record<string, string> } = {},
+  opts: { method?: "GET" | "POST"; body?: unknown; rawBody?: string; headers?: Record<string, string> } = {},
 ): Promise<HttpResult> {
-  const res = await httpRequest(ctx.baseUrl, `/${ctx.provider}${path}`, { ...opts, timeoutMs: ctx.timeoutMs });
+  return requestAndRecord(ctx, `/${ctx.provider}${path}`, path, opts);
+}
+
+export async function callGlobal(
+  ctx: ScenarioContext,
+  path: string,
+  opts: { method?: "GET" | "POST"; body?: unknown; rawBody?: string; headers?: Record<string, string> } = {},
+): Promise<HttpResult> {
+  return requestAndRecord(ctx, path, path, opts);
+}
+
+async function requestAndRecord(
+  ctx: ScenarioContext,
+  fullPath: string,
+  path: string,
+  opts: { method?: "GET" | "POST"; body?: unknown; rawBody?: string; headers?: Record<string, string> },
+): Promise<HttpResult> {
+  const res = await httpRequest(ctx.baseUrl, fullPath, { ...opts, timeoutMs: ctx.timeoutMs });
+  const textTruncated = res.text.length > MAX_EVIDENCE_TEXT;
   ctx.capture.push({
+    method: opts.method ?? (opts.body !== undefined || opts.rawBody !== undefined ? "POST" : "GET"),
     path,
-    requestBody: opts.body,
-    rawBody: opts.rawBody,
+    requestBody: opts.body !== undefined ? capJsonBody(opts.body) : undefined,
+    rawBody: opts.rawBody !== undefined ? opts.rawBody.slice(0, MAX_EVIDENCE_TEXT) : undefined,
     response: {
       status: res.status,
       contentType: res.contentType,
-      text: res.text.length > 65536 ? `${res.text.slice(0, 65536)}…(truncated)` : res.text,
+      text: textTruncated ? res.text.slice(0, MAX_EVIDENCE_TEXT) : res.text,
+      textTruncated: textTruncated || undefined,
     },
   });
   return res;

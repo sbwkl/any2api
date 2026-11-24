@@ -2,9 +2,10 @@
   "scenario": "responses.negative.unknown_model",
   "provider": "codebuddy",
   "model": "glm-5.3-flash",
-  "capturedAt": "2026-11-24T09:13:48.402Z",
+  "capturedAt": "2026-11-24T11:01:41.509Z",
   "calls": [
     {
+      "method": "POST",
       "path": "/v1/responses",
       "requestBody": {
         "model": "e2e-model-does-not-exist",
@@ -17,5 +18,6 @@
         "text": "{\"error\":{\"message\":\"model_not_found: e2e-model-does-not-exist\",\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"param\":null}}"
       }
     }
-  ]
+  ],
+  "upstream": []
 }
