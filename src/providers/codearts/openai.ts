@@ -8,8 +8,8 @@ import { getCredentials } from "./config";
 import { refreshNow } from "./refresher";
 import type { GatewayConfig, ModelInfo, Credentials } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
-import { aggregateSseToCompletion } from "../../shared/sse";
-import { errorTypeForStatus } from "../../shared/errors";
+import { aggregateSseToCompletion, normalizeChatSseUsage } from "../../shared/sse";
+import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../../shared/errors";
 import { dumpUpstream } from "../../shared/trace";
 
 const CLIENT_TYPE = "IDE";
@@ -82,7 +82,7 @@ export class OpenAIFacade {
     };
   }
 
-  private resolveModel(name: string | undefined): ModelInfo {
+  private resolveModel(name: string | undefined): ModelInfo | null {
     const models = this.gw.models;
     if (!name) return models[0];
     const lower = name.toLowerCase();
@@ -90,7 +90,7 @@ export class OpenAIFacade {
       models.find((m) => m.modelId.toLowerCase() === lower) ??
       models.find((m) => m.modelName.toLowerCase() === lower) ??
       models.find((m) => m.modelId.toLowerCase().includes(lower) || lower.includes(m.modelId.toLowerCase())) ??
-      models[0]
+      null
     );
   }
 
@@ -138,6 +138,8 @@ export class OpenAIFacade {
     if (!body || !Array.isArray(body.messages))
       return jsonError(400, "invalid_request: messages is required");
     const model = this.resolveModel(body.model);
+    // 未知模型必须显式 4xx：静默回退 models[0] 会让客户端以为在用 A 实际在用 B。
+    if (!model) return jsonError(404, `model_not_found: ${String(body.model)}`);
     const session = this.sessionFor(sessionKey);
 
     // 一轮 = 一次用户消息：新 traceId + msg_；会话内复用 ses_
@@ -232,7 +234,7 @@ export class OpenAIFacade {
       });
     }
     if (wantStream === true) {
-      return new Response(resp.body, {
+      return new Response(resp.body ? normalizeChatSseUsage(resp.body) : resp.body, {
         status: 200,
         headers: {
           "Content-Type": "text/event-stream",
@@ -260,6 +262,6 @@ export class OpenAIFacade {
 function jsonError(status: number, message: string): Response {
   return new Response(JSON.stringify({ error: { message, type: errorTypeForStatus(status), code: null } }), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", [PROXY_ERROR_HEADER]: "proxy" },
   });
 }

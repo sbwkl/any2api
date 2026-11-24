@@ -4,7 +4,7 @@ import { loadConfig } from "./config";
 describe("e2e config", () => {
   test("defaults match the plan", () => {
     const c = loadConfig({}, []);
-    expect(c.maxCalls).toBe(40);
+    expect(c.maxCalls).toBe(200);
     expect(c.providers).toEqual(["codearts", "codebuddy"]);
     expect(c.modelPreference).toEqual(["GLM-5.3-Flash", "DeepSeek-v4.1-Flash(1017)"]);
     expect(c.modelFallback).toBeUndefined();
@@ -14,7 +14,7 @@ describe("e2e config", () => {
     expect(c.port).toBe(0);
     expect(c.fixturesDir).toBe("e2e/fixtures");
     expect(c.reportsDir).toBe("e2e/reports");
-    expect(c.imageUrl).toBeUndefined();
+    expect(c.imageUrl).toBe("https://pic.rmb.bdstatic.com/bjh/news/49a357178ac9972519fab6f835ba61aa.jpeg");
     expect(c.only).toBeUndefined();
   });
 

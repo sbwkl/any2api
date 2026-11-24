@@ -17,7 +17,7 @@ export interface ChatBackend {
 export interface ProtocolCapabilities {
   /** full：支持 required/forced function；auto-only：上游只接受 auto */
   toolChoice?: "full" | "auto-only";
-  /** 是否把上游错误归一为对应协议错误（默认 true）；false = 透传 provider 原样响应 */
+  /** 是否把上游错误归一为对应协议错误（默认 true）；false = 上游错误透传，代理自身生成的错误仍按协议归一 */
   normalizeErrors?: boolean;
   /** 是否在响应中输出 thinking 块（默认 true） */
   thinking?: boolean;

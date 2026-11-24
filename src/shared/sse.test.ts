@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { aggregateSseToCompletion, upstreamErrorFromChunk } from "./sse";
+import { aggregateSseToCompletion, normalizeChatSseUsage, upstreamErrorFromChunk } from "./sse";
 
 function streamOf(text: string): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -112,5 +112,91 @@ describe("sse aggregation", () => {
     expect(upstreamErrorFromChunk({ error_code: "E1", error_msg: "boom" })).toBe("E1: boom");
     expect(upstreamErrorFromChunk({ error: { code: "E2", message: "kaput" } })).toBe("E2: kaput");
     expect(upstreamErrorFromChunk({ text: "[DONE]" })).toBeNull();
+  });
+});
+
+async function collect(stream: ReadableStream<Uint8Array>): Promise<string> {
+  return await new Response(stream).text();
+}
+
+function dataFrames(text: string): any[] {
+  return text
+    .split("\n\n")
+    .map((f) => f.trim())
+    .filter((f) => f.startsWith("data:"))
+    .map((f) => f.slice(5).trim())
+    .filter((d) => d !== "[DONE]")
+    .map((d) => JSON.parse(d));
+}
+
+describe("chat SSE usage normalization", () => {
+  test("moves usage off a chunk that still carries choices", async () => {
+    const input = [
+      `data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"content":"Hi"}}]}`,
+      "",
+      `data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const out = await collect(normalizeChatSseUsage(streamOf(input)));
+    const frames = dataFrames(out);
+    const withUsage = frames.filter((f) => f.usage);
+    expect(withUsage).toHaveLength(1);
+    expect(withUsage[0].choices).toEqual([]);
+    expect(withUsage[0].id).toBe("1");
+    expect(withUsage[0].model).toBe("m");
+    const finish = frames.find((f) => f.choices?.[0]?.finish_reason === "stop");
+    expect(finish.usage ?? null).toBeNull();
+    expect(out.trimEnd().endsWith("[DONE]")).toBe(true);
+    expect(out.match(/\[DONE\]/g)).toHaveLength(1);
+  });
+
+  test("keeps an already conforming usage chunk without duplicating it", async () => {
+    const input = [
+      `data: {"id":"2","model":"m","created":2,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`,
+      "",
+      `data: {"id":"2","model":"m","created":2,"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const frames = dataFrames(await collect(normalizeChatSseUsage(streamOf(input))));
+    expect(frames.filter((f) => f.usage)).toHaveLength(1);
+  });
+
+  test("merges partial usage sent across multiple chunks", async () => {
+    const input = [
+      `data: {"id":"4","model":"m","created":4,"choices":[{"index":0,"delta":{"content":"Hi"}}]}`,
+      "",
+      `data: {"id":"4","model":"m","created":4,"choices":[{"index":0,"delta":{}}],"usage":{"prompt_tokens":31,"prompt_tokens_details":{"cached_tokens":7}}}`,
+      "",
+      `data: {"id":"4","model":"m","created":4,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens":5}}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const frames = dataFrames(await collect(normalizeChatSseUsage(streamOf(input))));
+    const usageFrames = frames.filter((f) => f.usage);
+    expect(usageFrames).toHaveLength(1);
+    expect(usageFrames[0].usage).toEqual({
+      prompt_tokens: 31,
+      completion_tokens: 5,
+      prompt_tokens_details: { cached_tokens: 7 },
+    });
+    expect(usageFrames[0].choices).toEqual([]);
+  });
+
+  test("appends [DONE] when upstream omits it", async () => {
+    const input = `data: {"id":"3","model":"m","created":3,"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n`;
+    const out = await collect(normalizeChatSseUsage(streamOf(input)));
+    expect(out.trimEnd().endsWith("[DONE]")).toBe(true);
+  });
+
+  test("passes non-JSON data lines through unchanged", async () => {
+    const input = 'data: {"text":"[DONE]","error_code":"E1","error_msg":"boom"}\n\ndata: [DONE]\n\n';
+    const out = await collect(normalizeChatSseUsage(streamOf(input)));
+    expect(out).toContain('"error_code":"E1"');
+    expect(out.match(/\[DONE\]/g)).toHaveLength(2);
   });
 });

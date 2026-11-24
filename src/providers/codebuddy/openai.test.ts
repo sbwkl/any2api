@@ -88,6 +88,28 @@ describe("openai facade", () => {
     expect(await resp.text()).toContain("Hello");
   });
 
+  test("streaming moves usage into a trailing chunk with empty choices", async () => {
+    const fetchImpl = (async () => sseResponse()) as typeof fetch;
+    const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
+    const resp = await facade.handleChat(chatRequest({
+      model: "hy4flash-free",
+      messages: [{ role: "user", content: "hi" }],
+      stream: true,
+    }));
+    const text = await resp.text();
+    const frames = text
+      .split("\n\n")
+      .map((f) => f.trim())
+      .filter((f) => f.startsWith("data:"))
+      .map((f) => f.slice(5).trim())
+      .filter((d) => d !== "[DONE]")
+      .map((d) => JSON.parse(d));
+    const usageFrames = frames.filter((f: any) => f.usage);
+    expect(usageFrames).toHaveLength(1);
+    expect(usageFrames[0].choices).toEqual([]);
+    expect(text.trimEnd().endsWith("[DONE]")).toBe(true);
+  });
+
   test("aggregates upstream SSE when stream=false", async () => {
     const fetchImpl = (async () => sseResponse()) as typeof fetch;
     const facade = new CodeBuddyFacade(config, credentials, { fetchImpl });
