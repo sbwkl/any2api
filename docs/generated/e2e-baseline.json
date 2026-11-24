@@ -12,7 +12,196 @@
     "models": {
       "codearts": "glm-5.3-flash",
       "codebuddy": "glm-5.3-flash"
-    }
+    },
+    "scenarioSet": [
+      {
+        "id": "chat.basic.nonstream",
+        "endpoint": "/v1/chat/completions",
+        "feature": "基础非流式（含 usage）",
+        "clause": "OAI-CHAT-01"
+      },
+      {
+        "id": "chat.basic.stream",
+        "endpoint": "/v1/chat/completions",
+        "feature": "SSE 流式 + usage 块",
+        "clause": "OAI-CHAT-02"
+      },
+      {
+        "id": "chat.image.data_url",
+        "endpoint": "/v1/chat/completions",
+        "feature": "image_url data URL",
+        "clause": "OAI-CHAT-04"
+      },
+      {
+        "id": "chat.image.url",
+        "endpoint": "/v1/chat/completions",
+        "feature": "image_url 公网 URL",
+        "clause": "OAI-CHAT-04"
+      },
+      {
+        "id": "chat.multi_turn.system",
+        "endpoint": "/v1/chat/completions",
+        "feature": "multi-turn + system"
+      },
+      {
+        "id": "chat.response_format.json_schema",
+        "endpoint": "/v1/chat/completions",
+        "feature": "response_format json_schema",
+        "clause": "OAI-CHAT-06"
+      },
+      {
+        "id": "chat.tools.forced",
+        "endpoint": "/v1/chat/completions",
+        "feature": "tools + 强制 tool_choice",
+        "clause": "OAI-CHAT-05"
+      },
+      {
+        "id": "chat.response_format.json",
+        "endpoint": "/v1/chat/completions",
+        "feature": "response_format json_object",
+        "clause": "OAI-CHAT-06"
+      },
+      {
+        "id": "chat.logprobs",
+        "endpoint": "/v1/chat/completions",
+        "feature": "logprobs / top_logprobs",
+        "clause": "OAI-CHAT-07"
+      },
+      {
+        "id": "chat.n",
+        "endpoint": "/v1/chat/completions",
+        "feature": "n > 1",
+        "clause": "OAI-CHAT-08"
+      },
+      {
+        "id": "chat.negative.unknown_model",
+        "endpoint": "/v1/chat/completions",
+        "feature": "未知模型显式拒绝",
+        "clause": "OAI-CHAT-03"
+      },
+      {
+        "id": "chat.negative.invalid_json",
+        "endpoint": "/v1/chat/completions",
+        "feature": "非法 JSON 请求体",
+        "clause": "OAI-CHAT-03"
+      },
+      {
+        "id": "messages.basic.nonstream",
+        "endpoint": "/v1/messages",
+        "feature": "基础非流式（含 usage）",
+        "clause": "ANT-MSG-01"
+      },
+      {
+        "id": "messages.basic.stream",
+        "endpoint": "/v1/messages",
+        "feature": "SSE 事件序列",
+        "clause": "ANT-MSG-02"
+      },
+      {
+        "id": "messages.multi_turn.system",
+        "endpoint": "/v1/messages",
+        "feature": "multi-turn + system string"
+      },
+      {
+        "id": "messages.image.base64",
+        "endpoint": "/v1/messages",
+        "feature": "base64 图片",
+        "clause": "ANT-MSG-03"
+      },
+      {
+        "id": "messages.image.url",
+        "endpoint": "/v1/messages",
+        "feature": "URL 图片",
+        "clause": "ANT-MSG-03"
+      },
+      {
+        "id": "messages.image.tool_result",
+        "endpoint": "/v1/messages",
+        "feature": "tool_result 内嵌图片",
+        "clause": "ANT-MSG-04"
+      },
+      {
+        "id": "messages.image.system",
+        "endpoint": "/v1/messages",
+        "feature": "system 数组中的图片",
+        "clause": "ANT-MSG-05",
+        "knownDefect": true
+      },
+      {
+        "id": "messages.tools.forced",
+        "endpoint": "/v1/messages",
+        "feature": "tools + 强制 tool_choice",
+        "clause": "ANT-MSG-06"
+      },
+      {
+        "id": "messages.negative.unknown_model",
+        "endpoint": "/v1/messages",
+        "feature": "未知模型 + 错误信封归一",
+        "clause": "ANT-MSG-07"
+      },
+      {
+        "id": "messages.negative.invalid_json",
+        "endpoint": "/v1/messages",
+        "feature": "非法 JSON 请求体",
+        "clause": "ANT-MSG-07"
+      },
+      {
+        "id": "responses.basic.nonstream",
+        "endpoint": "/v1/responses",
+        "feature": "基础非流式（含 usage）",
+        "clause": "OAI-RESP-01"
+      },
+      {
+        "id": "responses.basic.stream",
+        "endpoint": "/v1/responses",
+        "feature": "SSE 事件序列",
+        "clause": "OAI-RESP-02",
+        "knownDefect": true
+      },
+      {
+        "id": "responses.image.data_url",
+        "endpoint": "/v1/responses",
+        "feature": "input_image data URL",
+        "clause": "OAI-RESP-03",
+        "knownDefect": true
+      },
+      {
+        "id": "responses.tools.forced",
+        "endpoint": "/v1/responses",
+        "feature": "function tools + 强制 tool_choice",
+        "clause": "OAI-RESP-04"
+      },
+      {
+        "id": "responses.negative.unknown_model",
+        "endpoint": "/v1/responses",
+        "feature": "未知模型显式拒绝",
+        "clause": "OAI-RESP-05"
+      },
+      {
+        "id": "models.list",
+        "endpoint": "/v1/models",
+        "feature": "模型列表形状",
+        "clause": "OAI-MODEL-01"
+      }
+    ],
+    "coverage": [
+      {
+        "provider": "codearts",
+        "expected": 28,
+        "actual": 28,
+        "missing": [],
+        "extra": [],
+        "orderMatches": true
+      },
+      {
+        "provider": "codebuddy",
+        "expected": 28,
+        "actual": 28,
+        "missing": [],
+        "extra": [],
+        "orderMatches": true
+      }
+    ]
   },
   "results": [
     {

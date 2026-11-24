@@ -27,9 +27,8 @@ export interface ScenarioContext {
   capture: CapturedCall[];
 }
 
-export interface Scenario {
+export interface ScenarioTemplate {
   id: string;
-  provider: ProviderName | "all";
   endpoint: string;
   feature: string;
   clause?: string;
@@ -38,6 +37,10 @@ export interface Scenario {
   needsProvider?: boolean;
   needsImageUrl?: boolean;
   run: (ctx: ScenarioContext) => Promise<Verdict>;
+}
+
+export interface Scenario extends ScenarioTemplate {
+  provider: ProviderName | "all";
 }
 
 export type VerdictStatus = "pass" | "fail" | "not-supported";

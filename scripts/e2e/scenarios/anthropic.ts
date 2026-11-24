@@ -1,4 +1,3 @@
-import type { ProviderName } from "../types";
 import { checkAnthropicMessage, checkAnthropicStream, checkErrorEnvelope } from "../verify";
 import { RED_IMAGE_DATA_URL } from "./chat";
 import {
@@ -14,7 +13,7 @@ import {
   rejectionVerdict,
   truncate,
   upstreamDump,
-  type Scenario,
+  type ScenarioTemplate,
   type Verdict,
 } from "./shared";
 
@@ -27,11 +26,10 @@ const redImageBlock = () => ({
   source: { type: "base64", media_type: "image/png", data: RED_BASE64 },
 });
 
-export function anthropicScenarios(provider: ProviderName): Scenario[] {
+export function anthropicScenarios(): ScenarioTemplate[] {
   return [
     {
       id: "messages.basic.nonstream",
-      provider,
       endpoint: "/v1/messages",
       feature: "基础非流式（含 usage）",
       clause: "ANT-MSG-01",
@@ -50,7 +48,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.basic.stream",
-      provider,
       endpoint: "/v1/messages",
       feature: "SSE 事件序列",
       clause: "ANT-MSG-02",
@@ -70,7 +67,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.multi_turn.system",
-      provider,
       endpoint: "/v1/messages",
       feature: "multi-turn + system string",
       run: async (ctx) => {
@@ -93,7 +89,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.image.base64",
-      provider,
       endpoint: "/v1/messages",
       feature: "base64 图片",
       clause: "ANT-MSG-03",
@@ -120,7 +115,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.image.url",
-      provider,
       endpoint: "/v1/messages",
       feature: "URL 图片",
       clause: "ANT-MSG-03",
@@ -150,7 +144,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.image.tool_result",
-      provider,
       endpoint: "/v1/messages",
       feature: "tool_result 内嵌图片",
       clause: "ANT-MSG-04",
@@ -188,7 +181,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.image.system",
-      provider,
       endpoint: "/v1/messages",
       feature: "system 数组中的图片",
       clause: "ANT-MSG-05",
@@ -217,7 +209,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.tools.forced",
-      provider,
       endpoint: "/v1/messages",
       feature: "tools + 强制 tool_choice",
       clause: "ANT-MSG-06",
@@ -250,7 +241,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.negative.unknown_model",
-      provider,
       endpoint: "/v1/messages",
       feature: "未知模型 + 错误信封归一",
       clause: "ANT-MSG-07",
@@ -273,7 +263,6 @@ export function anthropicScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "messages.negative.invalid_json",
-      provider,
       endpoint: "/v1/messages",
       feature: "非法 JSON 请求体",
       clause: "ANT-MSG-07",

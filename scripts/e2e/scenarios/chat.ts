@@ -1,5 +1,4 @@
 import { pngDataUrl } from "../images";
-import type { ProviderName } from "../types";
 import { checkChatChunks, checkChatCompletion, checkErrorEnvelope } from "../verify";
 import {
   assess,
@@ -14,8 +13,8 @@ import {
   rejectionVerdict,
   truncate,
   upstreamDump,
-  type Scenario,
   type ScenarioContext,
+  type ScenarioTemplate,
   type Verdict,
 } from "./shared";
 
@@ -36,11 +35,10 @@ function chatCompletionVerdict(ctx: ScenarioContext, res: Awaited<ReturnType<typ
   })();
 }
 
-export function chatScenarios(provider: ProviderName): Scenario[] {
+export function chatScenarios(): ScenarioTemplate[] {
   return [
     {
       id: "chat.basic.nonstream",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "基础非流式（含 usage）",
       clause: "OAI-CHAT-01",
@@ -55,7 +53,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.basic.stream",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "SSE 流式 + usage 块",
       clause: "OAI-CHAT-02",
@@ -76,7 +73,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.image.data_url",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "image_url data URL",
       clause: "OAI-CHAT-04",
@@ -99,7 +95,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.image.url",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "image_url 公网 URL",
       clause: "OAI-CHAT-04",
@@ -129,7 +124,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.multi_turn.system",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "multi-turn + system",
       run: async (ctx) => {
@@ -152,7 +146,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.response_format.json_schema",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "response_format json_schema",
       clause: "OAI-CHAT-06",
@@ -196,7 +189,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.tools.forced",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "tools + 强制 tool_choice",
       clause: "OAI-CHAT-05",
@@ -236,7 +228,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.response_format.json",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "response_format json_object",
       clause: "OAI-CHAT-06",
@@ -267,7 +258,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.logprobs",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "logprobs / top_logprobs",
       clause: "OAI-CHAT-07",
@@ -294,7 +284,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.n",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "n > 1",
       clause: "OAI-CHAT-08",
@@ -316,7 +305,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.negative.unknown_model",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "未知模型显式拒绝",
       clause: "OAI-CHAT-03",
@@ -339,7 +327,6 @@ export function chatScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "chat.negative.invalid_json",
-      provider,
       endpoint: "/v1/chat/completions",
       feature: "非法 JSON 请求体",
       clause: "OAI-CHAT-03",

@@ -1,4 +1,3 @@
-import type { ProviderName } from "../types";
 import { checkErrorEnvelope, checkResponseObject, checkResponsesStream } from "../verify";
 import { RED_IMAGE_DATA_URL } from "./chat";
 import {
@@ -8,22 +7,20 @@ import {
   dumpHasImage,
   fail,
   jsonOf,
-  notSupported,
   pass,
   rejectionVerdict,
   truncate,
   upstreamDump,
-  type Scenario,
+  type ScenarioTemplate,
 } from "./shared";
 
 const OK_PROMPT = "Reply with exactly: OK";
 const COLOR_PROMPT = "What is the dominant color of this image? Answer with one English word.";
 
-export function responsesScenarios(provider: ProviderName): Scenario[] {
+export function responsesScenarios(): ScenarioTemplate[] {
   return [
     {
       id: "responses.basic.nonstream",
-      provider,
       endpoint: "/v1/responses",
       feature: "基础非流式（含 usage）",
       clause: "OAI-RESP-01",
@@ -38,7 +35,6 @@ export function responsesScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "responses.basic.stream",
-      provider,
       endpoint: "/v1/responses",
       feature: "SSE 事件序列",
       clause: "OAI-RESP-02",
@@ -54,7 +50,6 @@ export function responsesScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "responses.image.data_url",
-      provider,
       endpoint: "/v1/responses",
       feature: "input_image data URL",
       clause: "OAI-RESP-03",
@@ -88,7 +83,6 @@ export function responsesScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "responses.tools.forced",
-      provider,
       endpoint: "/v1/responses",
       feature: "function tools + 强制 tool_choice",
       clause: "OAI-RESP-04",
@@ -113,11 +107,7 @@ export function responsesScenarios(provider: ProviderName): Scenario[] {
         if (error) return fail(error);
         if (json?.object !== "response" || json?.status !== "completed") return fail(`响应不是 completed 的 response 对象（status=${String(json?.status)}）`);
         const callItem = (json?.output ?? []).find((o: any) => o?.type === "function_call");
-        if (!callItem) {
-          return provider === "codebuddy"
-            ? notSupported("provider 声明 toolChoice=auto-only，强制 tool_choice 被降级")
-            : fail("output 缺少 function_call（强制 tool_choice 被忽略）");
-        }
+        if (!callItem) return fail("output 缺少 function_call（强制 tool_choice 被忽略）");
         if (callItem.name !== "get_color") return fail(`function_call.name 为 ${String(callItem.name)}`);
         try {
           JSON.parse(callItem.arguments);
@@ -129,7 +119,6 @@ export function responsesScenarios(provider: ProviderName): Scenario[] {
     },
     {
       id: "responses.negative.unknown_model",
-      provider,
       endpoint: "/v1/responses",
       feature: "未知模型显式拒绝",
       clause: "OAI-RESP-05",

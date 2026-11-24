@@ -11,6 +11,9 @@
 body { margin:0; padding:24px; background:var(--bg); color:var(--fg); font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
 .page-head h1 { margin:0 0 4px; font-size:22px; }
 .sub { margin:0; color:var(--muted); overflow-wrap:anywhere; }
+.coverage { margin:6px 0 0; font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+.coverage.ok { color:var(--pass); }
+.coverage.bad { color:var(--fail); }
 .overview { margin:20px 0; }
 .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
 .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
@@ -30,18 +33,23 @@ h4 { margin:0 0 8px; font-size:13px; }
 .muted { color:var(--muted); font-weight:normal; }
 .table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:8px; margin-top:12px; }
 table { border-collapse:collapse; width:100%; min-width:680px; font-size:13px; }
+table.matrix { min-width:900px; }
 th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
 th { color:var(--muted); font-weight:600; font-size:12px; white-space:nowrap; }
 tbody tr:last-child td { border-bottom:0; }
-tr.scenario { cursor:pointer; }
 tr.scenario:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
-tr.scenario:focus { outline:2px solid var(--accent); outline-offset:-2px; }
 td.detail { max-width:360px; overflow-wrap:anywhere; }
+td.provider-cell { min-width:170px; }
+.status-link { color:inherit; text-decoration:none; }
+.status-link:hover .badge { border-color:var(--accent); color:var(--accent); }
+.status-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:999px; }
+.cell-note { display:block; margin-top:3px; color:var(--muted); font-size:11px; line-height:1.4; max-width:240px; overflow-wrap:anywhere; }
 .badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid currentColor; white-space:nowrap; }
 .badge.pass { color:var(--pass); }
 .badge.fail { color:var(--fail); }
 .badge.ns { color:var(--ns); }
 .badge.skipped { color:var(--skip); }
+.badge.missing { color:var(--muted); border-style:dashed; }
 .hint { color:var(--muted); font-size:12px; }
 .evidence-list { display:grid; gap:10px; }
 .evidence { background:var(--card); border:1px solid var(--line); border-radius:8px; }
@@ -55,257 +63,233 @@ pre { margin:0; padding:8px; background:color-mix(in srgb, var(--fg) 5%, transpa
 code { font-size:12px; }
 footer { margin-top:28px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
 footer a { color:var(--accent); }
-@media (max-width:640px) { body { padding:14px; } table, thead, tbody, tr, td { display:block; width:100%; } thead { display:none; } table { min-width:0; } .table-wrap { overflow:visible; } tbody tr.scenario { padding:10px 12px; border-bottom:1px solid var(--line); } tbody tr.scenario:last-child { border-bottom:0; } td { border:0; padding:2px 0; overflow-wrap:anywhere; } td::before { content:attr(data-label) "："; color:var(--muted); font-size:11px; } td.col-clause { display:none; } td.detail { max-width:none; margin-top:4px; } }
+@media (max-width:640px) { body { padding:14px; } table, thead, tbody, tr, td { display:block; width:100%; } thead { display:none; } table, table.matrix { min-width:0; } .table-wrap { overflow:visible; } tbody tr.scenario { padding:10px 12px; border-bottom:1px solid var(--line); } tbody tr.scenario:last-child { border-bottom:0; } td { border:0; padding:2px 0; overflow-wrap:anywhere; } td::before { content:attr(data-label) "："; color:var(--muted); font-size:11px; } td.col-clause { display:none; } td.detail { max-width:none; margin-top:4px; } td.provider-cell { padding-top:6px; } .cell-note { max-width:none; } }
 </style>
 </head>
 <body>
 <header class="page-head">
 <h1>any2api e2e 兼容性报告</h1>
 <p class="sub">生成于 2026-11-24T11:01:41.519Z · 目标 http://127.0.0.1:52841 · 调用预算 50/60 · 模型 codearts=glm-5.3-flash · codebuddy=glm-5.3-flash</p>
+<p class="coverage ok">场景集一致：codearts 28/28 · codebuddy 28/28</p>
 </header>
 <section class="overview" aria-label="总览"><div class="cards"><div class="card"><h3>codearts</h3><p class="card-total">28 场景</p><p class="counts">pass 13 · fail 10 · not-supported 3 · skipped 2</p></div><div class="card"><h3>codebuddy</h3><p class="card-total">28 场景</p><p class="counts">pass 18 · fail 7 · not-supported 1 · skipped 2</p></div><div class="card"><h3>全局</h3><p class="card-total">1 场景</p><p class="counts">pass 1 · fail 0 · not-supported 0 · skipped 0</p></div><div class="card total"><h3>合计</h3><p class="card-total">57 场景</p><p class="counts">pass 32 · fail 17 · not-supported 4 · skipped 4</p></div></div></section>
 <div class="filters" role="group" aria-label="按状态过滤">
 <span class="filter-label">过滤</span>
-<button type="button" data-filter="all" class="active">全部 <span class="n">57</span></button>
-<button type="button" data-filter="fail">fail <span class="n">17</span></button>
-<button type="button" data-filter="not-supported">not-supported <span class="n">4</span></button>
-<button type="button" data-filter="skipped">skipped <span class="n">4</span></button>
+<button type="button" data-filter="all" class="active">全部 <span class="n">29</span></button>
+<button type="button" data-filter="fail">fail <span class="n">11</span></button>
+<button type="button" data-filter="not-supported">not-supported <span class="n">3</span></button>
+<button type="button" data-filter="skipped">skipped <span class="n">2</span></button>
 </div>
 <main>
-<section id="codearts">
-<h2>codearts <span class="muted">28 场景</span></h2>
-<p class="counts">pass 13 · fail 10 · not-supported 3 · skipped 2</p>
-<div class="table-wrap"><table>
-<thead><tr><th>场景</th><th>接口</th><th>特性</th><th>状态</th><th class="col-clause">条款</th><th>说明</th></tr></thead>
+<section id="matrix">
+<h2>场景对照矩阵 <span class="muted">28 场景 × 2 providers</span></h2>
+<p class="counts">同一场景模板按相同顺序对每个 provider 执行；列内是该 provider 的实际结果。</p>
+<div class="table-wrap"><table class="matrix">
+<thead><tr><th>场景</th><th>接口</th><th>特性</th><th>codearts</th><th>codebuddy</th><th class="col-clause">条款</th></tr></thead>
 <tbody>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-0" tabindex="0" role="button" aria-label="查看 chat.basic.nonstream 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>chat.basic.nonstream</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">基础非流式（含 usage）</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-0" data-target="ev-codearts-0" aria-label="查看 codearts 的 chat.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-0" data-target="ev-codebuddy-0" aria-label="查看 codebuddy 的 chat.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-1" tabindex="0" role="button" aria-label="查看 chat.basic.stream 的场景证据">
+<tr class="scenario" data-statuses="pass fail">
 <td data-label="场景"><code>chat.basic.stream</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">SSE 流式 + usage 块</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-1" data-target="ev-codearts-1" aria-label="查看 codearts 的 chat.basic.stream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-1" data-target="ev-codebuddy-1" aria-label="查看 codebuddy 的 chat.basic.stream 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="usage 块应带空 choices">usage 块应带空 choices</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-02</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-2" tabindex="0" role="button" aria-label="查看 chat.image.data_url 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>chat.image.data_url</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">image_url data URL</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-2" data-target="ev-codearts-2" aria-label="查看 codearts 的 chat.image.data_url 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-2" data-target="ev-codebuddy-2" aria-label="查看 codebuddy 的 chat.image.data_url 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-04</td>
-<td class="detail" data-label="说明">图片送达上游且颜色识别正确</td>
 </tr>
-<tr class="scenario" data-status="skipped" data-target="ev-codearts-3" tabindex="0" role="button" aria-label="查看 chat.image.url 的场景证据">
+<tr class="scenario" data-statuses="skipped skipped">
 <td data-label="场景"><code>chat.image.url</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">image_url 公网 URL</td>
-<td data-label="状态"><span class="badge skipped">skipped</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-3" data-target="ev-codearts-3" aria-label="查看 codearts 的 chat.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-3" data-target="ev-codebuddy-3" aria-label="查看 codebuddy 的 chat.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-04</td>
-<td class="detail" data-label="说明">未设置 E2E_IMAGE_URL</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-4" tabindex="0" role="button" aria-label="查看 chat.multi_turn.system 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>chat.multi_turn.system</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">multi-turn + system</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-4" data-target="ev-codearts-4" aria-label="查看 codearts 的 chat.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-4" data-target="ev-codebuddy-4" aria-label="查看 codebuddy 的 chat.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
 <td class="col-clause" data-label="条款">—</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-5" tabindex="0" role="button" aria-label="查看 chat.response_format.json_schema 的场景证据">
+<tr class="scenario" data-statuses="fail fail">
 <td data-label="场景"><code>chat.response_format.json_schema</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">response_format json_schema</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-5" data-target="ev-codearts-5" aria-label="查看 codearts 的 chat.response_format.json_schema 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="上游请求未包含 response_format.json_schema（静默丢弃）">上游请求未包含 response_format.json_schema（静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-5" data-target="ev-codebuddy-5" aria-label="查看 codebuddy 的 chat.response_format.json_schema 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="json_schema 已送达上游，但 content 不是 JSON（上游未强制结构）：```json {&quot;ok&quot;: true} ```">json_schema 已送达上游，但 content 不是 JSON（上游未强制结构）：```json {&quot;ok&quot;: true} ```</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-06</td>
-<td class="detail" data-label="说明">上游请求未包含 response_format.json_schema（静默丢弃）</td>
 </tr>
-<tr class="scenario" data-status="not-supported" data-target="ev-codearts-6" tabindex="0" role="button" aria-label="查看 chat.tools.forced 的场景证据">
+<tr class="scenario" data-statuses="not-supported not-supported">
 <td data-label="场景"><code>chat.tools.forced</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">tools + 强制 tool_choice</td>
-<td data-label="状态"><span class="badge ns">not-supported</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-6" data-target="ev-codearts-6" aria-label="查看 codearts 的 chat.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request…</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-6" data-target="ev-codebuddy-6" aria-label="查看 codebuddy 的 chat.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝（HTTP 400）：{&quot;error&quot;:{&quot;message&quot;:&quot;Invalid request. Please retry&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;code&quot;:11101}}">上游显式拒绝（HTTP 400）：{&quot;error&quot;:{&quot;message&quot;:&quot;Invalid request. Please retry&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;code&quot;:11101}}</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-05</td>
-<td class="detail" data-label="说明">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-7" tabindex="0" role="button" aria-label="查看 chat.response_format.json 的场景证据">
+<tr class="scenario" data-statuses="fail pass">
 <td data-label="场景"><code>chat.response_format.json</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">response_format json_object</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-7" data-target="ev-codearts-7" aria-label="查看 codearts 的 chat.response_format.json 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="上游请求未包含 response_format（静默丢弃）">上游请求未包含 response_format（静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-7" data-target="ev-codebuddy-7" aria-label="查看 codebuddy 的 chat.response_format.json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="response_format 送达上游且输出为 JSON">response_format 送达上游且输出为 JSON</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-06</td>
-<td class="detail" data-label="说明">上游请求未包含 response_format（静默丢弃）</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-8" tabindex="0" role="button" aria-label="查看 chat.logprobs 的场景证据">
+<tr class="scenario" data-statuses="fail fail">
 <td data-label="场景"><code>chat.logprobs</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">logprobs / top_logprobs</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-8" data-target="ev-codearts-8" aria-label="查看 codearts 的 chat.logprobs 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="响应缺少 choices[0].logprobs.content（参数被静默丢弃）">响应缺少 choices[0].logprobs.content（参数被静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-8" data-target="ev-codebuddy-8" aria-label="查看 codebuddy 的 chat.logprobs 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="响应缺少 choices[0].logprobs.content（参数被静默丢弃）">响应缺少 choices[0].logprobs.content（参数被静默丢弃）</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-07</td>
-<td class="detail" data-label="说明">响应缺少 choices[0].logprobs.content（参数被静默丢弃）</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-9" tabindex="0" role="button" aria-label="查看 chat.n 的场景证据">
+<tr class="scenario" data-statuses="fail fail">
 <td data-label="场景"><code>chat.n</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">n &gt; 1</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-9" data-target="ev-codearts-9" aria-label="查看 codearts 的 chat.n 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="choices 数量为 1（n=2 被静默丢弃）">choices 数量为 1（n=2 被静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-9" data-target="ev-codebuddy-9" aria-label="查看 codebuddy 的 chat.n 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="choices 数量为 1（n=2 被静默丢弃）">choices 数量为 1（n=2 被静默丢弃）</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-08</td>
-<td class="detail" data-label="说明">choices 数量为 1（n=2 被静默丢弃）</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-10" tabindex="0" role="button" aria-label="查看 chat.negative.unknown_model 的场景证据">
+<tr class="scenario" data-statuses="fail pass">
 <td data-label="场景"><code>chat.negative.unknown_model</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">未知模型显式拒绝</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-10" data-target="ev-codearts-10" aria-label="查看 codearts 的 chat.negative.unknown_model 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="未知模型被静默接受/回退（响应 model=deepseek-v4.1-flash-1017）">未知模型被静默接受/回退（响应 model=deepseek-v4.1-flash-1017）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-10" data-target="ev-codebuddy-10" aria-label="查看 codebuddy 的 chat.negative.unknown_model 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="显式拒绝（HTTP 404）">显式拒绝（HTTP 404）</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-03</td>
-<td class="detail" data-label="说明">未知模型被静默接受/回退（响应 model=deepseek-v4.1-flash-1017）</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-11" tabindex="0" role="button" aria-label="查看 chat.negative.invalid_json 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>chat.negative.invalid_json</code></td>
 <td data-label="接口">/v1/chat/completions</td>
 <td data-label="特性">非法 JSON 请求体</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-11" data-target="ev-codearts-11" aria-label="查看 codearts 的 chat.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-11" data-target="ev-codebuddy-11" aria-label="查看 codebuddy 的 chat.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td>
 <td class="col-clause" data-label="条款">OAI-CHAT-03</td>
-<td class="detail" data-label="说明">HTTP 400；错误信封合规</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-12" tabindex="0" role="button" aria-label="查看 messages.basic.nonstream 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>messages.basic.nonstream</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">基础非流式（含 usage）</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-12" data-target="ev-codearts-12" aria-label="查看 codearts 的 messages.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-12" data-target="ev-codebuddy-12" aria-label="查看 codebuddy 的 messages.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-13" tabindex="0" role="button" aria-label="查看 messages.basic.stream 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>messages.basic.stream</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">SSE 事件序列</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-13" data-target="ev-codearts-13" aria-label="查看 codearts 的 messages.basic.stream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-13" data-target="ev-codebuddy-13" aria-label="查看 codebuddy 的 messages.basic.stream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-02</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-14" tabindex="0" role="button" aria-label="查看 messages.multi_turn.system 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>messages.multi_turn.system</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">multi-turn + system string</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-14" data-target="ev-codearts-14" aria-label="查看 codearts 的 messages.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-14" data-target="ev-codebuddy-14" aria-label="查看 codebuddy 的 messages.multi_turn.system 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
 <td class="col-clause" data-label="条款">—</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-15" tabindex="0" role="button" aria-label="查看 messages.image.base64 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>messages.image.base64</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">base64 图片</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-15" data-target="ev-codearts-15" aria-label="查看 codearts 的 messages.image.base64 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-15" data-target="ev-codebuddy-15" aria-label="查看 codebuddy 的 messages.image.base64 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="图片送达上游且颜色识别正确">图片送达上游且颜色识别正确</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-03</td>
-<td class="detail" data-label="说明">图片送达上游且颜色识别正确</td>
 </tr>
-<tr class="scenario" data-status="skipped" data-target="ev-codearts-16" tabindex="0" role="button" aria-label="查看 messages.image.url 的场景证据">
+<tr class="scenario" data-statuses="skipped skipped">
 <td data-label="场景"><code>messages.image.url</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">URL 图片</td>
-<td data-label="状态"><span class="badge skipped">skipped</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-16" data-target="ev-codearts-16" aria-label="查看 codearts 的 messages.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-16" data-target="ev-codebuddy-16" aria-label="查看 codebuddy 的 messages.image.url 场景证据"><span class="badge skipped">skipped</span></a><span class="cell-note" title="未设置 E2E_IMAGE_URL">未设置 E2E_IMAGE_URL</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-03</td>
-<td class="detail" data-label="说明">未设置 E2E_IMAGE_URL</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-17" tabindex="0" role="button" aria-label="查看 messages.image.tool_result 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>messages.image.tool_result</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">tool_result 内嵌图片</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-17" data-target="ev-codearts-17" aria-label="查看 codearts 的 messages.image.tool_result 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="tool_result 图片送达上游且颜色识别正确">tool_result 图片送达上游且颜色识别正确</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-17" data-target="ev-codebuddy-17" aria-label="查看 codebuddy 的 messages.image.tool_result 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="tool_result 图片送达上游且颜色识别正确">tool_result 图片送达上游且颜色识别正确</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-04</td>
-<td class="detail" data-label="说明">tool_result 图片送达上游且颜色识别正确</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-18" tabindex="0" role="button" aria-label="查看 messages.image.system 的场景证据">
+<tr class="scenario" data-statuses="fail fail">
 <td data-label="场景"><code>messages.image.system</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">system 数组中的图片</td>
-<td data-label="状态"><span class="badge fail">fail（已知缺陷）</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-18" data-target="ev-codearts-18" aria-label="查看 codearts 的 messages.image.system 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="system 图片未送达上游（静默丢弃）">system 图片未送达上游（静默丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-18" data-target="ev-codebuddy-18" aria-label="查看 codebuddy 的 messages.image.system 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="system 图片未送达上游（静默丢弃）">system 图片未送达上游（静默丢弃）</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-05</td>
-<td class="detail" data-label="说明">system 图片未送达上游（静默丢弃）</td>
 </tr>
-<tr class="scenario" data-status="not-supported" data-target="ev-codearts-19" tabindex="0" role="button" aria-label="查看 messages.tools.forced 的场景证据">
+<tr class="scenario" data-statuses="not-supported pass">
 <td data-label="场景"><code>messages.tools.forced</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">tools + 强制 tool_choice</td>
-<td data-label="状态"><span class="badge ns">not-supported</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-19" data-target="ev-codearts-19" aria-label="查看 codearts 的 messages.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request…</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-19" data-target="ev-codebuddy-19" aria-label="查看 codebuddy 的 messages.tools.forced 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="强制 tool_choice 生效">强制 tool_choice 生效</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-06</td>
-<td class="detail" data-label="说明">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-20" tabindex="0" role="button" aria-label="查看 messages.negative.unknown_model 的场景证据">
+<tr class="scenario" data-statuses="fail pass">
 <td data-label="场景"><code>messages.negative.unknown_model</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">未知模型 + 错误信封归一</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-20" data-target="ev-codearts-20" aria-label="查看 codearts 的 messages.negative.unknown_model 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）">未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-20" data-target="ev-codebuddy-20" aria-label="查看 codebuddy 的 messages.negative.unknown_model 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="显式拒绝（HTTP 404）">显式拒绝（HTTP 404）</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-07</td>
-<td class="detail" data-label="说明">未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-21" tabindex="0" role="button" aria-label="查看 messages.negative.invalid_json 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>messages.negative.invalid_json</code></td>
 <td data-label="接口">/v1/messages</td>
 <td data-label="特性">非法 JSON 请求体</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-21" data-target="ev-codearts-21" aria-label="查看 codearts 的 messages.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-21" data-target="ev-codebuddy-21" aria-label="查看 codebuddy 的 messages.negative.invalid_json 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 400；错误信封合规">HTTP 400；错误信封合规</span></td>
 <td class="col-clause" data-label="条款">ANT-MSG-07</td>
-<td class="detail" data-label="说明">HTTP 400；错误信封合规</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-22" tabindex="0" role="button" aria-label="查看 responses.basic.nonstream 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>responses.basic.nonstream</code></td>
 <td data-label="接口">/v1/responses</td>
 <td data-label="特性">基础非流式（含 usage）</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-22" data-target="ev-codearts-22" aria-label="查看 codearts 的 responses.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-22" data-target="ev-codebuddy-22" aria-label="查看 codebuddy 的 responses.basic.nonstream 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
 <td class="col-clause" data-label="条款">OAI-RESP-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-23" tabindex="0" role="button" aria-label="查看 responses.basic.stream 的场景证据">
+<tr class="scenario" data-statuses="fail fail">
 <td data-label="场景"><code>responses.basic.stream</code></td>
 <td data-label="接口">/v1/responses</td>
 <td data-label="特性">SSE 事件序列</td>
-<td data-label="状态"><span class="badge fail">fail（已知缺陷）</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-23" data-target="ev-codearts-23" aria-label="查看 codearts 的 responses.basic.stream 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="缺少 response.output_text.done">缺少 response.output_text.done</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-23" data-target="ev-codebuddy-23" aria-label="查看 codebuddy 的 responses.basic.stream 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="缺少 response.output_text.done">缺少 response.output_text.done</span></td>
 <td class="col-clause" data-label="条款">OAI-RESP-02</td>
-<td class="detail" data-label="说明">缺少 response.output_text.done</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-24" tabindex="0" role="button" aria-label="查看 responses.image.data_url 的场景证据">
+<tr class="scenario" data-statuses="fail fail">
 <td data-label="场景"><code>responses.image.data_url</code></td>
 <td data-label="接口">/v1/responses</td>
 <td data-label="特性">input_image data URL</td>
-<td data-label="状态"><span class="badge fail">fail（已知缺陷）</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-24" data-target="ev-codearts-24" aria-label="查看 codearts 的 responses.image.data_url 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="上游请求未包含图片字段（input_image 被丢弃）">上游请求未包含图片字段（input_image 被丢弃）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-24" data-target="ev-codebuddy-24" aria-label="查看 codebuddy 的 responses.image.data_url 场景证据"><span class="badge fail">fail（已知缺陷）</span></a><span class="cell-note" title="上游请求未包含图片字段（input_image 被丢弃）">上游请求未包含图片字段（input_image 被丢弃）</span></td>
 <td class="col-clause" data-label="条款">OAI-RESP-03</td>
-<td class="detail" data-label="说明">上游请求未包含图片字段（input_image 被丢弃）</td>
 </tr>
-<tr class="scenario" data-status="not-supported" data-target="ev-codearts-25" tabindex="0" role="button" aria-label="查看 responses.tools.forced 的场景证据">
+<tr class="scenario" data-statuses="not-supported pass">
 <td data-label="场景"><code>responses.tools.forced</code></td>
 <td data-label="接口">/v1/responses</td>
 <td data-label="特性">function tools + 强制 tool_choice</td>
-<td data-label="状态"><span class="badge ns">not-supported</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-25" data-target="ev-codearts-25" aria-label="查看 codearts 的 responses.tools.forced 场景证据"><span class="badge ns">not-supported</span></a><span class="cell-note" title="上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request…</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-25" data-target="ev-codebuddy-25" aria-label="查看 codebuddy 的 responses.tools.forced 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="强制 tool_choice 生效">强制 tool_choice 生效</span></td>
 <td class="col-clause" data-label="条款">OAI-RESP-04</td>
-<td class="detail" data-label="说明">上游显式拒绝，但状态码被映射为 502：{&quot;error&quot;:{&quot;message&quot;:&quot;upstream_error: no choices in upstream SSE: InferHub.001001005.400: The request param is invalid, Please check it&quot;,&quot;type&quot;:&quot;upstream_error&quot;,&quot;code&quot;:null}}</td>
 </tr>
-<tr class="scenario" data-status="fail" data-target="ev-codearts-26" tabindex="0" role="button" aria-label="查看 responses.negative.unknown_model 的场景证据">
+<tr class="scenario" data-statuses="fail pass">
 <td data-label="场景"><code>responses.negative.unknown_model</code></td>
 <td data-label="接口">/v1/responses</td>
 <td data-label="特性">未知模型显式拒绝</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-26" data-target="ev-codearts-26" aria-label="查看 codearts 的 responses.negative.unknown_model 场景证据"><span class="badge fail">fail</span></a><span class="cell-note" title="未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）">未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-26" data-target="ev-codebuddy-26" aria-label="查看 codebuddy 的 responses.negative.unknown_model 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="显式拒绝（HTTP 404）">显式拒绝（HTTP 404）</span></td>
 <td class="col-clause" data-label="条款">OAI-RESP-05</td>
-<td class="detail" data-label="说明">未知模型被静默接受/回退（响应 model=e2e-model-does-not-exist）</td>
 </tr>
-<tr class="scenario" data-status="pass" data-target="ev-codearts-27" tabindex="0" role="button" aria-label="查看 models.list 的场景证据">
+<tr class="scenario" data-statuses="pass pass">
 <td data-label="场景"><code>models.list</code></td>
 <td data-label="接口">/v1/models</td>
 <td data-label="特性">模型列表形状</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td class="provider-cell" data-label="codearts"><a class="status-link" href="#ev-codearts-27" data-target="ev-codearts-27" aria-label="查看 codearts 的 models.list 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td><td class="provider-cell" data-label="codebuddy"><a class="status-link" href="#ev-codebuddy-27" data-target="ev-codebuddy-27" aria-label="查看 codebuddy 的 models.list 场景证据"><span class="badge pass">pass</span></a><span class="cell-note" title="HTTP 200；契约通过">HTTP 200；契约通过</span></td>
 <td class="col-clause" data-label="条款">OAI-MODEL-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
 </tr>
 </tbody>
 </table></div>
-<p class="hint">点击表格行可跳转到下方对应的场景证据。</p>
-<h3>场景证据</h3>
+<p class="hint">同一行是两个 provider 的同一场景；点击状态展开对应 provider 的场景证据。</p>
+</section>
+<section id="evidence-codearts">
+<h2>codearts 场景证据 <span class="muted">28 场景</span></h2>
+<p class="counts">pass 13 · fail 10 · not-supported 3 · skipped 2</p>
 <div class="evidence-list">
 <details class="evidence" id="ev-codearts-0" data-status="pass">
 <summary><span class="badge pass">pass</span> <code>chat.basic.nonstream</code> <span class="muted">/v1/chat/completions · 2440ms</span></summary>
@@ -1866,240 +1850,9 @@ footer a { color:var(--accent); }
 </details>
 </div>
 </section>
-<section id="codebuddy">
-<h2>codebuddy <span class="muted">28 场景</span></h2>
+<section id="evidence-codebuddy">
+<h2>codebuddy 场景证据 <span class="muted">28 场景</span></h2>
 <p class="counts">pass 18 · fail 7 · not-supported 1 · skipped 2</p>
-<div class="table-wrap"><table>
-<thead><tr><th>场景</th><th>接口</th><th>特性</th><th>状态</th><th class="col-clause">条款</th><th>说明</th></tr></thead>
-<tbody>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-0" tabindex="0" role="button" aria-label="查看 chat.basic.nonstream 的场景证据">
-<td data-label="场景"><code>chat.basic.nonstream</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">基础非流式（含 usage）</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
-</tr>
-<tr class="scenario" data-status="fail" data-target="ev-codebuddy-1" tabindex="0" role="button" aria-label="查看 chat.basic.stream 的场景证据">
-<td data-label="场景"><code>chat.basic.stream</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">SSE 流式 + usage 块</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-02</td>
-<td class="detail" data-label="说明">usage 块应带空 choices</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-2" tabindex="0" role="button" aria-label="查看 chat.image.data_url 的场景证据">
-<td data-label="场景"><code>chat.image.data_url</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">image_url data URL</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-04</td>
-<td class="detail" data-label="说明">图片送达上游且颜色识别正确</td>
-</tr>
-<tr class="scenario" data-status="skipped" data-target="ev-codebuddy-3" tabindex="0" role="button" aria-label="查看 chat.image.url 的场景证据">
-<td data-label="场景"><code>chat.image.url</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">image_url 公网 URL</td>
-<td data-label="状态"><span class="badge skipped">skipped</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-04</td>
-<td class="detail" data-label="说明">未设置 E2E_IMAGE_URL</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-4" tabindex="0" role="button" aria-label="查看 chat.multi_turn.system 的场景证据">
-<td data-label="场景"><code>chat.multi_turn.system</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">multi-turn + system</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">—</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
-</tr>
-<tr class="scenario" data-status="fail" data-target="ev-codebuddy-5" tabindex="0" role="button" aria-label="查看 chat.response_format.json_schema 的场景证据">
-<td data-label="场景"><code>chat.response_format.json_schema</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">response_format json_schema</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-06</td>
-<td class="detail" data-label="说明">json_schema 已送达上游，但 content 不是 JSON（上游未强制结构）：```json {&quot;ok&quot;: true} ```</td>
-</tr>
-<tr class="scenario" data-status="not-supported" data-target="ev-codebuddy-6" tabindex="0" role="button" aria-label="查看 chat.tools.forced 的场景证据">
-<td data-label="场景"><code>chat.tools.forced</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">tools + 强制 tool_choice</td>
-<td data-label="状态"><span class="badge ns">not-supported</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-05</td>
-<td class="detail" data-label="说明">上游显式拒绝（HTTP 400）：{&quot;error&quot;:{&quot;message&quot;:&quot;Invalid request. Please retry&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;code&quot;:11101}}</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-7" tabindex="0" role="button" aria-label="查看 chat.response_format.json 的场景证据">
-<td data-label="场景"><code>chat.response_format.json</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">response_format json_object</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-06</td>
-<td class="detail" data-label="说明">response_format 送达上游且输出为 JSON</td>
-</tr>
-<tr class="scenario" data-status="fail" data-target="ev-codebuddy-8" tabindex="0" role="button" aria-label="查看 chat.logprobs 的场景证据">
-<td data-label="场景"><code>chat.logprobs</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">logprobs / top_logprobs</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-07</td>
-<td class="detail" data-label="说明">响应缺少 choices[0].logprobs.content（参数被静默丢弃）</td>
-</tr>
-<tr class="scenario" data-status="fail" data-target="ev-codebuddy-9" tabindex="0" role="button" aria-label="查看 chat.n 的场景证据">
-<td data-label="场景"><code>chat.n</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">n &gt; 1</td>
-<td data-label="状态"><span class="badge fail">fail</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-08</td>
-<td class="detail" data-label="说明">choices 数量为 1（n=2 被静默丢弃）</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-10" tabindex="0" role="button" aria-label="查看 chat.negative.unknown_model 的场景证据">
-<td data-label="场景"><code>chat.negative.unknown_model</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">未知模型显式拒绝</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-03</td>
-<td class="detail" data-label="说明">显式拒绝（HTTP 404）</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-11" tabindex="0" role="button" aria-label="查看 chat.negative.invalid_json 的场景证据">
-<td data-label="场景"><code>chat.negative.invalid_json</code></td>
-<td data-label="接口">/v1/chat/completions</td>
-<td data-label="特性">非法 JSON 请求体</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-CHAT-03</td>
-<td class="detail" data-label="说明">HTTP 400；错误信封合规</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-12" tabindex="0" role="button" aria-label="查看 messages.basic.nonstream 的场景证据">
-<td data-label="场景"><code>messages.basic.nonstream</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">基础非流式（含 usage）</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-13" tabindex="0" role="button" aria-label="查看 messages.basic.stream 的场景证据">
-<td data-label="场景"><code>messages.basic.stream</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">SSE 事件序列</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-02</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-14" tabindex="0" role="button" aria-label="查看 messages.multi_turn.system 的场景证据">
-<td data-label="场景"><code>messages.multi_turn.system</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">multi-turn + system string</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">—</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-15" tabindex="0" role="button" aria-label="查看 messages.image.base64 的场景证据">
-<td data-label="场景"><code>messages.image.base64</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">base64 图片</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-03</td>
-<td class="detail" data-label="说明">图片送达上游且颜色识别正确</td>
-</tr>
-<tr class="scenario" data-status="skipped" data-target="ev-codebuddy-16" tabindex="0" role="button" aria-label="查看 messages.image.url 的场景证据">
-<td data-label="场景"><code>messages.image.url</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">URL 图片</td>
-<td data-label="状态"><span class="badge skipped">skipped</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-03</td>
-<td class="detail" data-label="说明">未设置 E2E_IMAGE_URL</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-17" tabindex="0" role="button" aria-label="查看 messages.image.tool_result 的场景证据">
-<td data-label="场景"><code>messages.image.tool_result</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">tool_result 内嵌图片</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-04</td>
-<td class="detail" data-label="说明">tool_result 图片送达上游且颜色识别正确</td>
-</tr>
-<tr class="scenario" data-status="fail" data-target="ev-codebuddy-18" tabindex="0" role="button" aria-label="查看 messages.image.system 的场景证据">
-<td data-label="场景"><code>messages.image.system</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">system 数组中的图片</td>
-<td data-label="状态"><span class="badge fail">fail（已知缺陷）</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-05</td>
-<td class="detail" data-label="说明">system 图片未送达上游（静默丢弃）</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-19" tabindex="0" role="button" aria-label="查看 messages.tools.forced 的场景证据">
-<td data-label="场景"><code>messages.tools.forced</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">tools + 强制 tool_choice</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-06</td>
-<td class="detail" data-label="说明">强制 tool_choice 生效</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-20" tabindex="0" role="button" aria-label="查看 messages.negative.unknown_model 的场景证据">
-<td data-label="场景"><code>messages.negative.unknown_model</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">未知模型 + 错误信封归一</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-07</td>
-<td class="detail" data-label="说明">显式拒绝（HTTP 404）</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-21" tabindex="0" role="button" aria-label="查看 messages.negative.invalid_json 的场景证据">
-<td data-label="场景"><code>messages.negative.invalid_json</code></td>
-<td data-label="接口">/v1/messages</td>
-<td data-label="特性">非法 JSON 请求体</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">ANT-MSG-07</td>
-<td class="detail" data-label="说明">HTTP 400；错误信封合规</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-22" tabindex="0" role="button" aria-label="查看 responses.basic.nonstream 的场景证据">
-<td data-label="场景"><code>responses.basic.nonstream</code></td>
-<td data-label="接口">/v1/responses</td>
-<td data-label="特性">基础非流式（含 usage）</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-RESP-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
-</tr>
-<tr class="scenario" data-status="fail" data-target="ev-codebuddy-23" tabindex="0" role="button" aria-label="查看 responses.basic.stream 的场景证据">
-<td data-label="场景"><code>responses.basic.stream</code></td>
-<td data-label="接口">/v1/responses</td>
-<td data-label="特性">SSE 事件序列</td>
-<td data-label="状态"><span class="badge fail">fail（已知缺陷）</span></td>
-<td class="col-clause" data-label="条款">OAI-RESP-02</td>
-<td class="detail" data-label="说明">缺少 response.output_text.done</td>
-</tr>
-<tr class="scenario" data-status="fail" data-target="ev-codebuddy-24" tabindex="0" role="button" aria-label="查看 responses.image.data_url 的场景证据">
-<td data-label="场景"><code>responses.image.data_url</code></td>
-<td data-label="接口">/v1/responses</td>
-<td data-label="特性">input_image data URL</td>
-<td data-label="状态"><span class="badge fail">fail（已知缺陷）</span></td>
-<td class="col-clause" data-label="条款">OAI-RESP-03</td>
-<td class="detail" data-label="说明">上游请求未包含图片字段（input_image 被丢弃）</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-25" tabindex="0" role="button" aria-label="查看 responses.tools.forced 的场景证据">
-<td data-label="场景"><code>responses.tools.forced</code></td>
-<td data-label="接口">/v1/responses</td>
-<td data-label="特性">function tools + 强制 tool_choice</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-RESP-04</td>
-<td class="detail" data-label="说明">强制 tool_choice 生效</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-26" tabindex="0" role="button" aria-label="查看 responses.negative.unknown_model 的场景证据">
-<td data-label="场景"><code>responses.negative.unknown_model</code></td>
-<td data-label="接口">/v1/responses</td>
-<td data-label="特性">未知模型显式拒绝</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-RESP-05</td>
-<td class="detail" data-label="说明">显式拒绝（HTTP 404）</td>
-</tr>
-<tr class="scenario" data-status="pass" data-target="ev-codebuddy-27" tabindex="0" role="button" aria-label="查看 models.list 的场景证据">
-<td data-label="场景"><code>models.list</code></td>
-<td data-label="接口">/v1/models</td>
-<td data-label="特性">模型列表形状</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
-<td class="col-clause" data-label="条款">OAI-MODEL-01</td>
-<td class="detail" data-label="说明">HTTP 200；契约通过</td>
-</tr>
-</tbody>
-</table></div>
-<p class="hint">点击表格行可跳转到下方对应的场景证据。</p>
-<h3>场景证据</h3>
 <div class="evidence-list">
 <details class="evidence" id="ev-codebuddy-0" data-status="pass">
 <summary><span class="badge pass">pass</span> <code>chat.basic.nonstream</code> <span class="muted">/v1/chat/completions · 2104ms</span></summary>
@@ -3601,17 +3354,16 @@ footer a { color:var(--accent); }
 <div class="table-wrap"><table>
 <thead><tr><th>场景</th><th>接口</th><th>特性</th><th>状态</th><th class="col-clause">条款</th><th>说明</th></tr></thead>
 <tbody>
-<tr class="scenario" data-status="pass" data-target="ev-global-0" tabindex="0" role="button" aria-label="查看 healthz.aggregate 的场景证据">
+<tr class="scenario" data-statuses="pass">
 <td data-label="场景"><code>healthz.aggregate</code></td>
 <td data-label="接口">/healthz</td>
 <td data-label="特性">聚合健康检查</td>
-<td data-label="状态"><span class="badge pass">pass</span></td>
+<td data-label="状态"><a class="status-link" href="#ev-global-0" data-target="ev-global-0" aria-label="查看 healthz.aggregate 场景证据"><span class="badge pass">pass</span></a></td>
 <td class="col-clause" data-label="条款">—</td>
 <td class="detail" data-label="说明">HTTP 200；2 个 provider</td>
 </tr>
 </tbody>
 </table></div>
-<p class="hint">点击表格行可跳转到下方对应的场景证据。</p>
 <h3>场景证据</h3>
 <div class="evidence-list">
 <details class="evidence" id="ev-global-0" data-status="pass">
@@ -3647,7 +3399,8 @@ footer a { color:var(--accent); }
   function apply(filter) {
     buttons.forEach(function (button) { button.classList.toggle("active", button.getAttribute("data-filter") === filter); });
     document.querySelectorAll("tr.scenario").forEach(function (row) {
-      row.hidden = filter !== "all" && row.getAttribute("data-status") !== filter;
+      var statuses = (row.getAttribute("data-statuses") || "").split(/\s+/);
+      row.hidden = filter !== "all" && statuses.indexOf(filter) === -1;
     });
     document.querySelectorAll("details.evidence").forEach(function (item) {
       item.hidden = filter !== "all" && item.getAttribute("data-status") !== filter;
@@ -3656,16 +3409,14 @@ footer a { color:var(--accent); }
   buttons.forEach(function (button) {
     button.addEventListener("click", function () { apply(button.getAttribute("data-filter") || "all"); });
   });
-  document.querySelectorAll("tr.scenario").forEach(function (row) {
-    function open() {
-      var target = document.getElementById(row.getAttribute("data-target") || "");
+  document.querySelectorAll("a.status-link").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      var target = document.getElementById(link.getAttribute("data-target") || "");
       if (!target) return;
+      event.preventDefault();
+      if (target.hidden) apply("all");
       target.open = true;
       target.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-    row.addEventListener("click", open);
-    row.addEventListener("keydown", function (event) {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); }
     });
   });
 })();

@@ -4,8 +4,16 @@ import { join } from "node:path";
 import { loadConfig } from "./config";
 import { dumpSize, readDumpRecordsSince } from "./dump";
 import { selectModel } from "./models";
-import { renderBaselineIndex, renderHtml, summarize, type ReportData, type ScenarioResult } from "./report";
-import { buildScenarios, type Scenario, type ScenarioContext, type Verdict } from "./scenarios";
+import {
+  computeCoverage,
+  renderBaselineIndex,
+  renderHtml,
+  summarize,
+  type ReportData,
+  type ScenarioResult,
+  type ScenarioSetEntry,
+} from "./report";
+import { baseScenarios, buildScenarios, type Scenario, type ScenarioContext, type Verdict } from "./scenarios";
 import { startServer } from "./server";
 
 const MAX_FIXTURE_BYTES = 2 * 1024 * 1024;
@@ -32,7 +40,17 @@ async function listModels(baseUrl: string, provider: string): Promise<string[]> 
 
 export async function main(): Promise<void> {
   const cfg = loadConfig();
-  console.log(`[e2e] 预算 E2E_MAX_CALLS=${cfg.maxCalls}；provider: ${cfg.providers.join(", ")}`);
+  const templates = baseScenarios().filter((scenario) => !cfg.only || scenario.id.includes(cfg.only));
+  const scenarioSet: ScenarioSetEntry[] = templates.map(({ id, endpoint, feature, clause, knownDefect }) => ({
+    id,
+    endpoint,
+    feature,
+    clause,
+    knownDefect,
+  }));
+  console.log(
+    `[e2e] 预算 E2E_MAX_CALLS=${cfg.maxCalls}；provider: ${cfg.providers.join(", ")}；场景模板: ${scenarioSet.length}`,
+  );
   const server = await startServer({ port: cfg.port });
   console.log(`[e2e] 服务已启动：${server.baseUrl}`);
 
@@ -121,6 +139,10 @@ export async function main(): Promise<void> {
       }
     }
 
+    const coverage = computeCoverage(scenarioSet, results, cfg.providers);
+    const coverageProblems = coverage.filter(
+      (item) => !item.orderMatches || item.missing.length > 0 || item.extra.length > 0,
+    );
     const meta = {
       generatedAt: new Date().toISOString(),
       baseUrl: server.baseUrl,
@@ -128,6 +150,8 @@ export async function main(): Promise<void> {
       calls,
       providers: cfg.providers,
       models: selected,
+      scenarioSet,
+      coverage,
     };
     const data: ReportData = { schema: "any2api-e2e-report/v1", meta, results };
     mkdirSync(cfg.reportsDir, { recursive: true });
@@ -143,6 +167,19 @@ export async function main(): Promise<void> {
       writeFileSync("docs/generated/e2e-baseline.json", JSON.stringify(data, null, 2));
       writeFileSync("docs/generated/e2e-baseline.md", renderBaselineIndex(meta, results));
       console.log(`[e2e] 基线已写入 docs/generated/e2e-baseline.{html,json,md}`);
+    }
+
+    if (coverageProblems.length) {
+      throw new Error(
+        `场景集不一致：${coverageProblems
+          .map(
+            (item) =>
+              `${item.provider} ${item.actual}/${item.expected}${
+                item.missing.length ? `，缺 ${item.missing.join("、")}` : ""
+              }${item.extra.length ? `，多 ${item.extra.join("、")}` : ""}${item.orderMatches ? "" : "，顺序不一致"}`,
+          )
+          .join("；")}`,
+      );
     }
 
     const counts = summarize(results);

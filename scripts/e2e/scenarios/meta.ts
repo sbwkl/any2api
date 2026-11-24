@@ -1,11 +1,9 @@
-import type { ProviderName } from "../types";
 import { checkModels } from "../verify";
-import { assess, call, callGlobal, fail, jsonOf, pass, type Scenario } from "./shared";
+import { assess, call, callGlobal, fail, jsonOf, pass, type Scenario, type ScenarioTemplate } from "./shared";
 
-export function modelListScenario(provider: ProviderName): Scenario {
+export function modelListScenario(): ScenarioTemplate {
   return {
     id: "models.list",
-    provider,
     endpoint: "/v1/models",
     feature: "模型列表形状",
     clause: "OAI-MODEL-01",

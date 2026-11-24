@@ -3,20 +3,27 @@ import { anthropicScenarios } from "./anthropic";
 import { chatScenarios } from "./chat";
 import { healthzScenario, modelListScenario } from "./meta";
 import { responsesScenarios } from "./responses";
-import type { Scenario } from "./shared";
+import type { Scenario, ScenarioTemplate } from "./shared";
+
+export function baseScenarios(): ScenarioTemplate[] {
+  return [
+    ...chatScenarios(),
+    ...anthropicScenarios(),
+    ...responsesScenarios(),
+    modelListScenario(),
+  ];
+}
 
 export function buildScenarios(providers: ProviderName[]): Scenario[] {
+  const templates = baseScenarios();
   const scenarios: Scenario[] = [];
   for (const provider of providers) {
-    scenarios.push(
-      ...chatScenarios(provider),
-      ...anthropicScenarios(provider),
-      ...responsesScenarios(provider),
-      modelListScenario(provider),
-    );
+    for (const template of templates) {
+      scenarios.push({ ...template, provider });
+    }
   }
   scenarios.push(healthzScenario());
   return scenarios;
 }
 
-export type { Scenario, ScenarioContext, Verdict } from "./shared";
+export type { Scenario, ScenarioContext, ScenarioTemplate, Verdict } from "./shared";
