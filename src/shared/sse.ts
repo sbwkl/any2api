@@ -40,6 +40,26 @@ export function mapUsage(usage: any): any | undefined {
   };
 }
 
+// 上游可能把错误塞进 HTTP 200 的 SSE（codearts 实测：`{"text":"[DONE]","error_code":"InferHub.…","error_msg":"…"}`）。
+// 这种帧没有 choices；若当作空回答处理，客户端会看到一次「什么都没发」的正常结束。
+// 判定从严：只认明确带错误字段的形态，避免把上游的心跳/计数帧当成错误。
+export function upstreamErrorFromChunk(chunk: any): string | null {
+  if (!chunk || typeof chunk !== "object") return null;
+  if (Array.isArray(chunk.choices) && chunk.choices.length > 0) return null;
+  if (chunk.error && typeof chunk.error === "object") {
+    const msg = chunk.error.message ?? chunk.error.msg;
+    if (chunk.error.code !== undefined || msg !== undefined)
+      return `${chunk.error.code ?? "error"}${msg ? `: ${msg}` : ""}`;
+  }
+  if (chunk.error_code !== undefined || chunk.error_msg !== undefined)
+    return `${chunk.error_code ?? "error"}${chunk.error_msg ? `: ${chunk.error_msg}` : ""}`;
+  return null;
+}
+
+// 空流与「只有错误帧」的流都归到同一条报错，但把上游原话带出去——
+// 通用的一句「no choices」会让调用方查不到任何线索。
+export const NO_CHOICES = "no choices in upstream SSE";
+
 export function mapFinishReason(reason: any): string {
   if (reason === "content-filter" || reason === "content_filter") return "content_filter";
   if (reason === "tool_calls" || reason === "function_call" || reason === "tool_call") return "tool_calls";
@@ -60,6 +80,7 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
   let finish: string | undefined;
   let usage: any;
   const slots = new Map<number, Slot>();
+  let upstreamError: string | null = null;
 
   for await (const data of sseData(body)) {
     if (!data || data === "[DONE]") continue;
@@ -72,6 +93,7 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
     if (!id && chunk.id) id = chunk.id;
     if (!model && chunk.model) model = chunk.model;
     if (!created && chunk.created) created = chunk.created;
+    upstreamError ??= upstreamErrorFromChunk(chunk);
     if (chunk.usage) {
       const prev = usage ?? {};
       usage = {
@@ -109,8 +131,8 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
     }
   }
 
-  // 空流 / 只有错误事件的流不是成功响应
-  if (slots.size === 0) throw new Error("no choices in upstream SSE");
+  // 空流 / 只有错误事件的流不是成功响应。错误帧优先：它比通用文案更能说明发生了什么。
+  if (slots.size === 0) throw new Error(upstreamError ? `${NO_CHOICES}: ${upstreamError}` : NO_CHOICES);
 
   const choices = [...slots.keys()].sort((a, b) => a - b).map((idx) => {
     const s = slots.get(idx)!;

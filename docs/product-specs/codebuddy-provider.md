@@ -94,7 +94,7 @@ Owner：wayne
 - **R18**：When 收到 `GET /healthz`, the system shall 返回聚合 JSON（`{ok, providers:[...]}`），其中每个 provider 报告 `ok` 与可选详情。
 - **R19**：When 上游返回 `code 6020`, the system shall 读取 `retry_after`（或调用 `/v2/chat/queue/status` 获取），等待后重试一次；若等待超过 `CODEBUDDY_QUEUE_TIMEOUT_MS`（默认 120000）或重试仍为 6020，返回 429；`code 6021/6022/14003` 映射为 429 并保留上游 message。
 - **R20**：When 上游请求或 SSE 聚合抛出异常, the system shall 返回 502 的 OpenAI 错误结构；注册表对未捕获的 provider 异常返回 JSON 500。错误 `type` 按状态对齐：401 → `authentication_error`，429 → `rate_limit_error`，其他 4xx → `invalid_request_error`，5xx → `upstream_error`。
-- **R21**：When 上游 SSE 没有任何 choices, the system shall 返回 502，不得返回成功空回答。
+- **R21**：When 非流式请求的上游 SSE 没有任何 choices（含只有错误帧的流）, the system shall 返回 502，不得返回成功空回答。**流式请求**的 HTTP 头在读到上游帧前已发出，无法再改状态码，改为发 Anthropic `error` 事件（见 R43）。
 - **R22**：When Anthropic/Responses/OpenAI 请求体字段类型不合法（`messages`/`input`/`metadata.user_id`/`session_id`/`user`/`tools`，以及 message 项的 `input[].content`）, the system shall 返回 400 协议错误；非 message 项的 content 校验见 R25。
 - **R23**：When provider prefix 重复、出现多个空 prefix、或格式不合法（不以 `/` 开头、以 `/` 结尾、为 `/`）, the system shall 启动失败并给出明确错误。
 - **R24**：When 服务启动, the system shall 为每个 provider 使用 `/<name>/v1` 前缀（codearts `/codearts/v1`、codebuddy `/codebuddy/v1`）；不再保留无前缀的 `/v1`。
@@ -114,8 +114,12 @@ Owner：wayne
 - **R37**：When provider 声明 `promptTokensIncludeCache`（当前仅 codebuddy，已实测上游 `prompt_tokens` 为总输入）, the system shall 在 Anthropic usage 中令 `input_tokens` 只表示未缓存输入（`max(0, prompt_tokens - cached_tokens - cache_creation_tokens)`），并保留 `cache_read_input_tokens` / `cache_creation_input_tokens` 为缓存分项；其他 provider 保持上游 `prompt_tokens` 原值。流式多帧 usage 应按字段合并，避免缺失字段把已采集值归零。
 - **R38**：When OpenAI Chat SSE 被聚合为非流式 completion, the system shall 在 `usage.prompt_tokens_details` 中保留上游 `cache_creation_tokens`；上游多帧 usage 时按字段合并，缺失字段不覆盖先前值。
 - **R39**：When Responses 流式响应创建时, the system shall 在初始 `usage` 中包含 `input_tokens_details.cached_tokens` 与 `output_tokens_details.reasoning_tokens`，并在终态事件中携带完整 usage；多帧 usage 按字段合并，缺失字段不覆盖先前值。
+- **R40**：When Anthropic 消息含 `image` 块（顶层或 `tool_result` 内嵌）, the system shall 将其映射为 OpenAI `image_url` 随请求发送（base64 → `data:` URL），不得以文本占位符替代；仅当 `source` 缺失或类型未知时才写占位文本。
+- **R41**：When 一条 Anthropic 消息同时含文本、`thinking` 与 `tool_use` 块, the system shall 产出同一条 assistant 消息，携带 `content`、`reasoning_content` 与 `tool_calls`；不得拆成多条 assistant 消息。
+- **R42**：When 工具调用缺少对应 `tool_result`（含其后插入 assistant 消息的情形）, the system shall 在该调用之后补一条合成 tool 消息（内容说明结果缺失、按失败处理）；when `tool_result` 找不到对应 `tool_use`, the system shall 将其降级为 user 文本而非裸 tool 消息；when 末尾 user 轮翻译为空, the system shall 补 `(no content)` 占位，请求不得以 assistant 结尾被当作预填（末尾轮留下了工具结果时是工具循环的合法中间态，不补占位）。
+- **R43**：When 上游 SSE 帧携带 `error_code`/`error_msg`（或 `error.code`/`error.message`）且无 choices，或整条流没有任何 choices, the system shall 发出 Anthropic `error` 事件，不得以 `message_delta{stop_reason:"end_turn"}` 收尾；`content_filter` 映射为 `refusal` 而非 `end_turn`。非流式聚合路径遇到同样的流按 R21 返回 502，并在错误信息里带上上游原话。
 
-每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；测试映射在对应 CHG 的测试清单中维护。
+每条 R 的验证位置见 CHG-0001 / CHG-0002 §5；新增 R40–R43 的验证位置见 [2026-11-24-anthropic-tool-assembly](../exec-plans/active/2026-11-24-anthropic-tool-assembly.md) §5，测试映射在 `src/protocols/anthropic-assembly.test.ts` 与 `src/shared/sse.test.ts`。
 
 ## 8. 风险与兔子洞
 
@@ -160,6 +164,7 @@ Owner：wayne
 | 2026-11-22-codebuddy-sanitize-whitespace | 兼容 Claude Code preamble 的空白/撇号变体 | 进行中 | [2026-11-22-codebuddy-sanitize-whitespace](../exec-plans/active/2026-11-22-codebuddy-sanitize-whitespace.md) |
 | 2026-11-22-codebuddy-claude-feedback-line | 清理 Claude Code 反馈链接行，修复 Claude Desktop 400 | 进行中 | [2026-11-22-codebuddy-claude-feedback-line](../exec-plans/active/2026-11-22-codebuddy-claude-feedback-line.md) |
 | 2026-11-23-usage-field-semantics | 修复三协议 usage 字段语义（Anthropic / Chat / Responses） | 进行中 | [2026-11-23-usage-field-semantics](../exec-plans/active/2026-11-23-usage-field-semantics.md) |
+| 2026-11-24-anthropic-tool-assembly | 修复 Anthropic 消息组装：图片丢失、工具调用拆分、静默空回答（R40–R43） | 进行中 | [2026-11-24-anthropic-tool-assembly](../exec-plans/active/2026-11-24-anthropic-tool-assembly.md) |
 
 ## 11. 链接
 

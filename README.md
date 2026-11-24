@@ -158,7 +158,7 @@ resp = client.chat.completions.create(
 
 - 服务无鉴权：默认只绑 `127.0.0.1`，仅本机可用；改 `HOST=0.0.0.0` 前请评估风险
 - 模型池为启动时动态发现（见上），失败回退观测池
-- 协议适配边界：图像块被省略（占位 `[image omitted]`）；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）
+- 协议适配边界：图像块（含 `tool_result` 内嵌）映射为 OpenAI `image_url` 发送，仅当 `source` 未知时写占位符；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）
 - 残余可识别特征：Bun 与内核（Node）的 TLS 指纹差异、OTLP service.name 为占位值
 - 明文回退为死路径：chat 后端硬性要求加密通道（实测 415 Unsupported Media Type），密钥协商失败即不可用（代理已实现换 key 重试）
 - codebuddy 支持 OpenAI Chat + Anthropic Messages + OpenAI Responses；遥测（`/v2/report`、`/llm/data/report`、`/v1/traces`）未做，消息中心轮询需 `CODEBUDDY_MSG_CENTER=1` 显式开启
