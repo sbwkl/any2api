@@ -1,4 +1,7 @@
 import { test, expect, describe } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { mountProviders, type ProviderModule } from "./registry";
 
 const defaultProvider: ProviderModule = {
@@ -138,5 +141,26 @@ describe("provider registry", () => {
     const j: any = await resp.json();
     expect(j.error.type).toBe("internal_error");
     expect(j.error.message).toContain("boom");
+  });
+
+  test("captures traffic when TRACE_CAPTURE_DIR is set", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "any2api-registry-trace-"));
+    process.env.TRACE_CAPTURE_DIR = dir;
+    try {
+      const handler = await mountProviders([defaultProvider]);
+      const resp = await handler(req("/v1/models"));
+      expect(resp.status).toBe(200);
+
+      const file = join(dir, `capture-${new Date().toISOString().slice(0, 10)}.jsonl`);
+      for (let i = 0; i < 100 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 10));
+      expect(existsSync(file)).toBe(true);
+      const rec = JSON.parse(readFileSync(file, "utf8").trim());
+      expect(rec.path).toBe("/v1/models");
+      expect(rec.status).toBe(200);
+      expect(rec.provider).toBe("default");
+    } finally {
+      delete process.env.TRACE_CAPTURE_DIR;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

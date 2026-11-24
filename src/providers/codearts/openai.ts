@@ -10,6 +10,7 @@ import type { GatewayConfig, ModelInfo, Credentials } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
 import { aggregateSseToCompletion } from "../../shared/sse";
 import { errorTypeForStatus } from "../../shared/errors";
+import { dumpUpstream } from "../../shared/trace";
 
 const CLIENT_TYPE = "IDE";
 const CLIENT_VERSION = "26.11.200";
@@ -63,6 +64,11 @@ export class OpenAIFacade {
 
   private chatOrigin(): string {
     return getCredentials().origin ?? process.env.SNAP_ORIGIN ?? "https://snap-access.cn-north-4.myhuaweicloud.com";
+  }
+
+  private chatUpstream(headers: Record<string, string>, body: any): Promise<Response> {
+    dumpUpstream("codearts", this.chatUrl, body);
+    return this.snap.chat(this.chatUrl, headers, body);
   }
 
   modelsPayload(): any {
@@ -191,7 +197,7 @@ export class OpenAIFacade {
     const startMs = Date.now();
     let resp: Response;
     try {
-      resp = await this.snap.chat(this.chatUrl, headers, mapped);
+      resp = await this.chatUpstream(headers, mapped);
     } catch (e: any) {
       return jsonError(502, `upstream_error: ${e?.message ?? String(e)}`);
     }
@@ -205,7 +211,7 @@ export class OpenAIFacade {
       try {
         await refreshNow();
         console.log("[openai] 401 → STS 已刷新，重试一次");
-        resp = await this.snap.chat(this.chatUrl, headers, mapped);
+        resp = await this.chatUpstream(headers, mapped);
         if (!resp.ok) {
           const retryText = await resp.text().catch(() => "");
           return new Response(retryText || JSON.stringify({ error: { message: `upstream ${resp.status}` } }), {

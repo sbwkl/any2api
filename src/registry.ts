@@ -1,5 +1,6 @@
 // Provider 注册表与路由分发 — 对应 RFC-0001 的 provider 边界重构
 // 路由层只回答：哪个前缀、交给谁、失败怎么退化；provider 不再知道自己的公开前缀。
+import { startTraceCapture } from "./shared/trace";
 
 export interface Route {
   method: string;
@@ -109,7 +110,7 @@ export async function mountProviders(modules: ProviderModule[]): Promise<(req: R
     }
   }
 
-  return async (req) => {
+  const routeRequest = async (req: Request): Promise<Response> => {
     const path = new URL(req.url).pathname;
 
     // 聚合健康检查（/healthz 由路由层统一处理，provider 不再各自暴露根路径）
@@ -143,5 +144,12 @@ export async function mountProviders(modules: ProviderModule[]): Promise<(req: R
     }
 
     return new Response("not found", { status: 404 });
+  };
+
+  return async (req) => {
+    const capture = startTraceCapture(req);
+    const res = await routeRequest(req);
+    if (capture) void capture.finish(res).catch(() => {});
+    return res;
   };
 }
