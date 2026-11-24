@@ -71,7 +71,22 @@ Owner：wayne
   - 图片投递（`/codearts/v1/messages`，`deepseek-v4.1-flash-1017`）：旧实现 4/4 回答「图片被省略/看不到」，新实现 4/4 正确描述截图内容（红色元素位置）。
   - 工具配对 4 组（悬空后重试、文本+调用、孤立结果、正常配对）：新旧都不报协议错误，新实现不再出现「工具调用数翻倍」「孤立结果被当作裸 tool 消息」的形态。
   - codearts `/v1/chat/completions` 直连（不经过本次改动的组装层）作为对照：同一张截图也能正确描述。
-- **未做**：Claude Code 客户端端到端复现（需要在真实 GUI 任务里重跑一遍完整会话）；codebuddy 图片路径的模型侧行为不稳定（同一张图纯文本提问也会编造截图内容），因此不以 codebuddy 作为图片投递的判定依据。
+- **真实客户端端到端**（Claude Code CLI 2.1.319，`-p` 打印模式，`ANTHROPIC_BASE_URL` 指向打补丁后的代理，`--bare`、`--output-format json`）。测试图 `/tmp/a2a-e2e/card.png` 里只有像素能提供的信息：一个红色方块 + 字符串 `PLUM-4271`；任务要求模型 `Read` 该图后回答/使用这串 CODE，模型无法从文本推出它。
+  - 会话 `c53592f7-…`（单步）：`Read` 1 次、带图片的 `tool_result` 1 条，最终 `end_turn` 文本含 `PLUM-4271`，非空。
+  - 会话 `0b76e587-…`（多步）：`Read → Bash(裁剪) → Read → Bash(echo)` 共 4 次工具调用、2 条带图片的 `tool_result`，最终 `end_turn` 文本含 `PLUM-4271`，非空；全程没有出现「只宣布动作、无工具调用、`end_turn`」的回合。
+  - 断言脚本：`/tmp/a2a-e2e/check_session.py`（读真实 transcript，统计调用次数、带图结果数、末尾回答是否为空）。
+- **旧实现对照未能端到端跑通**：对未打补丁的进程（旧版组装代码）反复重放同一客户端任务时，上游持续返回 `400 TM.00001041 Concurrent chats have reached the upper limit (3)`，无法取得一次完整的旧版客户端会话。改用**同一份真实历史**在进程内做组装层 A/B（`/tmp/a2a-e2e/rebuilt_request.json` 来自 `0b76e587` 会话，`asm_cmp.ts` 分别调用 HEAD 父提交与工作区的 `anthropicToOpenAi`）：
+
+  | 指标 | 旧实现 | 新实现 |
+  |---|---|---|
+  | 产出 OpenAI 消息数 | 11 | 10 |
+  | 连续 assistant 消息对 | 1 | 0 |
+  | 含 `image_url` 的消息 | 0 | 2 |
+  | 内容为空的 `tool` 消息 | 2 | 0 |
+  | 序列化后请求体 | 1,633 B | 35,349 B |
+
+  该对照只覆盖组装层（不含上游行为），因此旧实现在真实客户端里的最终表现仍属**推断**（依据：截图被丢弃后模型只看到空结果）；「新版不再出现只宣布不执行」则由上面的两次真实会话直接证明。
+- **未做 / 待补**：codebuddy 图片路径的模型侧行为不稳定（同一张图纯文本提问也会编造截图内容），因此不以 codebuddy 作为图片投递的判定依据；本次端到端只用 codearts 通道。
 
 ## 6. 回滚方案
 
@@ -87,16 +102,18 @@ Owner：wayne
 | 合成 tool 结果内容为英文固定句 | 中文会话里模型可能用英文确认 | 语义无害（明示调用失败）；如需本地化另议 |
 | 孤立 `tool_result` 降级为 user 文本 | 极少数客户端可能把该文本当成用户发言 | 优于上游以未知 `tool_call_id` 拒绝整个请求 |
 | codebuddy 模型对图片的响应不稳定 | 无法用 codebuddy 判定图片投递正确性 | 以 codearts 实测为准；codebuddy 侧**待验证** |
-| 真实客户端端到端未复现 | 不能声称「客户端里不再出现只宣布不执行」 | 需要在真实 GUI 任务中重跑验证 |
+| 旧实现的客户端对照缺失 | 旧版行为只能以组装层 A/B 佐证，非完整会话复现 | 上游并发限制导致旧版重放失败；如需闭环，待并发额度空闲时重跑（**待验证**） |
 
 ## 8. 关联与证据
 
 - 产品规格：[codebuddy-provider.md](../../product-specs/codebuddy-provider.md)（R12、R21、R29）
 - 上游证据：本机会话 transcript `/Users/wayne/.claude/projects/-Users-wayne-workspace-perch/e99811f6-8fe7-4bf2-8c0f-244c90e96efb.jsonl`，第 946–958 条
 - A/B 脚本与回放数据保留在 `/tmp/a2a-audit/`（`replay_messages.py`、`ab_messages.mjs`、`img_anthropic.mjs`、`pairs.mjs`）；属于临时工作区，不入库
+- 端到端脚本与素材在 `/tmp/a2a-e2e/`（`card.png`、`run.sh`、`check_session.py`、`rebuilt_request.json`、`asm_cmp.ts`）；同样不入库。客户端 transcript 位于 `/Users/wayne/.claude/projects/-private-tmp-a2a-e2e/`（`c53592f7-…`、`0b76e587-…`）
 
 ## 9. 变更记录
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 开发中 | wayne | 15 条新测试 TDD 红→绿；151 tests 全绿；build 成功；真实上游 A/B 已完成；未合并、未部署 |
+| 开发中 | wayne | 15 条新测试 TDD 红→绿；151 tests 全绿；build 成功；真实上游 A/B 已完成；Claude Code 端到端两次通过（单步 / 多步，均正确读出像素中的 CODE）；未合并、未部署 |
+| 开发中 | wayne | 2026-11-24 补记端到端证据与旧实现对照限制（上游并发限制），见 §5、§7 |
