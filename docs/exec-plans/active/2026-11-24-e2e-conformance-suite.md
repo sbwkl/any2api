@@ -94,6 +94,7 @@ Owner：wayne
 - [x] 已知缺陷可检出：Responses `input_image` 丢弃（两家）、Anthropic `system` 数组图片丢弃（两家）、Responses 流缺 `response.output_text.done`（两家）、codearts 未知模型静默回退（chat/messages/responses）、`logprobs` 与 `n` 静默丢弃（两家）、codearts `response_format` 静默丢弃。
 - [x] 图片 pilot：`chat.image.data_url`、`messages.image.base64`、`messages.image.tool_result` 两家均 pass（模型回答 Red）；`responses.image.data_url`、`messages.image.system` 两家均 fail，证明探测能通过正确链路也能捕获真实缺陷。
 - [x] fixture：`e2e/fixtures/` 53 个文件 / 232KB（≤2MB），Authorization / x-api-key / cookie 已脱敏；日常报告在 gitignored 的 `e2e/reports/`。
+- [ ] 客户端直连冒烟：手动清单见 §11；本轮未执行，不作为矩阵基线的一部分。
 - [ ] 文档结构 / 链接检查：仓库未配置项目级检查；待补。本轮用一次性脚本核对仓库内相对链接 0 broken；`README` / `AGENTS` 指向的工作区根 `../AGENTS.md` 在当前工作区不存在，属既有跨项目约定。
 
 ## 8. 风险与未决问题
@@ -133,9 +134,22 @@ Owner：wayne
 - 流中错误帧、排队 6020/429、401 刷新路径需要可控触发，本期未覆盖。
 - URL 图片场景依赖 `E2E_IMAGE_URL`，本期 skipped；图片缺陷修复后需回归。
 
-## 10. 变更记录
+## 10. 客户端直连冒烟清单（手动，待执行）
+
+D13 约定：客户端只直连 any2api，**不经 cc-switch 代理、不新增依赖**。冒烟不进入 `bun run e2e` 矩阵。
+
+1. 启动服务（`bun src/index.ts` 或 launchd），确认 `GET /healthz` 的 `ok=true`。
+2. Claude Code：把 Anthropic base URL 指向 `http://127.0.0.1:8787/codebuddy`（或 `/codearts`），API key 任意非空；模型从对应 `GET /{provider}/v1/models` 选择。
+3. Codex CLI：把 Responses base URL 指向 `http://127.0.0.1:8787/codebuddy/v1`（或 `/codearts/v1`），`wire_api` 使用 Responses；模型同上。
+4. 每个客户端至少验证：
+   - 流式文本与 reasoning / thinking 正常显示；
+   - 触发一次工具调用（如读文件），tool_use / tool_result 能往返；
+   - usage 有值且与官方字段语义一致。
+5. 记录客户端版本、provider、模型、通过 / 失败与失败现象；未执行前不得标「已验证」。
+
+## 11. 变更记录
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
 | 开发中 | wayne | 2026-11-24 决策锁定（D1–D17，见 §3）；本文件创建 |
-| 已验证（未合并） | wayne | 2026-11-24 最终基线：50/60 调用，32 pass / 17 fail / 4 not-supported / 4 skipped；`bun test` 202 pass；三处 `bun build` 零错误；fixtures 53 文件 / 232KB；缺陷与缺口见 §9 |
+| 已验证（未合并） | wayne | 2026-11-24 最终基线：50/60 调用，32 pass / 17 fail / 4 not-supported / 4 skipped；`bun test` 202 pass；三处 `bun build` 零错误；fixtures 53 文件 / 232KB；缺陷与缺口见 §9；客户端冒烟待执行（§10） |
