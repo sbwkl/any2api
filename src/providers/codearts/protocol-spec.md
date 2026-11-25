@@ -197,6 +197,8 @@ Content-Type: application/octet-stream
 然后 Ew signSimple re-sign（覆盖 Authorization/X-Sdk-Date）。
 **失败回退链**（客户端明确行为，代理可复用以提高拟真度）：协商失败→明文发送；加密请求网络错误→明文重发；非 2xx→读 body，含 ENCRYPT_KEY_EXPIRED→换 key 重试一次，否则明文重发。
 
+> **代理实现偏差（2026-11-25）**：chat 的明文回退实测 8/8 被上游以 415 拒绝，只会掩盖真实故障。代理不再对 chat 回退明文：协商失败直接报错；网络错误/5xx 用同一 key 重试一次；其余非 2xx 返回上游状态与原文，由协议层归一。`CODEARTS_FORCE_PLAINTEXT=1` 仅作调试。决策与证据见 `docs/exec-plans/active/2026-11-25-p0-upstream-errors-tool-fidelity.md`。
+
 ### 3.4 响应解密（SSE）
 
 响应头 `X-Encrypt-Algo: sm4-gcm` 时：
@@ -353,7 +355,7 @@ JS 对象构造序 → fetch 按插入序发出（Bun undici-ish）。拟真顺�
 
 - 加密 SSE 三段式 → 解密出标准 `data: {choices:[{delta:{content,reasoning_content,tool_calls}}],usage}` → 原样转 OpenAI chunk
 - `reasoning_content` 映射为 OpenAI `reasoning`/自定义字段（第三方按需）
-- 错误映射：`InferHub.MaaS.*/ModelArts.*/TM.*` → 按 `x-session-retry` 协议实现重试（407 ×3、Busy 81101 系退避 ≤10~20 次、429/406 读 `retry-after` 与 `need-switch-model` 头），最终归一为 OpenAI 4xx/5xx + 错误体
+- 错误映射：`InferHub.MaaS.*/ModelArts.*/TM.*` → 按 `x-session-retry` 协议实现重试（407 ×3、Busy 81101 系退避 ≤10~20 次、429/406 读 `retry-after` 与 `need-switch-model` 头），最终归一为 OpenAI 4xx/5xx + 错误体。代理当前只实现有界重试（瞬时 5xx/网络错误一次）；SSE 内嵌错误按内嵌状态码分类为 400/415/429/502/504，不再一律 502。
 - `TM.00020005`（租户冻结）、`TM.00001054`（内容安全）→ 直接 4xx + 原文 error_msg
 
 ### 7.3.1 上游 usage 语义（OpenAI Chat 与 Anthropic 映射）
@@ -404,7 +406,7 @@ input_tokens = max(0, prompt_tokens - cached_tokens - cache_creation_tokens)
 - [ ] 心跳 PUT + 30s busy 节奏 + idle 收尾
 - [ ] OTLP 5s/30 条批量上报，与 chat 同 traceId（可选但强烈建议）
 - [ ] client-ip = 本机局域网 IPv4
-- [ ] 加密失败按客户端同款回退链（§3.3），不要自创重试策略
+- [x] chat 不明文回退；瞬时 5xx/网络错误同 key 重试一次（有意偏差，见 §3.3 注）
 
 ---
 

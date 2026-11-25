@@ -75,6 +75,8 @@ bun src/index.ts
 | `OTLP_ENABLED` | `true` | OTLP 遥测仿真开关 |
 | `OTLP_SERVICE_NAME` | `codeagent-kernel` | 遥测 service.name |
 | `SNAP_ORIGIN` | 华为云生产地址 | snap-access 通道覆盖 |
+| `CODEARTS_UPSTREAM_IDLE_TIMEOUT_MS` | `180000` | 解密 SSE 读空闲超时（ms）；超时按 upstream idle timeout 失败 |
+| `CODEARTS_FORCE_PLAINTEXT` | 空 | 仅调试：chat 发明文而非加密；生产不可用（上游实测 415） |
 | `CODEBUDDY_AGENT` | `chat` | codebuddy 默认 profile：`chat` / `ask` / `craft` |
 | `CODEBUDDY_AUTO_REFRESH` | `1` | codebuddy 401 时是否自动刷新 token 并重试（`0` 关闭） |
 | `CODEBUDDY_MSG_CENTER` | `0` | codebuddy 是否开启消息中心 30s 轮询（`1` 开启） |
@@ -201,10 +203,10 @@ bun run e2e:corpus [dir]                               # 对入站采集 JSONL �
 
 - 服务无鉴权：默认只绑 `127.0.0.1`，仅本机可用；改 `HOST=0.0.0.0` 前请评估风险
 - 模型池为启动时动态发现（见上），失败回退观测池
-- 协议适配边界：图像块（含 `tool_result` 内嵌）映射为 OpenAI `image_url` 发送，仅当 `source` 未知时写占位符；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）
-- 实弹基线（2026-11-24：32 pass / 17 fail / 4 not-supported / 4 skipped）暴露的现行缺口（修复另开分支）：Responses `input_image` 与 Anthropic `system` 数组中的图片被丢弃；Responses 流缺少 `response.output_text.done`；`logprobs` / `n` 在两家都静默忽略；codearts 的 `response_format`（json_object / json_schema）被静默丢弃，未知模型静默回退（`models[0]`），强制 `tool_choice` 的上游 400 被映射为 502；codebuddy 的 `include_usage` 块带非空 `choices`，`json_schema` 已送达但上游输出仍带 markdown 围栏。详见基线报告与 exec-plan 缺陷清单。
+- 协议适配边界：图像块（含 `tool_result` 内嵌）映射为 OpenAI `image_url` 发送，仅当 `source` 未知时写占位符；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）；Responses 的 `namespace` 工具展开为 `<namespace>__<member>` 送上游，返回时还原 `name` + `namespace`（服务端工具 `web_search` 仍按当前边界丢弃，见 #22）
+- 实弹基线（2026-11-24：32 pass / 17 fail / 4 not-supported / 4 skipped）暴露的现行缺口（修复另开分支）：Responses `input_image` 与 Anthropic `system` 数组中的图片被丢弃；Responses 流缺少 `response.output_text.done`；`logprobs` / `n` 在两家都静默忽略；codearts 的 `response_format`（json_object / json_schema）被静默丢弃，未知模型静默回退（`models[0]`）；codebuddy 的 `include_usage` 块带非空 `choices`，`json_schema` 已送达但上游输出仍带 markdown 围栏。详见基线报告与 exec-plan 缺陷清单。注：基线是 2026-11-24 快照；其中「上游 400 被映射为 502」已于 2026-11-25 修正为按上游状态分类（400/429/502/504）。
 - 残余可识别特征：Bun 与内核（Node）的 TLS 指纹差异、OTLP service.name 为占位值
-- 明文回退为死路径：chat 后端硬性要求加密通道（实测 415 Unsupported Media Type），密钥协商失败即不可用（代理已实现换 key 重试）
+- 明文回退为死路径：chat 后端硬性要求加密通道（实测 8/8 得到内嵌 415 Unsupported Media Type）。2026-11-25 起代理不再对 chat 回退明文，改为同 key 重试一次后返回上游错误；`CODEARTS_FORCE_PLAINTEXT=1` 仅作调试开关
 - codebuddy 支持 OpenAI Chat + Anthropic Messages + OpenAI Responses；遥测（`/v2/report`、`/llm/data/report`、`/v1/traces`）未做，消息中心轮询需 `CODEBUDDY_MSG_CENTER=1` 显式开启
 - codebuddy 模型池读取本机云端产品缓存（24 个，与 IDE 一致）；缓存缺失时回退 product.json + agent models + 观测模型
 - codebuddy 默认不发送 `X-Device-Token`（实测当前通道可省略），不伪造 TuringShield
