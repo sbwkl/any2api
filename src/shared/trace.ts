@@ -153,15 +153,11 @@ function inferredRecordBody(body: BodyInit | null | undefined): unknown {
   return null;
 }
 
-/** 建立入站请求的异步上下文；开关关闭时返回 null 且不建立任何上下文 */
-export function startRequestTrace(req: Request, opts: TraceOptions = {}): RequestTrace | null {
-  const dir = opts.dir ?? process.env.TRACE_CAPTURE_DIR;
-  if (!dir) return null;
-  const startedAt = Date.now();
+function createTraceState(req: Request, dir: string): TraceState {
   const path = new URL(req.url).pathname;
-  const state: TraceState = {
+  return {
     dir,
-    startedAt,
+    startedAt: Date.now(),
     provider: providerHint(path),
     method: req.method,
     path,
@@ -172,11 +168,25 @@ export function startRequestTrace(req: Request, opts: TraceOptions = {}): Reques
     abortReason: null,
     finished: false,
   };
+}
+
+/** 首个可确定的中断原因获胜：后续标记不覆盖已记录原因 */
+function markStateAbort(state: TraceState, reason: AbortReason): void {
+  state.abortReason ??= reason;
+}
+
+/** 建立入站请求的异步上下文；开关关闭时返回 null 且不建立任何上下文 */
+export function startRequestTrace(req: Request, opts: TraceOptions = {}): RequestTrace | null {
+  const dir = opts.dir ?? process.env.TRACE_CAPTURE_DIR;
+  if (!dir) return null;
+  const state = createTraceState(req, dir);
   // enterWith：让同一请求异步链上的上游调用继承上下文，不要求调用方改造控制流。
+  // 注意：enterWith 会改写当前异步链的 store，并发请求可能互相覆盖；挂载处理器请使用
+  // runWithRequestTrace（run 语义，上下文按调用链隔离）。本入口仅保留向后兼容。
   traceStorage.enterWith(state);
   return {
     abort(reason) {
-      state.abortReason = reason;
+      markStateAbort(state, reason);
     },
     finish(response, durationMs) {
       return finishTrace(state, response, durationMs);
@@ -187,7 +197,61 @@ export function startRequestTrace(req: Request, opts: TraceOptions = {}): Reques
 /** 标记当前请求上下文的中断原因；无上下文时 no-op */
 export function markAbort(reason: AbortReason): void {
   const state = traceStorage.getStore();
-  if (state) state.abortReason = reason;
+  if (state) markStateAbort(state, reason);
+}
+
+/** 异常 → 中断原因：超时类异常（如 AbortSignal.timeout）记 timeout，其余代理内部异常记 proxy_error */
+export function abortReasonForError(error: unknown): AbortReason {
+  return (error as { name?: unknown } | null | undefined)?.name === "TimeoutError" ? "timeout" : "proxy_error";
+}
+
+const pendingFinishes = new Set<Promise<void>>();
+
+/** 等待所有进行中的请求记录写完；采集本身不 await finish，测试 / 退出前用它对齐 */
+export async function flushRequestTraces(): Promise<void> {
+  while (pendingFinishes.size > 0) await Promise.allSettled([...pendingFinishes]);
+}
+
+/**
+ * 挂载处理器入口：为一次入站请求建立独立的异步上下文（ALS.run 语义，按调用链隔离，
+ * 并发请求互不串上下文），请求处理结束后组装 L4 并旁路写盘。
+ * finish 不 await：采集不改变响应内容与延迟；客户端断开监听在 finish 后移除。
+ */
+export async function runWithRequestTrace(
+  req: Request,
+  fn: () => Response | Promise<Response>,
+  opts: TraceOptions = {},
+): Promise<Response> {
+  const dir = opts.dir ?? process.env.TRACE_CAPTURE_DIR;
+  if (!dir) return fn();
+  const state = createTraceState(req, dir);
+  const signal = req.signal;
+  const onAbort = () => markStateAbort(state, "client_disconnect");
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort);
+  }
+
+  let response: Response;
+  try {
+    response = await traceStorage.run(state, fn);
+  } catch (error) {
+    markStateAbort(state, abortReasonForError(error));
+    // 处理器抛出时 Bun 会返回 500；补一条带中断标记的记录后原样抛出。
+    await finishTrace(state, new Response("", { status: 500 }));
+    signal?.removeEventListener("abort", onAbort);
+    throw error;
+  }
+
+  const done = finishTrace(state, response);
+  pendingFinishes.add(done);
+  // finish 结束（成功或失败）后移除断开监听，避免请求已结束仍持有引用
+  const cleanup = () => {
+    pendingFinishes.delete(done);
+    signal?.removeEventListener("abort", onAbort);
+  };
+  void done.then(cleanup, cleanup);
+  return response;
 }
 
 function requestInit(request: UpstreamRequest): RequestInit {
@@ -311,7 +375,9 @@ async function finishTrace(state: TraceState, response: Response, durationMsOver
         }
         body += decoder.decode();
       } catch {
+        // 出站流在转发中失败：能确定是上游流转发失败，标 upstream_error
         complete = false;
+        markStateAbort(state, "upstream_error");
       }
     }
 
@@ -345,7 +411,8 @@ async function finishTrace(state: TraceState, response: Response, durationMsOver
   } catch {
     // 采集不得影响请求主路径
   } finally {
-    traceStorage.enterWith(undefined);
+    // 兼容旧 enterWith 入口：当前上下文仍是本请求时清除；run 语义下由 ALS 自动恢复
+    if (traceStorage.getStore() === state) traceStorage.enterWith(undefined);
   }
 }
 
