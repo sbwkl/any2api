@@ -6,6 +6,8 @@
   "scripts": {
     "start": "bun src/index.ts",
     "e2e": "bun scripts/e2e/run.ts",
-    "e2e:corpus": "bun scripts/e2e/corpus.ts"
+    "e2e:corpus": "bun scripts/e2e/corpus.ts",
+    "test": "bun test",
+    "check": "bun test && bun build src/index.ts --target=bun"
   }
 }
