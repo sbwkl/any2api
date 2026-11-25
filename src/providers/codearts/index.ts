@@ -18,6 +18,31 @@ import { traceUpstream } from "../../shared/trace";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
+// 启动凭证决策（纯函数，便于单测）：三个分支——
+// - 无已知有效期（env 静态凭证/字段缺失）或未过期 → 直接使用，不刷新；
+// - 已过期且有 SecretStorage lineage → 交给 refreshNow；
+// - 已过期且无 lineage → 明确报错（刷新必然失败）。
+export function planStartupCredentials(
+  bootstrap: Credentials | null,
+  secret: Credentials | null,
+): { creds: Credentials; refresh: boolean } {
+  if (!bootstrap && !secret)
+    throw new Error("未找到凭证：请先打开码道 CodeArts Agent 登录一次（代理会自动提取 STS 与刷新凭据）");
+  let creds = (bootstrap ?? secret)!;
+  // 择优：取更新鲜者
+  if (bootstrap && secret) {
+    const s = secret.expiresAt ? Date.parse(secret.expiresAt) : Infinity;
+    const b = bootstrap.expiresAt ? Date.parse(bootstrap.expiresAt) : -1;
+    if (s >= b) creds = secret;
+  }
+  const expiresAt = creds.expiresAt ? Date.parse(creds.expiresAt) : null;
+  if (expiresAt === null || Number.isNaN(expiresAt) || expiresAt > Date.now())
+    return { creds, refresh: false };
+  if (!secret?.refreshToken)
+    throw new Error("STS 已过期且无刷新凭据：请打开码道 CodeArts Agent 重新登录");
+  return { creds, refresh: true };
+}
+
 async function resolveInitialCredentials() {
   // snap 键过期/缺失不阻断启动：SecretStorage lineage（refresh_token）仍可续期恢复
   let bootstrap: Credentials | null = null;
@@ -27,24 +52,11 @@ async function resolveInitialCredentials() {
     console.warn(`[codearts] snap 键凭证不可用：${e?.message ?? e}`);
   }
   const secretCreds = credentialsFromSecretSession();
-  if (!bootstrap && !secretCreds)
-    throw new Error("未找到凭证：请先打开码道 CodeArts Agent 登录一次（代理会自动提取 STS 与刷新凭据）");
-  let creds = (bootstrap ?? secretCreds)!;
-  // 择优：取更新鲜者
-  if (bootstrap && secretCreds) {
-    const s = secretCreds.expiresAt ? Date.parse(secretCreds.expiresAt) : Infinity;
-    const b = bootstrap.expiresAt ? Date.parse(bootstrap.expiresAt) : -1;
-    if (s >= b) creds = secretCreds;
-  }
-  setCredentials(creds);
-  // 启动时过期 → 立即刷新（需 SecretStorage lineage 可用）
-  if (!creds.expiresAt || Date.parse(creds.expiresAt) <= Date.now()) {
-    if (!secretCreds?.refreshToken)
-      throw new Error("STS 已过期且无刷新凭据：请打开码道 CodeArts Agent 重新登录");
-    console.log("[codearts] STS 已过期，尝试自动刷新…");
-    creds = await refreshNow();
-  }
-  return creds;
+  const plan = planStartupCredentials(bootstrap, secretCreds);
+  setCredentials(plan.creds);
+  if (!plan.refresh) return plan.creds;
+  console.log("[codearts] STS 已过期，尝试自动刷新…");
+  return await refreshNow();
 }
 
 // 装配 codearts provider；路由路径相对挂载点，由注册表负责前缀分发。

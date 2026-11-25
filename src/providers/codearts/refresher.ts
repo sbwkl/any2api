@@ -121,6 +121,7 @@ function toCredentials(auth: SecretAuth): Credentials {
     origin: undefined,
     domainId: auth.domainId,
     expiresAt: auth.expires_at,
+    refreshToken: auth.refresh_token,
   };
 }
 
