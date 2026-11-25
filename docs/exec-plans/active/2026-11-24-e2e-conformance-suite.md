@@ -85,10 +85,10 @@ Owner：wayne
 - **服务器生命周期**：`Bun.spawn` 启动 `src/index.ts`，随机端口（env `PORT`），轮询 `/healthz`；退出时回收子进程。
 - **凭据**：沿用 server 现有自动提取（launchd / `state.vscdb`）与 env 覆盖；codearts 起不来则整轮失败并给出原因。
 - **模型选择**：`GET /{provider}/v1/models` → 偏好序列（大小写不敏感、兼容 `(1017)` 后缀）→ `E2E_MODEL_FALLBACK` → 启发式（flash/mini/lite/small）→ skipped；报告记录实际模型。
-- **观测**：`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求（JSONL）供 L2 断言字段未被丢弃；`TRACE_CAPTURE_DIR` 采集四层请求记录（schema 2 单行 JSONL，脱敏、不截断；见 [四层请求记录](2026-11-25-four-layer-request-record.md)）。
+- **观测**：`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求（JSONL）供 L2 断言字段未被丢弃；`TRACE_CAPTURE_DIR` 采集四层请求记录（schema 2 单行 JSONL，脱敏、不截断；见 [四层请求记录](../completed/2026-11-25-four-layer-request-record.md)）。
 - **图片探测**：程序生成纯色 PNG（无三方依赖），要求模型回答主色；同时保留「已知会失败」的格子验证 harness 检出能力。
 - **报告**：`e2e/reports/latest.html` + `latest.json`（gitignored）。HTML 用一张跨 provider 对照矩阵（一行场景、两列状态；点击状态格展开对应 provider 的输入 / 上游请求 / 输出摘要），下方按 provider 分区展示证据，全局 healthz 单独成节；筛选按任一 provider 命中。JSON 保留入站请求、上游请求与响应原文（单条 ≤64KB），并写入 `scenarioSet` 与 `coverage`；运行结束若覆盖不一致直接失败。`--baseline` 写 `docs/generated/e2e-baseline.{html,json,md}`，其中 MD 仅作入口与链接。
-- **语料评估**：`bun run e2e:corpus` 读取采集目录，按端点契约做 L1 校验并输出差异报告（手动执行，写入 runbook）。
+- **语料评估**：`bun run e2e:corpus` 读取采集目录，按端点契约做 L1 校验并输出差异报告（手动执行，写入 runbook）。仍按 v1 记录字段解析，schema 2 记录未适配（与四层请求记录 D12 的决定一致）。
 
 ## 7. 验证与证据（2026-11-24）
 

@@ -111,19 +111,19 @@ export async function postChat(opts: {
   dumpUpstream("codebuddy", opts.url, opts.body);
   const payload = gzipBody(opts.body);
   // 每次实际发送是一次独立尝试；L2 body 记 gzip 前明文，wire body 仍是 gzip。
+  const send = (headers: Record<string, string>) =>
+    traceUpstream(
+      { method: "POST", url: opts.url, headers, body: payload, recordBody: opts.body },
+      { fetch: fetchImpl },
+    );
+
   let headers = { ...opts.headers, "Content-Encoding": "gzip" };
-  let resp = await traceUpstream(
-    { method: "POST", url: opts.url, headers, body: payload, recordBody: opts.body },
-    { fetch: fetchImpl },
-  );
+  let resp = await send(headers);
   if (resp.status === 401 && opts.onUnauthorized) {
     const refreshed = await opts.onUnauthorized();
     if (refreshed) {
       headers = { ...refreshed, "Content-Encoding": "gzip" };
-      resp = await traceUpstream(
-        { method: "POST", url: opts.url, headers, body: payload, recordBody: opts.body },
-        { fetch: fetchImpl },
-      );
+      resp = await send(headers);
     }
   }
   if (opts.onQueue && resp.ok) {
@@ -133,10 +133,7 @@ export async function postChat(opts: {
       if (peek?.code === 6020) {
         const retry = await opts.onQueue(peek);
         if (retry) {
-          resp = await traceUpstream(
-            { method: "POST", url: opts.url, headers, body: payload, recordBody: opts.body },
-            { fetch: fetchImpl },
-          );
+          resp = await send(headers);
         }
       }
     }

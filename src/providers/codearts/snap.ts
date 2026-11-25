@@ -264,7 +264,7 @@ export class HeartbeatManager {
   startBusy(sessionId: string): void {
     if (this.timers.has(sessionId)) { this.touch(sessionId); return; }
     // 请求链内首次 busy：走共享记录入口（无请求上下文时自然 no-op）
-    this.send(sessionId, "busy", true).catch(() => {});
+    this.sendRecorded(sessionId, "busy").catch(() => {});
     // 注意：interval 在请求上下文内创建时会继承首个请求的 ALS store（实测），
     // 定时器路径的发送必须显式用原始 fetch，不依赖上下文判定。
     const timer = setInterval(() => {
@@ -272,10 +272,10 @@ export class HeartbeatManager {
       if (!t) return;
       if (Date.now() - t.lastAliveAt > this.maxLifetimeMs) {
         this.stopBusy(sessionId);
-        this.send(sessionId, "idle", false).catch(() => {});
+        this.sendBackground(sessionId, "idle").catch(() => {});
         return;
       }
-      this.send(sessionId, "busy", false).catch(() => {});
+      this.sendBackground(sessionId, "busy").catch(() => {});
     }, this.intervalMs);
     this.timers.set(sessionId, { timer, lastAliveAt: Date.now() });
   }
@@ -285,21 +285,28 @@ export class HeartbeatManager {
     if (!t) return;
     clearInterval(t.timer);
     this.timers.delete(sessionId);
-    this.send(sessionId, "idle", false).catch(() => {});
+    this.sendBackground(sessionId, "idle").catch(() => {});
   }
 
   // Sh() 模式签名：X-Sdk-Content-Sha256=UNSIGNED-PAYLOAD；user-session-id 头；PUT
-  private async send(sessionId: string, status: "busy" | "idle", record: boolean): Promise<void> {
+  private buildHeartbeat(sessionId: string, status: "busy" | "idle"): { url: string; headers: Record<string, string>; body: string } {
     const url = `${this.snapOrigin}${HEARTBEAT_PATH}`;
     const headers = signSh(
       { method: "PUT", endpoint: url, headers: { "Content-Type": "application/json", "user-session-id": sessionId } },
       getCredentials(), { signBody: false },
     );
-    const body = JSON.stringify({ status });
-    if (record) {
-      await traceUpstream({ method: "PUT", url, headers, body }, { fetch: this.fetchImpl }).catch(() => {});
-      return;
-    }
+    return { url, headers, body: JSON.stringify({ status }) };
+  }
+
+  /** 请求链内发送：走请求记录入口（无请求上下文时自然 no-op） */
+  private async sendRecorded(sessionId: string, status: "busy" | "idle"): Promise<void> {
+    const { url, headers, body } = this.buildHeartbeat(sessionId, status);
+    await traceUpstream({ method: "PUT", url, headers, body }, { fetch: this.fetchImpl }).catch(() => {});
+  }
+
+  /** 定时器 / idle 等后台发送：显式用原始 fetch，不继承请求上下文 */
+  private async sendBackground(sessionId: string, status: "busy" | "idle"): Promise<void> {
+    const { url, headers, body } = this.buildHeartbeat(sessionId, status);
     await this.fetchImpl(url, { method: "PUT", headers, body }).catch(() => {});
   }
 }

@@ -54,11 +54,6 @@ export interface RequestTrace {
   finish(response: Response, durationMs?: number): Promise<void>;
 }
 
-/** 旧版采集接口（registry 过渡期兼容）；行为等价 startRequestTrace */
-export interface TraceCapture {
-  finish(res: Response, durationMs?: number): Promise<void>;
-}
-
 interface UpstreamAttemptRecord {
   t_ms: number;
   method: string;
@@ -82,7 +77,7 @@ interface InboundBody {
 interface TraceState {
   dir: string;
   startedAt: number;
-  provider: string;
+  provider: ReturnType<typeof providerHint>;
   method: string;
   path: string;
   headers: Record<string, string>;
@@ -113,7 +108,11 @@ function headerEntries(input: HeadersInit): Array<[string, string]> {
   return out;
 }
 
-/** L1–L4 头集合：全量保留头名与顺序，敏感值脱敏 */
+/**
+ * L1–L4 头集合：保留全部头名，敏感值脱敏。
+ * L1 / L4 来自 Fetch `Headers`：同名头会合并、名称顺序按规范归一，无法还原线上
+ * 原始重复头与顺序；L2 为构造的对象，保留插入顺序。
+ */
 function redactHeaders(input: HeadersInit | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!input) return out;
@@ -181,8 +180,8 @@ export function startRequestTrace(req: Request, opts: TraceOptions = {}): Reques
   if (!dir) return null;
   const state = createTraceState(req, dir);
   // enterWith：让同一请求异步链上的上游调用继承上下文，不要求调用方改造控制流。
-  // 注意：enterWith 会改写当前异步链的 store，并发请求可能互相覆盖；挂载处理器请使用
-  // runWithRequestTrace（run 语义，上下文按调用链隔离）。本入口仅保留向后兼容。
+  // 本入口供测试 / 手动上下文使用；生产入口应使用 runWithRequestTrace（run 语义，按调用链隔离）。
+  // 注意：enterWith 会改写当前异步链的 store，并发请求可能互相覆盖。
   traceStorage.enterWith(state);
   return {
     abort(reason) {
@@ -212,6 +211,17 @@ export async function flushRequestTraces(): Promise<void> {
   while (pendingFinishes.size > 0) await Promise.allSettled([...pendingFinishes]);
 }
 
+/** 把 finish 登记进 pendingFinishes，并在结束后移除断开监听 */
+function trackPendingFinish(done: Promise<void>, signal: AbortSignal | undefined, onAbort: () => void): void {
+  pendingFinishes.add(done);
+  // finish 结束（成功或失败）后移除断开监听，避免请求已结束仍持有引用
+  const cleanup = () => {
+    pendingFinishes.delete(done);
+    signal?.removeEventListener("abort", onAbort);
+  };
+  void done.then(cleanup, cleanup);
+}
+
 /**
  * 挂载处理器入口：为一次入站请求建立独立的异步上下文（ALS.run 语义，按调用链隔离，
  * 并发请求互不串上下文），请求处理结束后组装 L4 并旁路写盘。
@@ -237,20 +247,12 @@ export async function runWithRequestTrace(
     response = await traceStorage.run(state, fn);
   } catch (error) {
     markStateAbort(state, abortReasonForError(error));
-    // 处理器抛出时 Bun 会返回 500；补一条带中断标记的记录后原样抛出。
-    await finishTrace(state, new Response("", { status: 500 }));
-    signal?.removeEventListener("abort", onAbort);
+    // 处理器抛出时 Bun 会返回 500；记录旁路写入，不等待上游 pending 流，异常立即抛出。
+    trackPendingFinish(finishTrace(state, new Response("", { status: 500 })), signal, onAbort);
     throw error;
   }
 
-  const done = finishTrace(state, response);
-  pendingFinishes.add(done);
-  // finish 结束（成功或失败）后移除断开监听，避免请求已结束仍持有引用
-  const cleanup = () => {
-    pendingFinishes.delete(done);
-    signal?.removeEventListener("abort", onAbort);
-  };
-  void done.then(cleanup, cleanup);
+  trackPendingFinish(finishTrace(state, response), signal, onAbort);
   return response;
 }
 
@@ -354,7 +356,10 @@ async function finishTrace(state: TraceState, response: Response, durationMsOver
     const contentType = response.headers.get("content-type");
 
     let body = "";
-    let firstByte: number | null = null;
+    // 响应头返回即视为首字节兜底：204/304 或空正文没有 chunk 可计时；
+    // 有正文时在首个非空 chunk 到达时覆盖为真实时刻。
+    let firstByte = Math.round(Date.now() - state.startedAt);
+    let sawChunk = false;
     let complete = true;
     let clone: Response | null = null;
     try {
@@ -370,7 +375,10 @@ async function finishTrace(state: TraceState, response: Response, durationMsOver
           const { done, value } = await reader.read();
           if (done) break;
           if (!value) continue;
-          if (firstByte === null) firstByte = Math.round(Date.now() - state.startedAt);
+          if (!sawChunk) {
+            sawChunk = true;
+            firstByte = Math.round(Date.now() - state.startedAt);
+          }
           body += decoder.decode(value, { stream: true });
         }
         body += decoder.decode();
@@ -411,7 +419,7 @@ async function finishTrace(state: TraceState, response: Response, durationMsOver
   } catch {
     // 采集不得影响请求主路径
   } finally {
-    // 兼容旧 enterWith 入口：当前上下文仍是本请求时清除；run 语义下由 ALS 自动恢复
+    // 兼容 startRequestTrace 的 enterWith 入口：当前上下文仍是本请求时清除；run 语义下由 ALS 自动恢复
     if (traceStorage.getStore() === state) traceStorage.enterWith(undefined);
   }
 }
@@ -443,18 +451,4 @@ export function dumpUpstream(provider: string, url: string, body: unknown, opts:
   } catch {
     // 观测不得影响主路径
   }
-}
-
-/** 旧版采集入口：委托 schema 2 记录器，供 registry 过渡期使用 */
-export function startTraceCapture(
-  req: Request,
-  opts: { dir?: string; /** @deprecated v2 不截断正文 */ maxBodyBytes?: number } = {},
-): TraceCapture | null {
-  const trace = startRequestTrace(req, { dir: opts.dir });
-  if (!trace) return null;
-  return {
-    finish(res, durationMs) {
-      return trace.finish(res, durationMs);
-    },
-  };
 }
