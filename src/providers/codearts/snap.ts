@@ -3,7 +3,7 @@ import { createECDH, createHash, randomBytes } from "crypto";
 import { SM4GCM } from "./sm4";
 import { signSimple, signSh } from "./signer";
 import { getCredentials } from "./config";
-import { traceUpstream, type FetchLike } from "../../shared/trace";
+import { traceUpstream, UpstreamDecodeError, type FetchLike } from "../../shared/trace";
 
 const SM4_GCM_ALGO = "sm4-gcm";
 const ENCRYPT_PATHS = ["/api/v2/chat/completions"];
@@ -129,7 +129,12 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
             if (buf.length > 0) {
               const frame = buf.trim();
               if (frame) {
-                const plain = decryptChunk(cipher, key, keyId, frame, chunkIndex);
+                let plain: string;
+                try {
+                  plain = decryptChunk(cipher, key, keyId, frame, chunkIndex);
+                } catch (e: any) {
+                  throw new UpstreamDecodeError("frame_decrypt", chunkIndex, e?.message ?? String(e));
+                }
                 controller.enqueue(encoder.encode(plain + FRAME_SEP));
                 chunkIndex++;
               }
@@ -149,7 +154,7 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
               plain = decryptChunk(cipher, key, keyId, trimmed, chunkIndex);
             } catch (e: any) {
               console.error(`[snap] SSE 帧解密失败 chunk=${chunkIndex}: ${e?.message ?? e} frame=${trimmed.slice(0, 120)}`);
-              throw e;
+              throw new UpstreamDecodeError("frame_decrypt", chunkIndex, e?.message ?? String(e));
             }
             chunkIndex++;
             controller.enqueue(encoder.encode(plain + FRAME_SEP));

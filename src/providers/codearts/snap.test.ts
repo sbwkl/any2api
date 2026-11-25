@@ -251,6 +251,69 @@ describe("snap.chat request-scoped attempts", () => {
     expect(chatAttempt.response.complete).toBe(true);
   });
 
+  test("a corrupt encrypted frame keeps the decrypted prefix in L3 with a structured decode_error and no retry", async () => {
+    const server = createECDH("prime256v1");
+    const serverPublicKey = server.generateKeys().toString("base64");
+    const cipher = new SM4GCM();
+    const keyId = "kid-10";
+    let sessionKey: Uint8Array | null = null;
+    const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
+    const firstPlain = 'data: {"a":1}\n\n';
+
+    const { fetch: fake, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        const reqBody = JSON.parse(String(call.init.body));
+        const shared = server.computeSecret(Buffer.from(reqBody.clientPublicKey, "base64"));
+        sessionKey = new Uint8Array(createHash("sha256").update(shared).digest().subarray(0, 16));
+        return Response.json({ serverPublicKey, keyId, expiresIn: 3600 });
+      }
+      const { ciphertext, iv, authTag } = cipher.encrypt(sessionKey!, encoder.encode(firstPlain), `${keyId}|0`);
+      const badTag = authTag.slice();
+      badTag[0] ^= 1;
+      const corrupt = `${b64(iv)}:${b64(badTag)}:${b64(ciphertext)}`;
+      return new Response(`${b64(iv)}:${b64(authTag)}:${b64(ciphertext)}\n\n${corrupt}\n\n`, {
+        status: 200,
+        headers: {
+          "X-Encrypt-Algo": "sm4-gcm",
+          "X-Encrypt-Key-Id": keyId,
+          "Content-Type": "application/x-encrypted-sse",
+        },
+      });
+    });
+
+    const trace = startRequestTrace(inbound(), { dir })!;
+    const snap = new SnapClient("https://snap.test", fake);
+    let callerError: unknown;
+    try {
+      const res = await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-4" }, chatBody());
+      try {
+        await res.text();
+      } catch (e) {
+        callerError = e;
+      }
+    } finally {
+      await trace.finish(Response.json({ ok: true }));
+    }
+
+    // 调用方流拒绝，且没有因解密失败新增重试/预读
+    expect(callerError).toBeDefined();
+    expect(calls.filter((c) => c.url === CHAT_URL)).toHaveLength(1);
+
+    const record = readRecords()[0];
+    expect(record.upstream).toHaveLength(2);
+    const chatAttempt = record.upstream[1];
+    // L3 保留失败前已解密的明文前缀，并明确标记不完整
+    expect(chatAttempt.response.body).toBe(firstPlain + "\n\n");
+    expect(chatAttempt.response.complete).toBe(false);
+    expect(chatAttempt.response.decode_error).toEqual({
+      stage: "frame_decrypt",
+      chunk_index: 1,
+      message: "authentication tag mismatch",
+    });
+    // 请求级中断原因与未发生解密失败时一致（不引入新的中断原因）
+    expect(record.response.abort_reason).toBeNull();
+  });
+
   test("key-exchange failure rejects instead of sending a useless plaintext chat", async () => {
     const { fetch: fake } = recordingFetch((call) => {
       if (call.url === KEY_EXCHANGE_URL) return new Response("KX_DOWN", { status: 500 });
