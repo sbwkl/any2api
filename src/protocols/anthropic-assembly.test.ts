@@ -306,3 +306,69 @@ describe("anthropic streaming edge cases", () => {
     expect(text).not.toContain('"stop_reason":"end_turn"');
   });
 });
+
+describe("anthropicToOpenAi 服务端工具与 tool_choice 一致性（docs/references/2026-11-25-server-tool-competitor-survey.md）", () => {
+  const FULL: ProtocolCapabilities = { toolChoice: "full", normalizeErrors: false };
+  const AUTO_ONLY: ProtocolCapabilities = { toolChoice: "auto-only", normalizeErrors: false };
+
+  test("服务端工具被丢弃时，指向它的强制 tool_choice 一并删除（真实 Claude Desktop web-search 形状）", () => {
+    const out = anthropicToOpenAi({
+      model: "m", max_tokens: 10,
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }],
+      tool_choice: { type: "tool", name: "web_search" },
+    }, FULL);
+    expect(out.tools).toBeUndefined();
+    expect(out.tool_choice).toBeUndefined();
+  });
+
+  test("自定义工具与服务端工具混用时，指向幸存自定义工具的强制选择保留", () => {
+    const out = anthropicToOpenAi({
+      model: "m", max_tokens: 10,
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ name: "f", input_schema: { type: "object" } }, { type: "web_search_20250305", name: "web_search" }],
+      tool_choice: { type: "tool", name: "f" },
+    }, FULL);
+    expect(out.tools).toEqual([{ type: "function", function: { name: "f", description: "", parameters: { type: "object" } } }]);
+    expect(out.tool_choice).toEqual({ type: "function", function: { name: "f" } });
+  });
+
+  test("强制选择指向被滤除的服务端工具时删除，即使自定义工具幸存", () => {
+    const out = anthropicToOpenAi({
+      model: "m", max_tokens: 10,
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ name: "f", input_schema: { type: "object" } }, { type: "web_search_20250305", name: "web_search" }],
+      tool_choice: { type: "tool", name: "web_search" },
+    }, FULL);
+    expect(out.tools).toHaveLength(1);
+    expect(out.tool_choice).toBeUndefined();
+  });
+
+  test("全部工具被滤空时 any/required 一并删除", () => {
+    const out = anthropicToOpenAi({
+      model: "m", max_tokens: 10,
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ type: "code_execution_20260522", name: "code_execution" }],
+      tool_choice: { type: "any" },
+    }, FULL);
+    expect(out.tools).toBeUndefined();
+    expect(out.tool_choice).toBeUndefined();
+  });
+
+  test("auto-only 能力位下 any→auto 保留（工具有幸存）或随滤空删除", () => {
+    const kept = anthropicToOpenAi({
+      model: "m", max_tokens: 10,
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ name: "f", input_schema: { type: "object" } }],
+      tool_choice: { type: "any" },
+    }, AUTO_ONLY);
+    expect(kept.tool_choice).toBe("auto");
+    const dropped = anthropicToOpenAi({
+      model: "m", max_tokens: 10,
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
+      tool_choice: { type: "any" },
+    }, AUTO_ONLY);
+    expect(dropped.tool_choice).toBeUndefined();
+  });
+});

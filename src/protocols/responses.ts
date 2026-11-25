@@ -88,10 +88,12 @@ export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   if (body.reasoning?.effort) out.reasoning_effort = body.reasoning.effort;
   if (body.parallel_tool_calls !== undefined) out.parallel_tool_calls = body.parallel_tool_calls;
   if (body.metadata !== undefined) out.metadata = body.metadata;
-  if (Array.isArray(body.tools) && body.tools.length)
-    out.tools = body.tools
+  if (Array.isArray(body.tools) && body.tools.length) {
+    const mapped = body.tools
       .filter((t) => t?.type === "function")
       .map((t) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.parameters ?? { type: "object" } } }));
+    if (mapped.length) out.tools = mapped;
+  }
 
   const tc = body.tool_choice;
   if (caps.toolChoice === "auto-only") {
@@ -102,6 +104,10 @@ export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
     if (typeof tc === "string") out.tool_choice = tc;
     else if (tc?.type === "function") out.tool_choice = { type: "function", function: { name: tc.name } };
   }
+  // 防悬空：上游拒绝「无幸存工具 / 引用被滤工具」的强制 tool_choice（InferHub.001001005 实测）
+  const surviving = new Set((out.tools ?? []).map((t) => t.function?.name));
+  if (surviving.size === 0) delete out.tool_choice;
+  else if (out.tool_choice?.type === "function" && !surviving.has(out.tool_choice.function?.name)) delete out.tool_choice;
   return out;
 }
 

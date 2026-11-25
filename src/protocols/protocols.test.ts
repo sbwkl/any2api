@@ -115,6 +115,36 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect(j.code).toBe(123);
   });
 
+  test("Responses 非 function 工具滤空时删除悬空强制 choice 且不发空 tools 键（spec #21）", async () => {
+    let seen: any;
+    const local = createProtocolRoutes(makeBackend({
+      respond: async (body) => { seen = body; return Response.json(completion); },
+    }), { toolChoice: "full", normalizeErrors: false });
+    const resp = await dispatch(local, "/v1/responses", "POST", {
+      model: "m", input: "hi",
+      tools: [{ type: "web_search" }],
+      tool_choice: { type: "function", name: "web_search" },
+    });
+    expect(resp.status).toBe(200);
+    expect(seen.tools).toBeUndefined();
+    expect(seen.tool_choice).toBeUndefined();
+  });
+
+  test("Responses 混合工具时指向幸存 function 的强制 choice 保留（spec #21）", async () => {
+    let seen: any;
+    const local = createProtocolRoutes(makeBackend({
+      respond: async (body) => { seen = body; return Response.json(completion); },
+    }), { toolChoice: "full", normalizeErrors: false });
+    const resp = await dispatch(local, "/v1/responses", "POST", {
+      model: "m", input: "hi",
+      tools: [{ type: "function", name: "f", parameters: { type: "object" } }, { type: "web_search" }],
+      tool_choice: { type: "function", name: "f" },
+    });
+    expect(resp.status).toBe(200);
+    expect(seen.tools).toHaveLength(1);
+    expect(seen.tool_choice).toEqual({ type: "function", function: { name: "f" } });
+  });
+
   test("GET /healthz returns backend health", async () => {
     const resp = await dispatch(routes, "/healthz", "GET");
     const j: any = await resp.json();
