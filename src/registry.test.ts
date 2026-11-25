@@ -155,8 +155,9 @@ describe("provider registry", () => {
       for (let i = 0; i < 100 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 10));
       expect(existsSync(file)).toBe(true);
       const rec = JSON.parse(readFileSync(file, "utf8").trim());
+      expect(rec.schema).toBe(2);
       expect(rec.path).toBe("/v1/models");
-      expect(rec.status).toBe(200);
+      expect(rec.response.status).toBe(200);
       expect(rec.provider).toBe("default");
     } finally {
       delete process.env.TRACE_CAPTURE_DIR;
