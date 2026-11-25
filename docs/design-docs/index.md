@@ -21,7 +21,8 @@
 
 ## 架构决策 ADR
 
-- [`adr/`](adr/) — 暂无已登记 ADR；难回退决策按主题新建，不分配顺序编号。
+- [`adr/codearts-l3-decrypted-plaintext.md`](adr/codearts-l3-decrypted-plaintext.md) — CodeArts L3 默认记录解密后的明文响应（accepted）。
+- [`adr/`](adr/) — 难回退决策按主题新建，不分配顺序编号。
 
 ## RFC
 

@@ -283,7 +283,7 @@ function requestInit(request: UpstreamRequest): RequestInit {
 /**
  * 出站记录入口：包裹一次上游调用（一个尝试）。
  * 无请求上下文时完全 no-op，直接透传 fetch；有上下文时旁路读取响应，
- * 记录 L2 请求与 L3 原始响应，原 Response 立即返回给调用方。
+ * 记录 L2 请求与 L3 上游可读响应，原 Response 立即返回给调用方。
  */
 export function traceUpstream(request: UpstreamRequest, opts: TraceUpstreamOptions = {}): Promise<Response> {
   const fetchImpl = opts.fetch ?? fetch;

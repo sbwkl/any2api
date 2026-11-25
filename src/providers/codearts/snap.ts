@@ -97,6 +97,23 @@ function decryptChunk(cipher: SM4GCM, key: Uint8Array, keyId: string, frame: str
   return toUtf8(cipher.decrypt(key, iv, tag, ct, `${keyId}|${index}`));
 }
 
+/** 统一把帧解密失败包装为 trace 可识别的最小载体；index 由调用方在解密前确定。 */
+function decryptTrackedChunk(
+  cipher: SM4GCM,
+  key: Uint8Array,
+  keyId: string,
+  frame: string,
+  index: number,
+  logPrefix?: string,
+): string {
+  try {
+    return decryptChunk(cipher, key, keyId, frame, index);
+  } catch (e: any) {
+    if (logPrefix) console.error(`${logPrefix} chunk=${index}: ${e?.message ?? e} frame=${frame.slice(0, 120)}`);
+    throw new UpstreamDecodeError("frame_decrypt", index, e?.message ?? String(e));
+  }
+}
+
 function readWithIdleTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   ms: number,
@@ -129,12 +146,7 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
             if (buf.length > 0) {
               const frame = buf.trim();
               if (frame) {
-                let plain: string;
-                try {
-                  plain = decryptChunk(cipher, key, keyId, frame, chunkIndex);
-                } catch (e: any) {
-                  throw new UpstreamDecodeError("frame_decrypt", chunkIndex, e?.message ?? String(e));
-                }
+                const plain = decryptTrackedChunk(cipher, key, keyId, frame, chunkIndex);
                 controller.enqueue(encoder.encode(plain + FRAME_SEP));
                 chunkIndex++;
               }
@@ -149,13 +161,14 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
             buf = buf.slice(idx + FRAME_SEP.length);
             const trimmed = frame.trim();
             if (!trimmed) continue;
-            let plain: string;
-            try {
-              plain = decryptChunk(cipher, key, keyId, trimmed, chunkIndex);
-            } catch (e: any) {
-              console.error(`[snap] SSE 帧解密失败 chunk=${chunkIndex}: ${e?.message ?? e} frame=${trimmed.slice(0, 120)}`);
-              throw new UpstreamDecodeError("frame_decrypt", chunkIndex, e?.message ?? String(e));
-            }
+            const plain = decryptTrackedChunk(
+              cipher,
+              key,
+              keyId,
+              trimmed,
+              chunkIndex,
+              "[snap] SSE 帧解密失败",
+            );
             chunkIndex++;
             controller.enqueue(encoder.encode(plain + FRAME_SEP));
             if (chunkIndex % 50 === 0) await new Promise((r) => setImmediate(r));

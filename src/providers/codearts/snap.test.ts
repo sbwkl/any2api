@@ -105,6 +105,35 @@ describe("snap.chat request-scoped attempts", () => {
     expect(readRecords()).toHaveLength(0);
   });
 
+  test("non-encrypted CodeArts responses keep the upstream-readable L3 JSONL record unchanged", async () => {
+    // force-plaintext 走 sendPlaintext，是 chat 唯一不协商密钥、不解密的上游路径。
+    process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+    const plainBody = 'data: {"ok":1}\n\n';
+    const { fetch: fake, calls } = recordingFetch(
+      () => new Response(plainBody, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+
+    const trace = startRequestTrace(inbound(), { dir })!;
+    const snap = new SnapClient("https://snap.test", fake);
+    const res = await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-plain-l3" }, chatBody());
+    expect(await res.text()).toBe(plainBody);
+    await trace.finish(Response.json({ ok: true }));
+
+    const record = readRecords()[0];
+    expect(record.schema).toBe(3);
+    expect(record.upstream).toHaveLength(1);
+    const chatAttempt = record.upstream[0];
+    expect(calls.map((c) => c.url)).toEqual([CHAT_URL]);
+    expect(chatAttempt.url).toBe(CHAT_URL);
+    expect(chatAttempt.response.status).toBe(200);
+    expect(chatAttempt.response.body).toBe(plainBody);
+    expect(recordedHeader(chatAttempt.response.headers, "content-type")).toBe("text/event-stream");
+    expect(recordedHeader(chatAttempt.response.headers, "x-encrypt-algo")).toBeNull();
+    expect(chatAttempt.response.decode_error).toBeUndefined();
+    expect(chatAttempt.response.complete).toBe(true);
+    expect(JSON.stringify(record)).not.toContain("x-encrypt-algo");
+  });
+
   test("records key-exchange and one encrypted retry for a transient 5xx", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
