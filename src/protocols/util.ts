@@ -21,7 +21,7 @@ export async function safeRespond(
 // 引用被滤工具」的矛盾形状（InferHub.001001005 实测），Anthropic 与 Responses
 // 两入口在能力位映射之后统一应用本检查。
 export function pruneDanglingToolChoice(out: any): any {
-  const survivingToolNames = new Set((out.tools ?? []).map((t) => t.function?.name));
+  const survivingToolNames = new Set((out.tools ?? []).map((t: any) => t.function?.name));
   if (survivingToolNames.size === 0) delete out.tool_choice;
   else if (out.tool_choice?.type === "function" && !survivingToolNames.has(out.tool_choice.function?.name)) delete out.tool_choice;
   return out;

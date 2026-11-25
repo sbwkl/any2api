@@ -341,7 +341,6 @@ function renderOverview(results: ScenarioResult[]): string {
   }
   const cards = [...groups.entries()]
     .map(([key, list]) => {
-      const counts = summarize(list);
       return `<div class="card"><h3>${escapeHtml(key === "global" ? "全局" : key)}</h3><p class="card-total">${list.length} 场景</p><p class="counts">${countLine(
         list,
       )}</p></div>`;

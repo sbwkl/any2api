@@ -30,7 +30,7 @@ function backend(respond: ChatBackend["respond"], seen?: { body?: any }): ChatBa
   return {
     models: () => [],
     health: () => ({ ok: true }),
-    handleChat: () => new Response(""),
+    handleChat: async () => new Response(""),
     respond: async (body, opts) => {
       if (seen) seen.body = body;
       return respond(body, opts);

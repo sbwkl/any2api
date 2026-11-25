@@ -41,7 +41,7 @@ const SSE_TOOL = [
 ].join("\n");
 
 function facadeWith(sse: string): CodeBuddyFacade {
-  const fetchImpl = (async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } })) as typeof fetch;
+  const fetchImpl = (async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } })) as unknown as typeof fetch;
   return new CodeBuddyFacade(config, credentials, { fetchImpl });
 }
 
@@ -205,7 +205,7 @@ describe("responses adapter", () => {
   });
 
   test("upstream errors become Responses error envelopes", async () => {
-    const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as typeof fetch;
+    const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as unknown as typeof fetch;
     const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
     const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), CAPS);
     expect(resp.status).toBe(400);
@@ -214,7 +214,7 @@ describe("responses adapter", () => {
   });
 
   test("passthrough error shape returns the provider response unchanged", async () => {
-    const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as typeof fetch;
+    const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as unknown as typeof fetch;
     const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
     const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), { toolChoice: "auto-only", normalizeErrors: false });
     expect(resp.status).toBe(400);

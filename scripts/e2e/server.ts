@@ -20,6 +20,8 @@ interface Spawned {
   exited: Promise<number>;
   exitCode: number | null;
   kill: (signal?: number | NodeJS.Signals) => void;
+  stdout: ReadableStream<Uint8Array>;
+  stderr: ReadableStream<Uint8Array>;
 }
 
 async function waitFor(fn: () => Promise<boolean> | boolean, timeoutMs: number): Promise<boolean> {

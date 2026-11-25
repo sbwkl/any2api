@@ -1,5 +1,5 @@
 // 凭证与模型池 — spec §1 凭证获取链 + benefit-service gateway/config（内核逐字语义）
-import { existsSync, readdirSync, readFileSync } from "fs";
+import { existsSync } from "fs";
 import { homedir } from "os";
 import { signSl, signSh, type Credentials } from "./signer";
 import { uuid32 } from "../../shared/ids";
@@ -35,10 +35,6 @@ export function getCredentials(): Credentials {
   return CURRENT;
 }
 
-function fromRunningApp(): Credentials | null {
-  return fromVscodeStateDb() ?? fromKernelHttp();
-}
-
 // 主路径：VSCode 扩展全局状态（huaweicloud.codearts-snap → userInfoKey.originData，内含 STS 全套）
 // 过期不再抛错（返回带 expiresAt 的凭证，由刷新链决定续期）
 function fromVscodeStateDb(): Credentials | null {
@@ -68,41 +64,6 @@ function fromVscodeStateDb(): Credentials | null {
   }
 }
 
-// 兜底：内核 HTTP /global/config（部分版本返回 {}）
-function fromKernelHttp(): Credentials | null {
-  try {
-    const base = `${homedir()}/.codeartsdoer/CodeArts_Agent`;
-    if (!existsSync(base)) return null;
-    let port: string | null = null;
-    for (const entry of readdirSync(base)) {
-      if (!entry.startsWith("Vscode_")) continue;
-      const p = `${base}/${entry}/server_config.properties`;
-      if (!existsSync(p)) continue;
-      const m = readFileSync(p, "utf8").match(/^port=(\d+)/m);
-      if (m) { port = m[1]; break; }
-    }
-    if (!port) return null;
-    const pgrep = Bun.spawnSync(["/bin/sh", "-c", "pgrep -f AgentKernel | head -1"]);
-    const pid = pgrep.stdout.toString().trim();
-    if (!pid) return null;
-    const ps = Bun.spawnSync(["/bin/sh", "-c", `ps eww ${pid} | tr ' ' '\\n' | grep '^OPENCODE_SERVER_PASSWORD=' | cut -d= -f2-`]);
-    const password = ps.stdout.toString().trim();
-    if (!password) return null;
-    const cfg = Bun.spawnSync(["/bin/sh", "-c",
-      `curl -sf -H "Authorization: Basic ${btoa(`codearts:${password}`)}" http://127.0.0.1:${port}/global/config`]);
-    if (cfg.exitCode !== 0) return null;
-    const data = JSON.parse(cfg.stdout.toString());
-    const ui = data.userInfo ?? {};
-    if (!ui.accessKeyId || !ui.secretAccessKey) return null;
-    return {
-      ak: ui.accessKeyId, sk: ui.secretAccessKey, securityToken: ui.accessToken ?? "",
-      userToken: data.userToken, domainId: ui.domainId,
-      origin: data.inferhubBaseUrl ? new URL(data.inferhubBaseUrl).origin : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
 
 // Policy Center policy/bundle（商用版真实模型列表下发端点，逐字对照扩展 getPolicyCenterConfig）：
 // POST {policyDomain}/v1/policy/bundle，Agent-Type: PromptCenter；商业版 x-auth-token 为空串

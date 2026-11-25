@@ -2,7 +2,7 @@ import { test, expect, describe } from "bun:test";
 import { createProtocolRoutes } from "./index";
 import { responsesToOpenAi } from "./responses";
 import { PROXY_ERROR_HEADER } from "../shared/errors";
-import type { ChatBackend } from "./types";
+import type { ChatBackend, ProtocolCapabilities } from "./types";
 
 const completion = {
   id: "1", model: "m", created: 1,
@@ -14,7 +14,7 @@ function makeBackend(overrides: Partial<ChatBackend> = {}): ChatBackend {
   return {
     models: () => [{ id: "m" }],
     health: () => ({ ok: true, custom: 1 }),
-    handleChat: () => new Response("chat"),
+    handleChat: async () => new Response("chat"),
     respond: async () => Response.json(completion),
     ...overrides,
   };

@@ -19,10 +19,8 @@ const attr = (k: string, v: string) => ({ key: k, value: { stringValue: v } });
 export class TelemetrySimulator {
   private spans: SpanRecord[] = [];
   private logs: LogRecord[] = [];
-  private timer: ReturnType<typeof setInterval> | null = null;
-
   constructor(private enabled: boolean, private serviceName: string, private fetchImpl: FetchLike = fetch) {
-    if (enabled) this.timer = setInterval(() => this.flush().catch(() => {}), BATCH_DELAY_MS);
+    if (enabled) setInterval(() => this.flush().catch(() => {}), BATCH_DELAY_MS).unref?.();
   }
 
   recordChat(opts: { traceId: string; spanId: string; startMs: number; endMs: number; otFunction: string; modelId: string }): void {

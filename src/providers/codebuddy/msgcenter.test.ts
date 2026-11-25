@@ -20,7 +20,7 @@ describe("msg center poller", () => {
     const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
       seen = { url: String(url), headers: new Headers(init?.headers) };
       return Response.json({ data: { total: 2 } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const poller = new MsgCenterPoller({ config, getCredentials: () => credentials, fetchImpl });
     await poller.tick();
     expect(seen!.url).toBe("https://example.test/v2/msg-center/message/summary");
@@ -30,7 +30,7 @@ describe("msg center poller", () => {
   });
 
   test("tick swallows non-OK responses", async () => {
-    const fetchImpl = (async () => Response.json({ code: 500 }, { status: 500 })) as typeof fetch;
+    const fetchImpl = (async () => Response.json({ code: 500 }, { status: 500 })) as unknown as typeof fetch;
     const poller = new MsgCenterPoller({ config, getCredentials: () => credentials, fetchImpl });
     await expect(poller.tick()).resolves.toBeUndefined();
   });
@@ -40,7 +40,7 @@ describe("msg center poller", () => {
     const fetchImpl = (async () => {
       calls++;
       return Response.json({ data: { total: 0 } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const poller = new MsgCenterPoller({ config, getCredentials: () => credentials, fetchImpl, intervalMs: 10 });
     poller.start();
     await new Promise((r) => setTimeout(r, 40));

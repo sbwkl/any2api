@@ -1,6 +1,7 @@
 // codearts 2Api 适配器 — 码道 CodeArts Agent → OpenAI 兼容 API
 // 协议规格见 protocol-spec.md（真实头全息样本 §0、双签名器 §2、SM4-GCM §3…）
-import { loadCredentials, discoverModels, setCredentials, type Credentials } from "./config";
+import { loadCredentials, discoverModels, setCredentials } from "./config";
+import type { Credentials } from "./signer";
 import { SnapClient } from "./snap";
 import { OpenAIFacade } from "./openai";
 import { TelemetrySimulator } from "./telemetry";

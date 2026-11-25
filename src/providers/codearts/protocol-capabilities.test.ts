@@ -20,7 +20,7 @@ function makeBackend(overrides: Partial<ChatBackend> = {}): ChatBackend {
   return {
     models: () => [{ id: "m" }],
     health: () => ({ ok: true }),
-    handleChat: () => new Response("chat"),
+    handleChat: async () => new Response("chat"),
     respond: async () => Response.json({ ...completion, usage }),
     ...overrides,
   };

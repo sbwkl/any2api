@@ -6,7 +6,7 @@
 import { Database } from "bun:sqlite";
 import { createDecipheriv, createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
 import { homedir } from "os";
-import type { Credentials } from "./config";
+import type { Credentials } from "./signer";
 import { setCredentials } from "./config";
 import { traceUpstream, type FetchLike } from "../../shared/trace";
 
@@ -89,7 +89,7 @@ export function readSecretSession(): SecretAuth | null {
     const auth = JSON.parse(decryptSecretBlob(new Uint8Array(envelope.data))) as SecretAuth;
     if (!auth?.refresh_token || !auth?.loginContext?.dpopKeyPair) return null;
     return auth;
-  } catch (e) {
+  } catch (e: any) {
     console.warn(`[refresher] 读取 HuaweiCloudSession 失败: ${e?.message ?? e}`);
     return null;
   }
@@ -275,7 +275,7 @@ export async function maintainCredentials(fetchImpl: FetchLike = fetch): Promise
   if (remaining > EXPIRED_REFRESH_MARGIN_MS) return;
   try {
     await refreshNow(fetchImpl);
-  } catch (e) {
+  } catch (e: any) {
     console.warn(`[refresher] 主动续期失败: ${e?.message ?? e}`);
   }
 }

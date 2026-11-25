@@ -1,6 +1,6 @@
 // 实测 Policy Center policy/bundle — 模型列表发现端点
 import { loadCredentials } from "./config";
-import { signSh, type Credentials } from "./signer";
+import { signSh } from "./signer";
 import { uuid32 } from "../../shared/ids";
 
 async function main(): Promise<void> {

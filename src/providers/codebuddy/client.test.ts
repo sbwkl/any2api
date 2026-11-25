@@ -72,7 +72,7 @@ describe("client", () => {
       expect(body.model).toBe("m");
       if (calls === 1) return Response.json({ code: 401, msg: "expired" }, { status: 401 });
       return new Response("data: {}\n\n", { status: 200, headers: { "Content-Type": "text/event-stream" } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const resp = await postChat({
       url: "https://example.test/v2/chat/completions",
@@ -90,7 +90,7 @@ describe("client", () => {
     const fetchImpl = (async () => {
       calls++;
       return Response.json({ code: 401, msg: "expired" }, { status: 401 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const resp = await postChat({
       url: "https://example.test/v2/chat/completions",
       headers: {},
@@ -111,7 +111,7 @@ describe("client", () => {
       expect(h.get("x-refresh-token")).toBe("ref");
       expect(h.get("x-auth-refresh-source")).toBe("plugin");
       return Response.json({ data: { accessToken: "new", refreshToken: "ref2", uid: "u1", expiresAt: 123 } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const next = await refreshAccessToken({ config, credentials, fetchImpl });
     expect(called).toBe(true);
     expect(next?.accessToken).toBe("new");
@@ -139,7 +139,7 @@ describe("client", () => {
         body: JSON.parse(String(init?.body ?? "{}")),
       };
       return Response.json({ data: { retry_after: 3, queue_position: 2, queue_size: 5 } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const status = await fetchQueueStatus({ config, credentials, model: "m", requestId: "r1", fetchImpl });
     expect(seen!.url).toBe("https://example.test/v2/chat/queue/status");
     expect(seen!.headers.get("x-conversation-request-id")).toBe("r1");
@@ -157,7 +157,7 @@ describe("client", () => {
       calls++;
       if (calls === 1) return Response.json({ code: 6020, data: { retry_after: 0 } });
       return new Response("data: {}\n\n", { status: 200, headers: { "Content-Type": "text/event-stream" } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const resp = await postChat({
       url: "https://example.test/v2/chat/completions",
       headers: {},
@@ -175,7 +175,7 @@ describe("client", () => {
     const fetchImpl = (async () => {
       calls++;
       return Response.json({ code: 6020, data: { retry_after: 3 } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const resp = await postChat({
       url: "https://example.test/v2/chat/completions",
       headers: {},
