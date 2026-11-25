@@ -24,6 +24,21 @@ const SENSITIVE_HEADERS = new Set([
 /** 请求中断原因（schema 3 允许的取值） */
 export type AbortReason = "client_disconnect" | "upstream_error" | "timeout" | "proxy_error";
 
+/**
+ * provider 解码失败的最小共享载体：仅由 provider 抛出、trace 写入该次上游 L3。
+ * stage 不设枚举，由各 provider 自行定义阶段名。
+ */
+export class UpstreamDecodeError extends Error {
+  constructor(
+    readonly stage: string,
+    readonly chunk_index: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "UpstreamDecodeError";
+  }
+}
+
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 /** 一次上游调用的描述：L2 记录加密 / gzip 前的明文，发送用 wire body */
@@ -66,6 +81,7 @@ interface UpstreamAttemptRecord {
     body: string;
     chunks: Array<{ t_ms: number; bytes: number }>;
     complete: boolean;
+    decode_error?: { stage: string; chunk_index: number; message: string };
   };
 }
 
@@ -342,6 +358,13 @@ async function drainUpstream(state: TraceState, attempt: UpstreamAttemptRecord, 
   } catch (error) {
     attempt.response.body = body;
     attempt.response.complete = false;
+    if (error instanceof UpstreamDecodeError) {
+      attempt.response.decode_error = {
+        stage: error.stage,
+        chunk_index: error.chunk_index,
+        message: error.message,
+      };
+    }
     throw error;
   }
 }
