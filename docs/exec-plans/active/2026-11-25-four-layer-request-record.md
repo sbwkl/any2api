@@ -63,7 +63,7 @@ Owner：wayne
 - [x] 单测：`bun test` → 272 pass / 0 fail，32 个文件、1147 次断言。覆盖 trace 核心（schema 2、L1 头脱敏、parsed / `raw_request`、多尝试顺序、chunk 计时、中断原因、无截断且忽略旧上限变量、0600、无上下文 no-op、写入失败静默）、注册表集成缝隙（L1–L4、空 `upstream`、messages / responses 入站）、两 provider 出站注入 fetch 的记录与无上下文回归。
 - [x] 静态检查：`bun build src/index.ts --target=bun`、`bun build scripts/e2e/run.ts --target=bun` 均退出码 0、stderr 为空。
 - [x] e2e 未改动：`git diff --stat main...HEAD -- scripts/e2e` 输出为空。
-- [x] 残留清理：`git diff main...HEAD -- src scripts` 无新增任何 `console.*` 调用；旧版单条正文上限变量只剩 `src/shared/trace.test.ts` 中「被忽略」的断言用例，代码与文档不再把它当有效配置；README 与 e2e exec-plan 中原有的单条上限与按天轮转描述已按 schema 2 实现改写。
+- [x] 残留清理：`git diff main...HEAD -- src scripts` 无新增任何 `console.*` 调用；旧版单条正文上限变量只剩 `src/shared/trace.test.ts` 中「被忽略」的断言用例，代码与文档不再把它当有效配置；README 与 e2e exec-plan 中原有的旧版限额与轮转描述已按 schema 2 实现改写。
 - [x] 文档结构 / 本地链接检查：仓库未配置项目级检查（未配置；待补）。对改动的 README、本文件与 e2e exec-plan 共 24 个相对链接人工核对：23 个存在；`README.md → ../AGENTS.md` 为既有跨项目约定（指向工作区根，在当前 worktree 不存在），非本次引入。
 - [ ] 部署（用户手工，未执行）：生产 launchd 仍加载旧配置；需移除已废弃的单条正文上限变量并重启服务（`launchctl bootout` + `bootstrap`）。
 
