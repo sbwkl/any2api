@@ -1,7 +1,7 @@
 // OpenAI Responses API 适配 — 共享协议层
 // 依赖 ChatBackend.respond；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
-import { safeRespond } from "./util";
+import { pruneDanglingToolChoice, safeRespond } from "./util";
 import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
 import { sseData } from "../shared/sse";
 
@@ -88,10 +88,12 @@ export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   if (body.reasoning?.effort) out.reasoning_effort = body.reasoning.effort;
   if (body.parallel_tool_calls !== undefined) out.parallel_tool_calls = body.parallel_tool_calls;
   if (body.metadata !== undefined) out.metadata = body.metadata;
-  if (Array.isArray(body.tools) && body.tools.length)
-    out.tools = body.tools
+  if (Array.isArray(body.tools) && body.tools.length) {
+    const mapped = body.tools
       .filter((t) => t?.type === "function")
       .map((t) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.parameters ?? { type: "object" } } }));
+    if (mapped.length) out.tools = mapped;
+  }
 
   const tc = body.tool_choice;
   if (caps.toolChoice === "auto-only") {
@@ -102,7 +104,7 @@ export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
     if (typeof tc === "string") out.tool_choice = tc;
     else if (tc?.type === "function") out.tool_choice = { type: "function", function: { name: tc.name } };
   }
-  return out;
+  return pruneDanglingToolChoice(out);
 }
 
 function validateResponses(body: any): string | null {

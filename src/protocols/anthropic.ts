@@ -1,7 +1,7 @@
 // Anthropic Messages API 适配 — 共享协议层
 // 依赖 ChatBackend.respond（OpenAI chat 形态）；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
-import { safeRespond } from "./util";
+import { pruneDanglingToolChoice, safeRespond } from "./util";
 import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
 import { sseData, upstreamErrorFromChunk, NO_CHOICES } from "../shared/sse";
 
@@ -196,10 +196,12 @@ export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   if (body.temperature !== undefined) out.temperature = body.temperature;
   if (body.top_p !== undefined) out.top_p = body.top_p;
   if (Array.isArray(body.stop_sequences) && body.stop_sequences.length) out.stop = body.stop_sequences;
-  if (Array.isArray(body.tools) && body.tools.length)
-    out.tools = body.tools
+  if (Array.isArray(body.tools) && body.tools.length) {
+    const mapped = body.tools
       .filter((t) => t?.type === "custom" || (!t?.type && t?.name))
       .map((t) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.input_schema ?? { type: "object" } } }));
+    if (mapped.length) out.tools = mapped;
+  }
 
   const tc = body.tool_choice;
   if (caps.toolChoice === "auto-only") {
@@ -211,7 +213,7 @@ export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
     else if (tc?.type === "auto") out.tool_choice = "auto";
     else if (tc?.type === "none") out.tool_choice = "none";
   }
-  return out;
+  return pruneDanglingToolChoice(out);
 }
 
 // content_filter 不能映射成 end_turn：那等于告诉客户端「模型正常说完了」，
