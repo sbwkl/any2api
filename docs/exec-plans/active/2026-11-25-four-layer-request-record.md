@@ -1,7 +1,7 @@
 # 四层请求记录：trace 扩展（L1–L4）
 
 类型：可观测性 / 测试基础设施
-状态：开发中
+状态：已验证（本地回归通过；未合并 main、未部署）
 Owner：wayne
 所属模块/入口：`src/shared/trace.ts`、`src/registry.ts`、两 provider 出站调用点
 关联：spec [sbwkl/any2api#6](https://github.com/sbwkl/any2api/issues/6)、[GLOSSARY](../../../GLOSSARY.md)、[e2e 一致性测试](2026-11-24-e2e-conformance-suite.md)
@@ -18,7 +18,7 @@ Owner：wayne
 - 采集不影响请求主路径：写入失败静默，响应内容与延迟不变。
 - 修复既有缺陷：响应头在消费前快照（content_type 恒 null）、流式耗时同时记录首字节与总时长。
 - e2e 的上游请求转储与报告逻辑保持不变；e2e 语料评估不做新格式适配（遇 v2 记录失败按决定不处理）。
-- 验证：`bun test` 全绿；`bun build src/index.ts --target=bun` 与 e2e 脚本构建零错误（证据待补）。
+- 验证：`bun test` 全绿；`bun build src/index.ts --target=bun` 与 e2e 脚本构建零错误（证据见 §6）。
 
 ## 3. 决策台账（2026-11-25 grilling 锁定）
 
@@ -37,6 +37,8 @@ Owner：wayne
 | D11 | 配置 | 仅环境变量；废弃单条正文上限变量 |
 | D12 | e2e | 上游请求转储与报告不动；语料评估不适配新格式 |
 
+实现复核（2026-11-25）：D1–D12 与最终实现一致，无行为偏差。实现层限制仅一处——L1 头经 Fetch `Headers` 记录，同名头会被合并、名称顺序按规范归一，无法还原线上原始重复头与顺序（L2 为构造对象，保留插入顺序）；见 §5。
+
 ## 4. 影响范围与非目标
 
 **受影响**：共享 trace 记录器与请求上下文、注册表接线、codearts / codebuddy 出站调用点、README 环境变量表、GLOSSARY。
@@ -52,17 +54,26 @@ Owner：wayne
 | 提示词 / 工具内容明文落盘 | 隐私 | 仅本地私有环境；目录与文件仅所有者可访问 |
 | 响应旁路读取影响流 | 响应延迟或背压 | 旁路读取不得阻塞主路径，必要时异步排水 |
 | 后台调用误记 | 记录混入非客户端流量 | 以请求异步上下文为判定边界 |
+| L1 头顺序 / 重复头不可还原 | 信封仿真的头集合顺序判断可能失真 | Fetch `Headers` 语义导致同名头合并、顺序归一；当前真实客户端未出现重复头，接受 |
+| 进程崩溃丢失进行中请求 | 该请求无记录 | 设计选择（D5）：请求结束才落盘；已接受 |
+| 生产 launchd 仍设置已废弃的单条正文上限变量 | 无功能影响（v2 已忽略该变量） | 待用户移除该键并重启服务；本变更不改 launchd |
 
-## 6. 验证与证据
+## 6. 验证与证据（2026-11-25，本地 worktree）
 
-- [ ] 单测：trace 核心（schema、脱敏、多尝试、chunk 计时、中断、无截断、0600、无上下文 no-op）。
-- [ ] 集成：挂载处理器 + 假 provider + 假上游，断言 L1–L4、多尝试、空上游请求。
-- [ ] 回归：provider 既有注入 fetch 测试不变；e2e 未改动。
-- [ ] 静态检查：`bun test`、入口与 e2e 脚本 `bun build` 零错误。
-- [ ] 文档结构 / 链接检查：未配置项目级检查；待补。
+- [x] 单测：`bun test` → 272 pass / 0 fail，32 个文件、1147 次断言。覆盖 trace 核心（schema 2、L1 头脱敏、parsed / `raw_request`、多尝试顺序、chunk 计时、中断原因、无截断且忽略旧上限变量、0600、无上下文 no-op、写入失败静默）、注册表集成缝隙（L1–L4、空 `upstream`、messages / responses 入站）、两 provider 出站注入 fetch 的记录与无上下文回归。
+- [x] 静态检查：`bun build src/index.ts --target=bun`、`bun build scripts/e2e/run.ts --target=bun` 均退出码 0、stderr 为空。
+- [x] e2e 未改动：`git diff --stat main...HEAD -- scripts/e2e` 输出为空。
+- [x] 残留清理：`git diff main...HEAD -- src scripts` 无新增任何 `console.*` 调用；旧版单条正文上限变量只剩 `src/shared/trace.test.ts` 中「被忽略」的断言用例，代码与文档不再把它当有效配置；README 与 e2e exec-plan 中原有的单条上限与按天轮转描述已按 schema 2 实现改写。
+- [x] 文档结构 / 本地链接检查：仓库未配置项目级检查（未配置；待补）。对改动的 README、本文件与 e2e exec-plan 共 24 个相对链接人工核对：23 个存在；`README.md → ../AGENTS.md` 为既有跨项目约定（指向工作区根，在当前 worktree 不存在），非本次引入。
+- [ ] 部署（用户手工，未执行）：生产 launchd 仍加载旧配置；需移除已废弃的单条正文上限变量并重启服务（`launchctl bootout` + `bootstrap`）。
 
 ## 7. 变更记录
 
 | 状态 | 操作人 | 证据 / 链接 |
 |---|---|---|
-| 开发中 | wayne | 2026-11-25 grilling 锁定 D1–D12；spec #6 已发布；本文件创建 |
+| 已完成 | wayne | 2026-11-25 grilling 锁定 D1–D12；spec #6 已发布；本文件创建 |
+| 已完成（#7 核心） | wayne | e807a74（合并 6e715ad）：schema 2 记录器、请求上下文、出站记录入口与单测 |
+| 已完成（#9 codebuddy） | wayne | 7bcaf05（合并 5d3e74d）：出站调用接入四层记录 |
+| 已完成（#8 注册表） | wayne | fbbbeb5 + 525ecbb（合并 55cc84d）：请求级上下文、中断原因、messages / responses 集成缝隙 |
+| 已完成（#10 codearts） | wayne | 0a28f5f（合并 f900204）：出站调用接入四层记录并新增可注入 fetch |
+| 已完成（#11 收尾） | wayne | 本次提交：README 采集说明、e2e exec-plan 旧说明修正、本文件证据与变更记录；验证见 §6 |
