@@ -39,6 +39,14 @@ test("network and timeout wording classifies retryable failures", () => {
   expect(classifyUpstreamStatus("APIG.0203: Backend timeout")).toBe(504);
 });
 
+test("ports, hex ids and counters are not mistaken for embedded statuses", () => {
+  // host:port 的 443 是端口，不是 HTTP 状态；ECONNREFUSED 仍按网络错误归类
+  expect(classifyUpstreamStatus("connect ECONNREFUSED 127.0.0.1:443")).toBe(502);
+  expect(classifyUpstreamStatus("trace 6a450bcd fetch failed")).toBe(502);
+  expect(classifyUpstreamStatus("req 9f4a450b")).toBe(502);
+  expect(classifyUpstreamStatus("the rate limit is 2500 per minute")).toBe(429);
+});
+
 test("empty or unknown failures fall back to 502 without inventing 4xx", () => {
   expect(classifyUpstreamStatus("no choices in upstream SSE")).toBe(502);
   expect(classifyUpstreamStatus("something odd happened")).toBe(502);

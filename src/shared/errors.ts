@@ -27,8 +27,9 @@ export function anthropicErrorTypeForStatus(status: number): string {
 }
 
 // 上游把 HTTP 状态藏进错误文本（codearts 实测：`InferHub.…400:`、`TM.…: 415`、
-// `ModelArts.81101.429:`）。只认独立的 4xx/5xx 三段码，避免把 request-id/计数误判。
-const EMBEDDED_STATUS = /(?:^|[^0-9])([45][0-9]{2})(?=$|[^0-9])/;
+// `ModelArts.81101.429:`）。只认独立的三段码：前后不能是数字（计数/毫秒），
+// 也不能是字母或 `:`（十六进制 id、host:port），避免把端口 443、hash 里的 450 误判成状态。
+const EMBEDDED_STATUS = /(?<![:0-9a-zA-Z])([45][0-9]{2})(?![0-9a-zA-Z])/;
 
 export function classifyUpstreamStatus(message: string): number {
   const m = EMBEDDED_STATUS.exec(message ?? "");

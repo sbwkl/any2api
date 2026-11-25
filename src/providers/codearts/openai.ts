@@ -267,14 +267,22 @@ export class OpenAIFacade {
       });
     }
 
-    // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对非 stream 请求也回 SSE）。
-    // 聚合期间失败时客户端尚未收到任何字节，瞬时错误可安全重试一次。
+    // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对 non-stream 请求也回 SSE）。
+    // 只对「聚合/读取阶段」的瞬时故障重试一次：连接建立类失败已由 SnapClient 在同一 key 内
+    // 重试一次，这里再叠一层会让单次请求最坏发 4 次加密 POST（流式路径只有 snap 那一次）。
     let lastMessage = "upstream error";
     let lastStatus = 502;
     for (let attempt = 1; attempt <= NON_STREAM_ATTEMPTS; attempt++) {
+      let resp: Response;
       try {
-        const resp = await sendOnce();
-        if (!resp.ok) return resp;
+        resp = await sendOnce();
+      } catch (e: any) {
+        // snap 已重试过：直接按分类返回，不再消耗外层预算
+        const message = e?.message ?? String(e);
+        return jsonError(classifyUpstreamStatus(message), message);
+      }
+      if (!resp.ok) return resp;
+      try {
         const ct = resp.headers.get("content-type") ?? "";
         // 上游对非 stream 请求也回 SSE：聚合为单个 completion JSON。
         if (ct.includes("text/event-stream")) {

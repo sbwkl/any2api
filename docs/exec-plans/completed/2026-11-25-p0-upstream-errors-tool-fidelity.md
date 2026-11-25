@@ -35,7 +35,7 @@ Owner：wayne
 
 ### 3.1 错误映射（P0-1）
 
-- 新增 `classifyUpstreamMessage`：从上游错误文本中提取内嵌 HTTP 状态（`.400:` / `.429:` / `415` 等）与语义关键词（rate limit、timeout、ECONNRESET），映射为 `400/429/502/504`。
+- 新增 `classifyUpstreamStatus`：从上游错误文本中提取内嵌 HTTP 状态（`.400:` / `.429:` / `415` 等）与语义关键词（rate limit、timeout、ECONNRESET），映射为 `400/429/502/504`。内嵌状态只认前后不接数字、字母或 `:` 的独立三段码，端口（`host:443`）与十六进制 id 不会误判成状态。
 - 新增 `anthropicErrorTypeForStatus`：Anthropic 合法类型（`invalid_request_error` / `rate_limit_error` / `authentication_error` / `permission_error` / `not_found_error` / `request_too_large` / `overloaded_error` / `api_error`）。
 - `errorTypeForStatus` 的 5xx 默认值由 `upstream_error` 改为 OpenAI 合法的 `server_error`；`safeRespond` 同步。
 - CodeArts provider 的非 2xx 响应不再原样透传上游体，而是返回带 `x-any2api-error-source: proxy` 的 OpenAI 错误信封（保留上游 message），由协议层按请求方协议归一。
@@ -51,7 +51,7 @@ Owner：wayne
   - 非 2xx 502/503/504：加密重试一次；仍失败返回该响应。
   - `ENCRYPT_KEY_EXPIRED`：保留 clearKey + 重协商 + 重试一次（与瞬时重试共用一次预算）。
 - 新增上游读空闲超时：`CODEARTS_UPSTREAM_IDLE_TIMEOUT_MS`（默认 180000），仅作用于解密流；超时取消 reader 并以 `upstream idle timeout` 报错。
-- 非流式聚合在尚未向客户端发送任何字节前，对瞬时网络错误重试一次（重建签名、复用 session/trace id）；参数错/限流/鉴权错误不重试。
+- 非流式聚合在尚未向客户端发送任何字节前，对「聚合/读取阶段」的瞬时网络错误重试一次（重建签名、复用 session/trace id）；连接建立类失败不叠加外层预算（SnapClient 内已重试一次），真空流与参数错/限流/鉴权错误不重试。
 - **不做**：内核完整的 `x-session-retry`/Busy 退避协议（407×3、81101 ≤10–20 次）；本轮只做有界重试，另开 issue。
 
 ### 3.3 namespace 工具保真（P0-3 / #24）
@@ -86,12 +86,12 @@ Owner：wayne
 
 ## 5. 验证与观测
 
-- **单测**：`bun test` → **312 pass / 0 fail**（1280 断言，36 文件）。新增覆盖：
-  - 错误分类表（内嵌 400/429/415、ECONNRESET、timeout、空流回退 502）；
+- **单测**：`bun test` → **314 pass / 0 fail**（1287 断言，36 文件）。新增覆盖：
+  - 错误分类表（内嵌 400/429/415、ECONNRESET、timeout、空流回退 502；端口 443、十六进制 450 不被误判）；
   - OpenAI `server_error` / Anthropic `api_error` 等协议合法类型；
   - 200 SSE 内嵌 429 → 429 `rate_limit_error`；内嵌 400 不重试；
   - 非 2xx 504 → 代理错误信封（`x-any2api-error-source: proxy`）保留上游 message；
-  - 非流式聚合遇 ECONNRESET → 重试一次后成功；真空流只发一次上游请求（不重试）；
+  - 非流式聚合遇 ECONNRESET → 重试一次后成功；真空流只发一次上游请求；连接建立失败只发一次（snap 内已重试）；
   - SnapClient：瞬时 5xx 加密重试一次、网络错误加密重试一次、key-exchange 失败直接抛错、读空闲超时、`CODEARTS_FORCE_PLAINTEXT=1` 明文调试路径；
   - Responses（全部经共享路由 S1）：namespace 展开（含 64 字符截断/同名冲突/与顶层函数撞名去重）、输入 `function_call.namespace` 映射、`tool_choice` 重写、非流式/流式输出还原 `name`+`namespace`、函数名晚到仍先发正确 `output_item.added`；
   - Responses 流错误帧与空流 → 分类错误事件。
@@ -123,3 +123,4 @@ Owner：wayne
 | 开发中 | wayne | 2026-11-25 创建；审计快照与决策见 §2/§3 |
 | 已验证 | wayne | 2026-11-25 实现 P0-1/P0-2/P0-3；`bun test` 309 pass / 0 fail，`bun build` exit 0；非本轮问题登记为 #30–#35（needs-triage） |
 | 已验证（评审修复） | wayne | 2026-11-25 两轴评审后修复：真空流不重试、函数名晚到仍先发 `output_item.added`、测试全部经 S1 共享路由 + 撞名/明文开关覆盖、能力位注释与 §7.3 事实分离、错误映射去重；`bun test` 312 pass / 0 fail，`bun build` exit 0；PR #37 |
+| 已验证（复审修复） | wayne | 2026-11-25 内嵌状态码收紧（端口/十六进制不再误判）、非流式外层重试不再叠加 snap 预算；`bun test` 314 pass / 0 fail，`bun build` exit 0 |

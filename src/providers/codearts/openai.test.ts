@@ -127,6 +127,20 @@ test("a transient reset during non-stream aggregation is retried once", async ()
   expect(calls).toBe(2);
 });
 
+test("a connection failure is retried by the snap layer only, not again by the facade", async () => {
+  let calls = 0;
+  const facade = makeFacade(async () => {
+    calls++;
+    throw new Error("socket connection was closed");
+  });
+  const resp = await facade.respond(body, false, "sessionConn");
+  expect(resp.status).toBe(502);
+  const j: any = await resp.json();
+  expect(j.error.type).toBe("server_error");
+  // SnapClient 内部已有一次同 key 重试；门面不再叠加预算
+  expect(calls).toBe(1);
+});
+
 test("unknown model is rejected with 404 instead of falling back to models[0]", async () => {
   let upstreamCalled = false;
   const facade = makeFacade(async () => {
