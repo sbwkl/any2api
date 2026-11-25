@@ -327,6 +327,8 @@ describe("four-layer request record wiring", () => {
       create: async () => ({
         routes: [
           { method: "GET", path: "/v1/models", handle: () => Response.json({ provider: "cb" }) },
+          { method: "POST", path: "/v1/messages", handle: () => Response.json({ type: "message" }) },
+          { method: "POST", path: "/v1/responses", handle: () => Response.json({ object: "response" }) },
           { method: "GET", path: "/healthz", handle: () => Response.json({ ok: true }) },
         ],
         health: () => ({ ok: true }),
@@ -343,6 +345,8 @@ describe("four-layer request record wiring", () => {
       ["/healthz", "GET", 200],
       ["/v1/models", "GET", 200],
       ["/codebuddy/v1/models", "GET", 200],
+      ["/codebuddy/v1/messages", "POST", 200],
+      ["/codebuddy/v1/responses", "POST", 200],
       ["/codebuddy/healthz", "GET", 200],
       ["/codebuddy/v1/models", "POST", 405],
       ["/codebuddy/nope", "GET", 404],
