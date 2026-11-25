@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach, spyOn } from "bun:test";
 import { createECDH, createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -352,10 +352,19 @@ describe("heartbeat recording boundary", () => {
     expect(calls.length).toBeGreaterThan(2);
     const upstream = readRecords()[0].upstream;
     expect(upstream).toHaveLength(1);
-    expect(upstream[0].url).toBe("https://snap.test/snap-manager/v1/chat-session/heartbeat");
+    expect(upstream[0].url).toBe("https://snap.test/snap-manager/v1/chat-session/heartbeat?status=busy");
     expect(upstream[0].method).toBe("PUT");
-    expect(upstream[0].body).toEqual({ status: "busy" });
+    expect(upstream[0].body).toEqual({});
     expect(recordedHeader(upstream[0].headers, "authorization")).toBe("<redacted>");
+
+    // 首个 busy 的线上调用：status 在查询参数里、body 为 {}
+    expect(calls[0].url).toBe("https://snap.test/snap-manager/v1/chat-session/heartbeat?status=busy");
+    expect(calls[0].init.body).toBe("{}");
+
+    // 后台 idle（stopBusy）：URL 含 ?status=idle、body 为 {}
+    const idleCalls = calls.filter((c) => c.url.includes("?status=idle"));
+    expect(idleCalls.length).toBeGreaterThanOrEqual(1);
+    expect(idleCalls[0].init.body).toBe("{}");
   });
 
   test("does not record the 24h silent-idle branch triggered from the timer", async () => {
@@ -372,6 +381,48 @@ describe("heartbeat recording boundary", () => {
     expect(calls.length).toBeGreaterThanOrEqual(3);
     const upstream = readRecords()[0].upstream;
     expect(upstream).toHaveLength(1);
-    expect(upstream[0].body).toEqual({ status: "busy" });
+    expect(upstream[0].body).toEqual({});
+
+    // 24h 静默分支触发的两次 idle（后台）：URL 含 ?status=idle、body 为 {}
+    const idleCalls = calls.filter((c) => c.url.includes("?status=idle"));
+    expect(idleCalls.length).toBeGreaterThanOrEqual(2);
+    expect(idleCalls[0].init.body).toBe("{}");
+  });
+
+  test("warns with status code and body fragment on non-2xx heartbeat responses without rejecting", async () => {
+    const warnArgs: unknown[][] = [];
+    const warnMock = spyOn(console, "warn").mockImplementation((...args) => { warnArgs.push(args); });
+    try {
+      const { fetch: fake } = recordingFetch(() => new Response('{"error_code":"TM.00001001"}', { status: 400 }));
+      const hb = new HeartbeatManager("https://snap.test", { fetch: fake, intervalMs: 60000 });
+      hb.startBusy("sess-400"); // 首个 busy（请求链内路径）
+      await waitFor(() => warnArgs.length >= 1);
+      hb.stopBusy("sess-400"); // idle（后台路径）
+      await waitFor(() => warnArgs.length >= 2);
+    } finally {
+      warnMock.mockRestore();
+    }
+
+    // 两条路径都产生 warn：含 HTTP 状态码与响应体片段
+    const joined = warnArgs.map((args) => args.join(" ")).join("\n");
+    expect(joined).toContain("400");
+    expect(joined).toContain("TM.00001001");
+  });
+
+  test("logs an error on heartbeat network failures without throwing", async () => {
+    const errorArgs: unknown[][] = [];
+    const errorMock = spyOn(console, "error").mockImplementation((...args) => { errorArgs.push(args); });
+    try {
+      const { fetch: fake } = recordingFetch(() => { throw new Error("network down"); });
+      const hb = new HeartbeatManager("https://snap.test", { fetch: fake, intervalMs: 60000 });
+      hb.startBusy("sess-net"); // 首个 busy（请求链内路径）
+      await waitFor(() => errorArgs.length >= 1);
+      hb.stopBusy("sess-net"); // idle（后台路径）
+      await waitFor(() => errorArgs.length >= 2);
+    } finally {
+      errorMock.mockRestore();
+    }
+
+    expect(errorArgs.map((args) => args.join(" ")).join("\n")).toContain("network down");
   });
 });

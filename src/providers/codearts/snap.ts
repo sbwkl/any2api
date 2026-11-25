@@ -288,25 +288,51 @@ export class HeartbeatManager {
     this.sendBackground(sessionId, "idle").catch(() => {});
   }
 
-  // Sh() 模式签名：X-Sdk-Content-Sha256=UNSIGNED-PAYLOAD；user-session-id 头；PUT
+  // Sh() 模式签名：X-Sdk-Content-Sha256=UNSIGNED-PAYLOAD；user-session-id 头；PUT。
+  // status 放查询参数（与内核 uA.put(path, headers, {}, { status }) 逐字一致），body 固定 "{}"。
+  // 签名 endpoint 传不含 query 的路径，query 经 queryParams 参与签名。
   private buildHeartbeat(sessionId: string, status: "busy" | "idle"): { url: string; headers: Record<string, string>; body: string } {
-    const url = `${this.snapOrigin}${HEARTBEAT_PATH}`;
+    const url = `${this.snapOrigin}${HEARTBEAT_PATH}?status=${status}`;
     const headers = signSh(
-      { method: "PUT", endpoint: url, headers: { "Content-Type": "application/json", "user-session-id": sessionId } },
+      {
+        method: "PUT",
+        endpoint: `${this.snapOrigin}${HEARTBEAT_PATH}`,
+        queryParams: { status },
+        headers: { "Content-Type": "application/json", "user-session-id": sessionId },
+      },
       getCredentials(), { signBody: false },
     );
-    return { url, headers, body: JSON.stringify({ status }) };
+    return { url, headers, body: "{}" };
+  }
+
+  /** 响应检查（两条发送路径共享）：非 2xx warn（含状态码与响应片段）、网络异常 error；成功静默 */
+  private async checkHeartbeat(sessionId: string, status: "busy" | "idle", send: () => Promise<Response>): Promise<void> {
+    let resp: Response;
+    try {
+      resp = await send();
+    } catch (e) {
+      console.error(`[snap] 心跳网络错误 session=${sessionId} status=${status}: ${(e as any)?.message ?? e}`);
+      return;
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      console.warn(`[snap] 心跳非2xx session=${sessionId} status=${status} http=${resp.status} body=${text.slice(0, 300)}`);
+    }
   }
 
   /** 请求链内发送：走请求记录入口（无请求上下文时自然 no-op） */
   private async sendRecorded(sessionId: string, status: "busy" | "idle"): Promise<void> {
     const { url, headers, body } = this.buildHeartbeat(sessionId, status);
-    await traceUpstream({ method: "PUT", url, headers, body }, { fetch: this.fetchImpl }).catch(() => {});
+    await this.checkHeartbeat(sessionId, status, () =>
+      traceUpstream({ method: "PUT", url, headers, body }, { fetch: this.fetchImpl }),
+    ).catch(() => {});
   }
 
   /** 定时器 / idle 等后台发送：显式用原始 fetch，不继承请求上下文 */
   private async sendBackground(sessionId: string, status: "busy" | "idle"): Promise<void> {
     const { url, headers, body } = this.buildHeartbeat(sessionId, status);
-    await this.fetchImpl(url, { method: "PUT", headers, body }).catch(() => {});
+    await this.checkHeartbeat(sessionId, status, () =>
+      this.fetchImpl(url, { method: "PUT", headers, body }),
+    ).catch(() => {});
   }
 }

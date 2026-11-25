@@ -266,12 +266,13 @@ JS 对象构造序 → fetch 按插入序发出（Bun undici-ish）。拟真顺�
 
 ### 5.1 心跳（`snap-manager/v1/chat-session/heartbeat`）
 
-- **`PUT {snap-origin}/snap-manager/v1/chat-session/heartbeat`**（PUT 不是 POST）
-- 头：`user-session-id: <顶层会话ID>` + AKSK 签名（Sh() 模式，X-Sdk-Content-Sha256=UNSIGNED-PAYLOAD）或 x-auth-token
-- 体：`{"status":"busy"}` / `{"status":"idle"}`
+- **`PUT {snap-origin}/snap-manager/v1/chat-session/heartbeat?status=busy|idle`**（PUT 不是 POST；**status 放查询参数**，与内核 `uA.put(path, headers, {}, { status })` 逐字一致）
+- 头：`user-session-id: <顶层会话ID>` + AKSK 签名（Sh() 模式，X-Sdk-Content-Sha256=UNSIGNED-PAYLOAD，status 查询参数参与 canonical query 签名）或 x-auth-token
+- 体：固定 `{}`（status 不放 body）
 - 节奏：session.status=busy → 立即 busy，然后每 **30s** 一次；idle → 停表 + 立即 idle
 - 会话聚合：**只有顶层会话发心跳**（子会话只刷新活跃时间戳）；心跳静默 >24h 自动转 idle
 - 代理应按 OpenAI 会话粒度模拟：每次代理"会话"首个请求 → busy + 30s 定时；会话结束/空闲 → idle
+- 排障：返回 `400 {"error_code":"TM.00001001","error_msg":"参数校验失败: wsf.validator.session.status"}` 表示 **status 查询参数缺失或非法**——先检查 URL 是否带 `?status=busy|idle`，而不是往 body 里塞字段
 
 ### 5.2 订阅查询
 
