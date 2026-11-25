@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   dumpUpstream,
+  flushRequestTraces,
   markAbort,
+  runWithRequestTrace,
   startRequestTrace,
   startTraceCapture,
   traceUpstream,
@@ -338,6 +340,126 @@ describe("upstream attempts (L2 + L3)", () => {
     expect(c.t_ms).toBeGreaterThanOrEqual(b.t_ms);
     expect(attempt.response.body).toBe("aabbbc");
     expect(attempt.response.complete).toBe(true);
+  });
+});
+
+describe("request-scoped tracing (runWithRequestTrace)", () => {
+  test("is a no-op without TRACE_CAPTURE_DIR and returns the handler response untouched", async () => {
+    const res = await runWithRequestTrace(inbound("/v1/models"), () => Response.json({ ok: true }));
+    expect(await res.json()).toEqual({ ok: true });
+    expect(existsSync(capturePath(dir))).toBe(false);
+  });
+
+  test("establishes the async context and records L2/L3 plus L4 without delaying the response", async () => {
+    const res = await runWithRequestTrace(
+      jsonRequest(),
+      async () => {
+        await traceUpstream(
+          {
+            method: "POST",
+            url: "https://upstream/v2/chat",
+            headers: { authorization: "Bearer secret", "x-request-id": "r1" },
+            body: "{}",
+            recordBody: { model: "m" },
+          },
+          { fetch: async () => Response.json({ ok: 1 }) },
+        );
+        return Response.json({ done: true });
+      },
+      { dir },
+    );
+    expect(await res.json()).toEqual({ done: true });
+
+    // finish 不 await：写盘在后台完成，flush 保证测试确定性
+    await flushRequestTraces();
+    const rec = readRecords()[0];
+    expect(rec.path).toBe("/codearts/v1/chat/completions");
+    expect(rec.upstream).toHaveLength(1);
+    expect(rec.upstream[0].headers.authorization).toBe("<redacted>");
+    expect(rec.upstream[0].body).toEqual({ model: "m" });
+    expect(rec.upstream[0].response.body).toBe('{"ok":1}');
+    expect(rec.response.status).toBe(200);
+    expect(rec.response.body).toBe('{"done":true}');
+    expect(rec.response.complete).toBe(true);
+    expect(rec.response.abort_reason).toBeNull();
+  });
+
+  test("classifies handler exceptions: proxy_error by default, timeout for TimeoutError", async () => {
+    await expect(
+      runWithRequestTrace(jsonRequest(), () => {
+        throw new Error("boom");
+      }, { dir }),
+    ).rejects.toThrow("boom");
+    await expect(
+      runWithRequestTrace(jsonRequest(), () => {
+        throw new DOMException("slow upstream", "TimeoutError");
+      }, { dir }),
+    ).rejects.toThrow();
+
+    const records = readRecords();
+    expect(records).toHaveLength(2);
+    expect(records[0].response.status).toBe(500);
+    expect(records[0].response.complete).toBe(false);
+    expect(records[0].response.abort_reason).toBe("proxy_error");
+    expect(records[1].response.abort_reason).toBe("timeout");
+  });
+
+  test("marks client_disconnect when the inbound request aborts before the stream ends", async () => {
+    const controller = new AbortController();
+    const req = inbound("/codearts/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      signal: controller.signal,
+    });
+    const res = await runWithRequestTrace(
+      req,
+      () =>
+        new Response(
+          new ReadableStream({
+            async start(c) {
+              c.enqueue(encoder.encode("first-chunk"));
+              await sleep(20);
+              controller.abort();
+              c.enqueue(encoder.encode("last-chunk"));
+              c.close();
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+      { dir },
+    );
+    expect(await res.text()).toBe("first-chunklast-chunk");
+
+    await flushRequestTraces();
+    const rec = readRecords()[0];
+    expect(rec.response.body).toBe("first-chunklast-chunk");
+    expect(rec.response.complete).toBe(false);
+    expect(rec.response.abort_reason).toBe("client_disconnect");
+  });
+
+  test("marks upstream_error when the outbound stream fails mid-transfer", async () => {
+    const res = await runWithRequestTrace(
+      jsonRequest(),
+      () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(encoder.encode("partial"));
+              setTimeout(() => c.error(new Error("upstream flow broke")), 5);
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+      { dir },
+    );
+    await res.text().catch(() => {});
+
+    await flushRequestTraces();
+    const rec = readRecords()[0];
+    expect(rec.response.body).toBe("partial");
+    expect(rec.response.complete).toBe(false);
+    expect(rec.response.abort_reason).toBe("upstream_error");
   });
 });
 
