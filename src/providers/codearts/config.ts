@@ -64,7 +64,6 @@ function fromVscodeStateDb(): Credentials | null {
   }
 }
 
-
 // Policy Center policy/bundle（商用版真实模型列表下发端点，逐字对照扩展 getPolicyCenterConfig）：
 // POST {policyDomain}/v1/policy/bundle，Agent-Type: PromptCenter；商业版 x-auth-token 为空串
 // （"Hc version, token is transferred by the toolkit"），认证靠 provider 层 AKSK 签名。
