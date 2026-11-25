@@ -10,24 +10,11 @@ function backendWith(sse: string): ChatBackend {
   return {
     models: () => [],
     health: () => ({ ok: true }),
-    handleChat: () => new Response("no"),
+    handleChat: async () => new Response("no"),
     respond: async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
   };
 }
 
-async function messagesWith(body: any, sse = "data: [DONE]\n\n"): Promise<any[]> {
-  let seen: any;
-  const backend = backendWith(sse);
-  backend.respond = async (b) => {
-    seen = b;
-    return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
-  };
-  await handleAnthropicMessages(backend, new Request("http://localhost/v1/messages", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "m", max_tokens: 16, ...body }),
-  }), CAPS);
-  return seen.messages;
-}
 
 const BASE = { model: "m", max_tokens: 16 };
 const TOOL = (id: string, name = "f") => ({ type: "tool_use", id, name, input: { x: 1 } });

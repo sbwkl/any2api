@@ -198,8 +198,8 @@ export function anthropicToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
   if (Array.isArray(body.stop_sequences) && body.stop_sequences.length) out.stop = body.stop_sequences;
   if (Array.isArray(body.tools) && body.tools.length) {
     const mapped = body.tools
-      .filter((t) => t?.type === "custom" || (!t?.type && t?.name))
-      .map((t) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.input_schema ?? { type: "object" } } }));
+      .filter((t: any) => t?.type === "custom" || (!t?.type && t?.name))
+      .map((t: any) => ({ type: "function", function: { name: t.name, description: t.description ?? "", parameters: t.input_schema ?? { type: "object" } } }));
     if (mapped.length) out.tools = mapped;
   }
 

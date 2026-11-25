@@ -6,7 +6,7 @@ import { HeartbeatManager } from "./snap";
 import { signSl } from "./signer";
 import { getCredentials } from "./config";
 import { refreshNow } from "./refresher";
-import type { GatewayConfig, ModelInfo, Credentials } from "./config";
+import type { GatewayConfig, ModelInfo } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
 import { aggregateSseToCompletion, normalizeChatSseUsage, NO_CHOICES } from "../../shared/sse";
 import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, isTransientUpstreamMessage, PROXY_ERROR_HEADER } from "../../shared/errors";

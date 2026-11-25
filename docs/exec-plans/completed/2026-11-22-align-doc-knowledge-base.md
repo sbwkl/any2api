@@ -6,7 +6,7 @@
 | 状态 | 已验证 |
 | Owner | 工作区维护者 |
 | 所属模块 / 入口 | `AGENTS.md`、`ARCHITECTURE.md`、`README.md`、`docs/` |
-| 关联 | [产品规格索引](../../product-specs/index.md)、[设计知识库索引](../../design-docs/index.md)、[工作区根 AGENTS.md](../../../../AGENTS.md) |
+| 关联 | [产品规格索引](../../product-specs/index.md)、[设计知识库索引](../../design-docs/index.md)、[AGENTS.md](../../../AGENTS.md) |
 
 ## 1. 摘要
 

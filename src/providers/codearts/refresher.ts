@@ -6,7 +6,7 @@
 import { Database } from "bun:sqlite";
 import { createDecipheriv, createCipheriv, pbkdf2Sync, randomBytes } from "crypto";
 import { homedir } from "os";
-import type { Credentials } from "./config";
+import type { Credentials } from "./signer";
 import { setCredentials } from "./config";
 import { traceUpstream, type FetchLike } from "../../shared/trace";
 
@@ -30,7 +30,7 @@ const SECRET_KEY_EXPR =
   `secret://${JSON.stringify({ extensionId: "huaweicloud.authentication", key: "HuaweiCloudSession" })}`;
 const STATE_DB_PATH = `${homedir()}/Library/Application Support/CodeArts Agent/User/globalStorage/state.vscdb`;
 
-interface SecretAuth {
+export interface SecretAuth {
   account: { id: string; label: string };
   scopes: string[];
   accessToken: string;
@@ -89,7 +89,7 @@ export function readSecretSession(): SecretAuth | null {
     const auth = JSON.parse(decryptSecretBlob(new Uint8Array(envelope.data))) as SecretAuth;
     if (!auth?.refresh_token || !auth?.loginContext?.dpopKeyPair) return null;
     return auth;
-  } catch (e) {
+  } catch (e: any) {
     console.warn(`[refresher] 读取 HuaweiCloudSession 失败: ${e?.message ?? e}`);
     return null;
   }
@@ -113,7 +113,7 @@ function writeSecretSession(auth: SecretAuth): void {
   }
 }
 
-function toCredentials(auth: SecretAuth): Credentials {
+export function toCredentials(auth: SecretAuth): Credentials {
   return {
     ak: auth.accessKey,
     sk: auth.secretKey,
@@ -121,6 +121,7 @@ function toCredentials(auth: SecretAuth): Credentials {
     origin: undefined,
     domainId: auth.domainId,
     expiresAt: auth.expires_at,
+    refreshToken: auth.refresh_token,
   };
 }
 
@@ -275,7 +276,7 @@ export async function maintainCredentials(fetchImpl: FetchLike = fetch): Promise
   if (remaining > EXPIRED_REFRESH_MARGIN_MS) return;
   try {
     await refreshNow(fetchImpl);
-  } catch (e) {
+  } catch (e: any) {
     console.warn(`[refresher] 主动续期失败: ${e?.message ?? e}`);
   }
 }

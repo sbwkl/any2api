@@ -8,6 +8,10 @@
     "e2e": "bun scripts/e2e/run.ts",
     "e2e:corpus": "bun scripts/e2e/corpus.ts",
     "test": "bun test",
-    "check": "bun test && bun build src/index.ts --target=bun"
+    "check": "bun test && bun build src/index.ts --target=bun && tsc --noEmit && bun scripts/check-docs-links.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.5",
+    "typescript": "^7.0.2"
   }
 }

@@ -233,4 +233,4 @@ bun run e2e:corpus [dir]                               # 对入站采集 JSONL �
 
 ## 开发约定
 
-跨项目流程见 [工作区根 AGENTS.md](../AGENTS.md)：`main` 保护、新特性走 `feat/<特性名>`、脏工作区用 worktree、TDD、提交前静态检查、临时集成分支、PR / 合并前用户同意。项目级测试：`bun test`（离线）；实弹一致性见上节 `bun run e2e`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`。未配置的检查保持「待补」，不得用跳过规则压掉告警。
+流程约定见 [AGENTS.md](AGENTS.md)：`main` 保护、新特性走 `feat/<特性名>`、脏工作区用 worktree、TDD、提交前静态检查、临时集成分支、PR / 合并前用户同意。项目级门禁：`bun run check`（= `bun test` + `bun build src/index.ts --target=bun` + `tsc --noEmit` + `bun scripts/check-docs-links.ts`）；实弹一致性见上节 `bun run e2e`。未配置的检查保持「待补」，不得用跳过规则压掉告警。

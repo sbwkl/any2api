@@ -46,8 +46,9 @@ export function buildHeaders(ctx: HeaderContext): Record<string, string> {
   return headers;
 }
 
-export function gzipBody(body: any): Uint8Array {
-  return gzipSync(JSON.stringify(body));
+export function gzipBody(body: any): Uint8Array<ArrayBuffer> {
+  // gzipSync 的 Buffer 由 ArrayBuffer 支撑；BodyInit 只接受 ArrayBuffer-backed 视图
+  return gzipSync(JSON.stringify(body)) as Uint8Array<ArrayBuffer>;
 }
 
 export function sleep(ms: number): Promise<void> {

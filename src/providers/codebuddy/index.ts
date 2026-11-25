@@ -44,7 +44,7 @@ export const codebuddyProvider: ProviderModule = {
         thinkingToEffort: true,
         promptTokensIncludeCache: true,
       }),
-      health: () => ({ ok: true, ...facade.healthPayload() }),
+      health: () => facade.healthPayload(),
     };
   },
 };

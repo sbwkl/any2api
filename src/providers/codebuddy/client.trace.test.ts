@@ -81,7 +81,7 @@ describe("postChat trace records", () => {
         status: 200,
         headers: { "Content-Type": "text/event-stream; charset=utf-8" },
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const trace = traceRequest();
     const resp = await postChat({
@@ -146,7 +146,7 @@ describe("postChat trace records", () => {
       chatCalls++;
       if (chatCalls === 1) return Response.json({ code: 6020, data: { retry_after: 0 } });
       return new Response("data: {}\n\n", { status: 200, headers: { "Content-Type": "text/event-stream" } });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const resp = await postChat({
       url: "https://example.test/v2/chat/completions",
@@ -179,7 +179,7 @@ describe("postChat trace records", () => {
 describe("auxiliary request-scoped calls", () => {
   test("refreshAccessToken records its attempt with redacted credentials", async () => {
     const trace = traceRequest();
-    const fetchImpl = (async () => Response.json({ data: { accessToken: "new", refreshToken: "ref2" } })) as typeof fetch;
+    const fetchImpl = (async () => Response.json({ data: { accessToken: "new", refreshToken: "ref2" } })) as unknown as typeof fetch;
     const next = await refreshAccessToken({ config, credentials, fetchImpl });
     expect(next?.accessToken).toBe("new");
     await trace.finish(Response.json({ ok: true }));
@@ -211,7 +211,7 @@ describe("auxiliary request-scoped calls", () => {
           },
         }),
         { status: 200, headers: { "Content-Type": "text/event-stream" } },
-      )) as typeof fetch;
+      )) as unknown as typeof fetch;
     const trace = traceRequest();
     const resp = await postChat({
       url: "https://example.test/v2/chat/completions",
@@ -241,7 +241,7 @@ describe("background and context-free calls", () => {
       new Response("data: {}\n\n", {
         status: 200,
         headers: { "Content-Type": "text/event-stream" },
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
     const resp = await postChat({
       url: "https://example.test/v2/chat/completions",
       headers: {},
@@ -255,7 +255,7 @@ describe("background and context-free calls", () => {
 
   test("msg-center background polling never enters a request record", async () => {
     process.env.TRACE_CAPTURE_DIR = dir;
-    const fetchImpl = (async () => Response.json({ data: { total: 1 } })) as typeof fetch;
+    const fetchImpl = (async () => Response.json({ data: { total: 1 } })) as unknown as typeof fetch;
     // 启动期创建：定时器回调不继承任何入站请求上下文
     const poller = new MsgCenterPoller({ config, getCredentials: () => credentials, fetchImpl });
     const trace = traceRequest();

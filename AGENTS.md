@@ -25,9 +25,9 @@
 
 ## 常用命令
 
-- 测试：`bun test`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`
+- 门禁：`bun run check` = `bun test` + `bun build src/index.ts --target=bun` + `tsc --noEmit` + `bun scripts/check-docs-links.ts`（单项可拆开跑）
 - 本机 PATH 无 bun 时：`~/.bun/bin/bun`
-- 文档结构与本地链接检查：见工作区根变更文档中的验证命令；未配置项目级检查时写「未配置；待补」。
+- 文档结构与本地链接检查：已配置，`bun scripts/check-docs-links.ts`（已并入 `bun run check`）
 
 ## Agent skills
 

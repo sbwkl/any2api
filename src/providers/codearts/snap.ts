@@ -1,7 +1,7 @@
 // snap 协议栈 — key-exchange（u$）、会话密钥管理（d$）、加密 chat（bz）、SSE 解密（g$）、心跳 — 内核逐字移植
 import { createECDH, createHash, randomBytes } from "crypto";
 import { SM4GCM } from "./sm4";
-import { signSimple, signSh, type Credentials } from "./signer";
+import { signSimple, signSh } from "./signer";
 import { getCredentials } from "./config";
 import { traceUpstream, type FetchLike } from "../../shared/trace";
 
@@ -38,7 +38,7 @@ class KeyExchangeClient {
     const url = `${this.baseUrl}${KEY_EXCHANGE_PATH}`;
     // Ew 语义：有 AKSK → signSimple（Content-Type: application/json）；否则 token 头
     const signed = signSimple(creds, "POST", url, "application/json");
-    const headers = signed ? { ...signed } : { "Content-Type": "application/json" };
+    const headers: Record<string, string> = signed ? { ...signed } : { "Content-Type": "application/json" };
     if (creds.userToken) headers["x-auth-token"] = creds.userToken;
     const resp = await traceUpstream(
       { method: "POST", url, headers, body: JSON.stringify({ clientPublicKey, sessionId, timestamp }) },
@@ -100,7 +100,7 @@ function decryptChunk(cipher: SM4GCM, key: Uint8Array, keyId: string, frame: str
 function readWithIdleTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   ms: number,
-): Promise<ReadableStreamReadResult<Uint8Array>> {
+){
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`upstream idle timeout after ${ms}ms`)), ms);
