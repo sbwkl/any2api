@@ -12,12 +12,13 @@
 - `docs/generated/` — 生成物快照或索引；不手改可再生内容。
 - `docs/product-specs/` — 当前产品行为与验收事实源。
 - `docs/references/` — 调研、实测、外部参考证据。
+- `docs/agents/` — 工程技能配置：issue tracker、triage 标签、领域文档消费规则。
 - 项目入口：`src/index.ts`。CodeBuddy / CodeArts provider 与共享协议层；历史 REQ / CHG / RFC 文档已按目录语义迁移。
 
 ## 硬性规则（永远生效）
 
 1. 文档是事实源；`AGENTS.md` 只是地图。状态以文档首部为准，没有验证 / 部署证据不得标「已验证 / 已发布」。
-2. `docs/` 顶层目录只允许 `design-docs`、`exec-plans`、`generated`、`product-specs`、`references`；领域宪章放 `docs/*.md`。
+2. `docs/` 顶层目录只允许 `design-docs`、`exec-plans`、`generated`、`product-specs`、`references`、`agents`；领域宪章放 `docs/*.md`。
 3. 历史 `REQ-xxxx` / `CHG-xxxx` / `ADR-xxxx` / `RFC-xxxx` 编号冻结；新增文档使用语义化主题路径，不维护「下一批 ID」。
 4. `main` 是保护分支；任何合并进 `main` 都必须先征得用户同意。新特性走 `feat/<特性名>`，脏工作区用 worktree，集成测试用临时分支。
 5. 不臆造指标、证据、用户反馈或当前实现；没有数据写「待验证 / 待补」并列为风险。
@@ -46,3 +47,17 @@
 - 测试：`bun test`
 - 编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`
 - 文档结构与本地链接检查：见工作区根变更文档中的验证命令；未配置项目级检查时写「未配置；待补」。
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues（`sbwkl/any2api`，`gh` CLI）。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+五个默认 triage 标签，字符串即角色名。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文：根目录 `GLOSSARY.md` + `docs/design-docs/adr/`（本项目约定的 ADR 目录）。见 `docs/agents/domain.md`。
