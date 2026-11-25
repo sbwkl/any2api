@@ -1,8 +1,8 @@
-// 可观测性：四层请求记录（schema 2）与上游请求转储（UPSTREAM_DUMP_DIR）。
+// 可观测性：四层请求记录（schema 3）与上游请求转储（UPSTREAM_DUMP_DIR）。
 // 两者均为 opt-in、默认关闭，且不得影响请求主路径。
 //
 // 一次入站请求对应一条 JSONL 记录：L1 入站请求、upstream[] 为请求上下文内
-// 每次上游尝试的 L2 请求 + L3 原始响应、L4 出站响应。请求结束时一次性追加。
+// 每次上游尝试的 L2 请求 + L3 上游可读响应、L4 出站响应。请求结束时一次性追加。
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -21,7 +21,7 @@ const SENSITIVE_HEADERS = new Set([
   "set-cookie",
 ]);
 
-/** 请求中断原因（schema 2 允许的取值） */
+/** 请求中断原因（schema 3 允许的取值） */
 export type AbortReason = "client_disconnect" | "upstream_error" | "timeout" | "proxy_error";
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -396,7 +396,7 @@ async function finishTrace(state: TraceState, response: Response, durationMsOver
     const abortReason = state.abortReason;
     if (abortReason) complete = false;
     const record = {
-      schema: 2 as const,
+      schema: 3 as const,
       ts: new Date().toISOString(),
       provider: state.provider,
       method: state.method,

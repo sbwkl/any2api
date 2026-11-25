@@ -196,7 +196,7 @@ describe("provider registry", () => {
       for (let i = 0; i < 100 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 10));
       expect(existsSync(file)).toBe(true);
       const rec = JSON.parse(readFileSync(file, "utf8").trim());
-      expect(rec.schema).toBe(2);
+      expect(rec.schema).toBe(3);
       expect(rec.path).toBe("/v1/models");
       expect(rec.response.status).toBe(200);
       expect(rec.provider).toBe("default");
@@ -281,7 +281,7 @@ describe("four-layer request record wiring", () => {
     const rec = records[0];
 
     // L1
-    expect(rec.schema).toBe(2);
+    expect(rec.schema).toBe(3);
     expect(rec.provider).toBe("codebuddy");
     expect(rec.method).toBe("POST");
     expect(rec.path).toBe("/codebuddy/v1/chat/completions");
