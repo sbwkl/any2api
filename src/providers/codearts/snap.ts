@@ -3,6 +3,7 @@ import { createECDH, createHash, randomBytes } from "crypto";
 import { SM4GCM } from "./sm4";
 import { signSimple, signSh, type Credentials } from "./signer";
 import { getCredentials } from "./config";
+import { traceUpstream, type FetchLike } from "../../shared/trace";
 
 const SM4_GCM_ALGO = "sm4-gcm";
 const ENCRYPT_PATHS = ["/api/v2/chat/completions"];
@@ -18,7 +19,7 @@ const toUtf8 = (b: Uint8Array) => Buffer.from(b).toString("utf-8");
 interface NegotiatedKey { keyId: string; sessionKey: Uint8Array; expiresIn: number }
 
 class KeyExchangeClient {
-  constructor(private baseUrl: string) {}
+  constructor(private baseUrl: string, private fetchImpl: FetchLike = fetch) {}
 
   async negotiate(): Promise<NegotiatedKey> {
     const creds = getCredentials(); // 每次协商取最新凭证（刷新链热替换）
@@ -31,11 +32,10 @@ class KeyExchangeClient {
     const signed = signSimple(creds, "POST", url, "application/json");
     const headers = signed ? { ...signed } : { "Content-Type": "application/json" };
     if (creds.userToken) headers["x-auth-token"] = creds.userToken;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ clientPublicKey, sessionId, timestamp }),
-    });
+    const resp = await traceUpstream(
+      { method: "POST", url, headers, body: JSON.stringify({ clientPublicKey, sessionId, timestamp }) },
+      { fetch: this.fetchImpl },
+    );
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
       throw new Error(`Key exchange failed: ${resp.status} ${text.slice(0, 200)}`);
@@ -56,12 +56,13 @@ export class SessionKeyManager {
   constructor(
     private refreshIntervalSec = 3600,
     private fallbackOnFailure = true,
+    private fetchImpl: FetchLike = fetch,
   ) {}
 
   async getOrNegotiateKey(baseUrl: string): Promise<NegotiatedKey> {
     if (this.currentKey && Date.now() < this.currentKey.expiresAt - REUSE_MARGIN_MS) return this.currentKey;
     if (!this.client || this.currentBaseUrl !== baseUrl) {
-      this.client = new KeyExchangeClient(baseUrl);
+      this.client = new KeyExchangeClient(baseUrl, this.fetchImpl);
       this.currentBaseUrl = baseUrl;
     }
     try {
@@ -150,8 +151,16 @@ export class SnapClient {
   public keys: SessionKeyManager;
   private cipher = new SM4GCM();
 
-  constructor(public chatOrigin: string) {
-    this.keys = new SessionKeyManager(3600, true);
+  constructor(public chatOrigin: string, private fetchImpl: FetchLike = fetch) {
+    this.keys = new SessionKeyManager(3600, true, this.fetchImpl);
+  }
+
+  // 明文发送：每次尝试独立记录（无请求上下文时入口自然透传）
+  private sendPlaintext(url: string, headers: Record<string, string>, plaintext: string): Promise<Response> {
+    return traceUpstream(
+      { method: "POST", url, headers, body: plaintext },
+      { fetch: this.fetchImpl },
+    );
   }
 
   // headers：provider 层业务头（x-ot-* 等）；bodyJson：OpenAI 格式请求体对象
@@ -159,16 +168,16 @@ export class SnapClient {
     // UXe 判定：仅 /api/v2/chat/completions 加密
     const pathname = new URL(url).pathname;
     if (process.env.CODEARTS_FORCE_PLAINTEXT === "1")
-      return fetch(url, { method: "POST", headers, body: JSON.stringify(bodyObj) });
+      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj));
     if (!ENCRYPT_PATHS.some((p) => pathname.startsWith(p))) {
-      return fetch(url, { method: "POST", headers, body: JSON.stringify(bodyObj) });
+      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj));
     }
     const baseUrl = new URL(url).origin;
     let key: NegotiatedKey;
     try {
       key = await this.keys.getOrNegotiateKey(baseUrl);
     } catch {
-      return fetch(url, { method: "POST", headers, body: JSON.stringify(bodyObj) }); // 协商失败→明文
+      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj)); // 协商失败→明文
     }
     const plaintext = JSON.stringify(bodyObj);
     const ts = Date.now();
@@ -196,10 +205,14 @@ export class SnapClient {
         h.forEach((v, k) => (dump[k] = k === "Authorization" ? `${v.slice(0, 60)}...` : v.length > 80 ? `${v.slice(0, 80)}...` : v));
         console.log("[snap] 最终上线头集:", JSON.stringify(dump, null, 1));
       }
-      resp = await fetch(url, { method: "POST", headers: h, body: b64(ciphertext) });
+      // L2 记录加密前明文（recordBody）；线上 body 为 base64 密文；线上头含 X-Encrypt-* 与重签名
+      resp = await traceUpstream(
+        { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj },
+        { fetch: this.fetchImpl },
+      );
     } catch {
       console.warn("[snap] 加密请求网络错误 → 明文重发");
-      return fetch(url, { method: "POST", headers, body: plaintext }); // 网络错误→明文重发
+      return this.sendPlaintext(url, headers, plaintext); // 网络错误→明文重发
     }
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
@@ -208,7 +221,7 @@ export class SnapClient {
         this.keys.clearKey();
         return this.chat(url, headers, bodyObj, true);
       }
-      return fetch(url, { method: "POST", headers, body: plaintext }); // 非 2xx→明文重发
+      return this.sendPlaintext(url, headers, plaintext); // 非 2xx→明文重发
     }
     const algo = resp.headers.get("X-Encrypt-Algo");
     console.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);
@@ -222,10 +235,26 @@ const HEARTBEAT_PATH = "/snap-manager/v1/chat-session/heartbeat";
 const BUSY_INTERVAL_MS = 30000;
 const MAX_LIFETIME_MS = 86400000;
 
+export interface HeartbeatOptions {
+  /** 可注入 fetch 以便单测；默认全局 fetch */
+  fetch?: FetchLike;
+  /** busy 间隔；默认 30s，测试可注入更短值 */
+  intervalMs?: number;
+  /** 会话最大静默寿命；默认 24h，测试可注入更短值 */
+  maxLifetimeMs?: number;
+}
+
 export class HeartbeatManager {
   private timers = new Map<string, { timer: ReturnType<typeof setInterval>; lastAliveAt: number }>();
+  private fetchImpl: FetchLike;
+  private intervalMs: number;
+  private maxLifetimeMs: number;
 
-  constructor(private snapOrigin: string) {}
+  constructor(private snapOrigin: string, opts: HeartbeatOptions = {}) {
+    this.fetchImpl = opts.fetch ?? fetch;
+    this.intervalMs = opts.intervalMs ?? BUSY_INTERVAL_MS;
+    this.maxLifetimeMs = opts.maxLifetimeMs ?? MAX_LIFETIME_MS;
+  }
 
   touch(sessionId: string): void {
     const t = this.timers.get(sessionId);
@@ -234,17 +263,20 @@ export class HeartbeatManager {
 
   startBusy(sessionId: string): void {
     if (this.timers.has(sessionId)) { this.touch(sessionId); return; }
-    this.send(sessionId, "busy").catch(() => {});
+    // 请求链内首次 busy：走共享记录入口（无请求上下文时自然 no-op）
+    this.send(sessionId, "busy", true).catch(() => {});
+    // 注意：interval 在请求上下文内创建时会继承首个请求的 ALS store（实测），
+    // 定时器路径的发送必须显式用原始 fetch，不依赖上下文判定。
     const timer = setInterval(() => {
       const t = this.timers.get(sessionId);
       if (!t) return;
-      if (Date.now() - t.lastAliveAt > MAX_LIFETIME_MS) {
+      if (Date.now() - t.lastAliveAt > this.maxLifetimeMs) {
         this.stopBusy(sessionId);
-        this.send(sessionId, "idle").catch(() => {});
+        this.send(sessionId, "idle", false).catch(() => {});
         return;
       }
-      this.send(sessionId, "busy").catch(() => {});
-    }, BUSY_INTERVAL_MS);
+      this.send(sessionId, "busy", false).catch(() => {});
+    }, this.intervalMs);
     this.timers.set(sessionId, { timer, lastAliveAt: Date.now() });
   }
 
@@ -253,20 +285,21 @@ export class HeartbeatManager {
     if (!t) return;
     clearInterval(t.timer);
     this.timers.delete(sessionId);
-    this.send(sessionId, "idle").catch(() => {});
+    this.send(sessionId, "idle", false).catch(() => {});
   }
 
   // Sh() 模式签名：X-Sdk-Content-Sha256=UNSIGNED-PAYLOAD；user-session-id 头；PUT
-  private async send(sessionId: string, status: "busy" | "idle"): Promise<void> {
+  private async send(sessionId: string, status: "busy" | "idle", record: boolean): Promise<void> {
     const url = `${this.snapOrigin}${HEARTBEAT_PATH}`;
     const headers = signSh(
       { method: "PUT", endpoint: url, headers: { "Content-Type": "application/json", "user-session-id": sessionId } },
       getCredentials(), { signBody: false },
     );
-    await fetch(url, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify({ status }),
-    }).catch(() => {});
+    const body = JSON.stringify({ status });
+    if (record) {
+      await traceUpstream({ method: "PUT", url, headers, body }, { fetch: this.fetchImpl }).catch(() => {});
+      return;
+    }
+    await this.fetchImpl(url, { method: "PUT", headers, body }).catch(() => {});
   }
 }

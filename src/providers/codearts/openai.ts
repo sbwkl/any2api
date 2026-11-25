@@ -10,7 +10,7 @@ import type { GatewayConfig, ModelInfo, Credentials } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
 import { aggregateSseToCompletion, normalizeChatSseUsage } from "../../shared/sse";
 import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../../shared/errors";
-import { dumpUpstream } from "../../shared/trace";
+import { dumpUpstream, type FetchLike } from "../../shared/trace";
 
 const CLIENT_TYPE = "IDE";
 const CLIENT_VERSION = "26.11.200";
@@ -47,8 +47,9 @@ export class OpenAIFacade {
     private snap: SnapClient,
     private gw: GatewayConfig,
     private telemetry: TelemetrySimulator,
+    private fetchImpl: FetchLike = fetch,
   ) {
-    this.heartbeats = new HeartbeatManager(new URL(this.chatOrigin()).origin);
+    this.heartbeats = new HeartbeatManager(new URL(this.chatOrigin()).origin, { fetch: this.fetchImpl });
     this.chatUrl = `${this.chatOrigin()}/api/v2/chat/completions`;
     // 会话空闲清理：发 idle 心跳收尾
     setInterval(() => {
@@ -208,10 +209,10 @@ export class OpenAIFacade {
     });
 
     if (!resp.ok && resp.status === 401) {
-      // STS 过期/失效：尝试强制刷新后重试一次
+      // STS 过期/失效：尝试强制刷新后重试一次（请求链内刷新与重发均进入四层记录）
       const errText = await resp.text().catch(() => "");
       try {
-        await refreshNow();
+        await refreshNow(this.fetchImpl);
         console.log("[openai] 401 → STS 已刷新，重试一次");
         resp = await this.chatUpstream(headers, mapped);
         if (!resp.ok) {
