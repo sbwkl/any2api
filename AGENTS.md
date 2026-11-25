@@ -25,8 +25,8 @@
 
 ## 常用命令
 
-- 测试：`bun test`
-- 编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`
+- 测试：`bun test`；编译 / 构建 / 静态检查：`bun build src/index.ts --target=bun`
+- 本机 PATH 无 bun 时：`~/.bun/bin/bun`
 - 文档结构与本地链接检查：见工作区根变更文档中的验证命令；未配置项目级检查时写「未配置；待补」。
 
 ## Agent skills

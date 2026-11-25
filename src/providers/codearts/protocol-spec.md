@@ -1,7 +1,7 @@
 # CodeArts Agent 真实客户端模拟规格 & OpenAI 兼容代理架构设计
 
 > 日期：2026-11-20
-> 前置文档：`/private/tmp/codearts-agent-llm-analysis.md`（总体逆向报告）
+> 前置说明：早期总体逆向报告（原 `/private/tmp/codearts-agent-llm-analysis.md`）已随 /tmp 丢失；一手材料为本机内核二进制 `~/.codeartsdoer/CodeArts_Agent/AgentKernel_*`（Bun 单文件可执行，多版本并存）。需要核对线上形状时从中提取内嵌 JS：`grep -abo` 定位标记（如 `chat-session/heartbeat`）→ `dd` 按字节偏移切片 → `tr` 清洗非可见字节。
 > 本文目标：给出"让 snap-access 后端把代理流量识别为真实客户端流量"所需的**逐字实现规格**，全部内容来自内核二进制 JS 还原 + 本机真实日志采样（2026-11-20 实测），并给出 OpenAI 兼容代理（方案 B）的完整架构。
 > 用户已明确接受 ToS/风控风险；本文仅覆盖技术事实。
 
