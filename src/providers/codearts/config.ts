@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { signSl, signSh, type Credentials } from "./signer";
 import { uuid32 } from "../../shared/ids";
+import { traceUpstream, type FetchLike } from "../../shared/trace";
 
 export interface ModelInfo { modelId: string; modelName: string; endpoint: string; inputLength?: number }
 export interface GatewayConfig { endpoint: string; models: ModelInfo[] }
@@ -107,7 +108,7 @@ function fromKernelHttp(): Credentials | null {
 // POST {policyDomain}/v1/policy/bundle，Agent-Type: PromptCenter；商业版 x-auth-token 为空串
 // （"Hc version, token is transferred by the toolkit"），认证靠 provider 层 AKSK 签名。
 // 响应 plugin_config[].config(JSON 字符串数组) 各 agent 段含 user_model_list，取首段主模型池。
-export async function fetchPolicyModels(creds: Credentials): Promise<ModelInfo[]> {
+export async function fetchPolicyModels(creds: Credentials, fetchImpl: FetchLike = fetch): Promise<ModelInfo[]> {
   const url = `${SNAP_BASE}/v1/policy/bundle`;
   const body = {
     ide: "CodeArts Agent",
@@ -123,7 +124,10 @@ export async function fetchPolicyModels(creds: Credentials): Promise<ModelInfo[]
     "x-auth-token": "",
   };
   const signed = signSh({ method: "POST", endpoint: url, data: body, headers }, creds);
-  const resp = await fetch(url, { method: "POST", headers: signed, body: JSON.stringify(body) });
+  const resp = await traceUpstream(
+    { method: "POST", url, headers: signed, body: JSON.stringify(body) },
+    { fetch: fetchImpl },
+  );
   if (!resp.ok) throw new Error(`policy/bundle HTTP ${resp.status}`);
   const json = await resp.json() as any;
   for (const item of json?.plugin_config ?? []) {
@@ -144,9 +148,9 @@ export async function fetchPolicyModels(creds: Credentials): Promise<ModelInfo[]
 }
 
 // 模型发现：policy/bundle（真实客户端机制）优先，失败回退观测池
-export async function discoverModels(creds: Credentials): Promise<GatewayConfig> {
+export async function discoverModels(creds: Credentials, fetchImpl: FetchLike = fetch): Promise<GatewayConfig> {
   try {
-    const models = await fetchPolicyModels(creds);
+    const models = await fetchPolicyModels(creds, fetchImpl);
     return { endpoint: "", models };
   } catch (e: any) {
     console.warn(`[codearts] policy/bundle 不可用（${e?.message ?? e}），使用观测模型池`);
@@ -163,7 +167,7 @@ export async function discoverModels(creds: Credentials): Promise<GatewayConfig>
 // benefit-service getGatewayConfig（内核逐字语义）：GET opengw /api/v1/gateway/config
 // 头：Content-Type: application/json + x-snap-traceid(uuid32) + X-Security-token；sl.sign（EMPTY body hash）
 // 注：需渠道订阅（普通账号报 invalid channel），真实客户端拉模型列表不用此端点，保留供参考。
-export async function fetchGatewayConfig(creds: Credentials): Promise<GatewayConfig> {
+export async function fetchGatewayConfig(creds: Credentials, fetchImpl: FetchLike = fetch): Promise<GatewayConfig> {
   const url = `${OPENGW_BASE}${GATEWAY_CONFIG_PATH}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -171,7 +175,7 @@ export async function fetchGatewayConfig(creds: Credentials): Promise<GatewayCon
   };
   if (creds.securityToken) headers["X-Security-token"] = creds.securityToken;
   const signed = signSl({ method: "GET", endpoint: url, headers }, creds);
-  const resp = await fetch(url, { method: "GET", headers: signed });
+  const resp = await traceUpstream({ method: "GET", url, headers: signed }, { fetch: fetchImpl });
   const body = await resp.json().catch(() => null) as any;
   if (body?.error_code !== "0000" || !body?.result) {
     // 福利模型端点需要渠道上下文（无福利订阅时报 invalid channel, group not found）。

@@ -8,6 +8,7 @@ import { createDecipheriv, createCipheriv, pbkdf2Sync, randomBytes } from "crypt
 import { homedir } from "os";
 import type { Credentials } from "./config";
 import { setCredentials } from "./config";
+import { traceUpstream, type FetchLike } from "../../shared/trace";
 
 // 内核常量（逐字对照 authentication 扩展）
 const IAM_TOKEN_API = "/v1/oauth2/tokens";
@@ -175,7 +176,10 @@ function classifyRefreshError(body: any): "AlreadyUsed" | "Expired" | "InvalidSy
   return "Other";
 }
 
-async function callRefresh(auth: SecretAuth): Promise<{ credentials: { access_key_id: string; secret_access_key: string; security_token: string; expiration: string }; refresh_token: string }> {
+async function callRefresh(
+  auth: SecretAuth,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ credentials: { access_key_id: string; secret_access_key: string; security_token: string; expiration: string }; refresh_token: string }> {
   const url = `${STS_ENDPOINT}${IAM_TOKEN_API}`;
   const dpop = await generateDpop(auth.loginContext, "POST", url);
   const body = new URLSearchParams({
@@ -184,11 +188,16 @@ async function callRefresh(auth: SecretAuth): Promise<{ credentials: { access_ke
     grant_type: GRANT_REFRESH_TOKEN,
     refresh_token: auth.refresh_token,
   }).toString();
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { DPoP: dpop, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body,
-  });
+  // 请求链内（401 重试）记录；保活定时器与启动刷新无请求上下文，入口自然 no-op
+  const resp = await traceUpstream(
+    {
+      method: "POST",
+      url,
+      headers: { DPoP: dpop, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body,
+    },
+    { fetch: fetchImpl },
+  );
   const json = await resp.json().catch(() => null) as any;
   if (!resp.ok || !json?.credentials)
     throw Object.assign(new Error(`STS 刷新失败 HTTP ${resp.status}`), { iamBody: json });
@@ -210,11 +219,11 @@ function buildRenewedAuth(old: SecretAuth, renewed: Awaited<ReturnType<typeof ca
 }
 
 /** 单次刷新：读 SecretStorage → 刷新 → 回写轮换后的 refresh_token → 采纳新 STS */
-export async function refreshNow(): Promise<Credentials> {
+export async function refreshNow(fetchImpl: FetchLike = fetch): Promise<Credentials> {
   const auth = readSecretSession();
   if (!auth) throw new Error("SecretStorage 中无 HuaweiCloudSession（请先在 app 内登录）");
   try {
-    const renewed = await callRefresh(auth);
+    const renewed = await callRefresh(auth, fetchImpl);
     const newAuth = buildRenewedAuth(auth, renewed);
     writeSecretSession(newAuth);
     lastSeenRefreshToken = newAuth.refresh_token;
@@ -251,7 +260,7 @@ export async function refreshNow(): Promise<Credentials> {
  * 维护循环一步：采纳 app 续期的新凭证（lineage 变化）或按需刷新。
  * app 健康时（其按 (expiration-now)/2 ∈ [30min,2h] 续期）仅需采纳，不产生竞争。
  */
-export async function maintainCredentials(): Promise<void> {
+export async function maintainCredentials(fetchImpl: FetchLike = fetch): Promise<void> {
   const auth = readSecretSession();
   if (!auth) return;
   if (lastSeenRefreshToken && auth.refresh_token !== lastSeenRefreshToken) {
@@ -265,7 +274,7 @@ export async function maintainCredentials(): Promise<void> {
   const remaining = Date.parse(auth.expires_at) - Date.now();
   if (remaining > EXPIRED_REFRESH_MARGIN_MS) return;
   try {
-    await refreshNow();
+    await refreshNow(fetchImpl);
   } catch (e) {
     console.warn(`[refresher] 主动续期失败: ${e?.message ?? e}`);
   }
