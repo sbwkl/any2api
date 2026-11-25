@@ -8,8 +8,8 @@ import { getCredentials } from "./config";
 import { refreshNow } from "./refresher";
 import type { GatewayConfig, ModelInfo, Credentials } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
-import { aggregateSseToCompletion, normalizeChatSseUsage } from "../../shared/sse";
-import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../../shared/errors";
+import { aggregateSseToCompletion, normalizeChatSseUsage, NO_CHOICES } from "../../shared/sse";
+import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, isTransientUpstreamMessage, PROXY_ERROR_HEADER } from "../../shared/errors";
 import { dumpUpstream, type FetchLike } from "../../shared/trace";
 
 const CLIENT_TYPE = "IDE";
@@ -20,6 +20,8 @@ const OT_FUNCTION = "agent-claw";
 const USER_AGENT = process.env.PROXY_USER_AGENT ?? "opencode/126.11.2-20261117200150";
 const LANGUAGE = "en-us";
 const IDLE_TO_IDLE_MS = 120000; // 无请求 2 分钟后发 idle 收尾
+// 非流式聚合在尚未向客户端发出任何字节前，瞬时网络错误重试一次。
+const NON_STREAM_ATTEMPTS = 2;
 
 function clientIp(): string {
   for (const list of Object.values(networkInterfaces())) {
@@ -37,6 +39,12 @@ function secIsoZ(d = new Date()): string {
 }
 
 interface SessionState { id: string; firstRequestDone: boolean; lastActivity: number }
+
+/** 上游错误消息是否值得重试：由共享分类决定（5xx/连接类/超时）。参数错、限流、鉴权不重试。 */
+function isTransientFailure(message: string): boolean {
+  // 真空流不是网络故障：重试只会把一次失败变成两次上游调用。
+  return message !== NO_CHOICES && isTransientUpstreamMessage(message);
+}
 
 export class OpenAIFacade {
   private sessions = new Map<string, SessionState>();
@@ -148,9 +156,8 @@ export class OpenAIFacade {
     const msgId = createId("message");
     const spanId = rand16hex();
     const snapTraceId = `${traceId}_${rand16hex()}`;
-    const now = Date.now();
 
-    const headers: Record<string, string> = {
+    const baseHeaders: Record<string, string> = {
       "x-ot-trace-id": traceId,
       "x-ot-span-id": spanId,
       "x-snap-traceid": snapTraceId,
@@ -177,7 +184,7 @@ export class OpenAIFacade {
       "X-Encrypt-Capable": "sm4-gcm",         // 不签名
     };
     if (!session.firstRequestDone) {
-      headers["x-session-user-message"] = "true"; // 仅首轮
+      baseHeaders["x-session-user-message"] = "true"; // 仅首轮
       session.firstRequestDone = true;
     }
     // 心跳：会话首个请求 → busy + 30s 定时
@@ -189,52 +196,67 @@ export class OpenAIFacade {
       mapped.stream = true;
       mapped.stream_options = { include_usage: true };
     }
-    // provider 层 sl.sign（真实内核语义：payloadHash=sha256(JSON.stringify(body))，content-type 不参与签名）
-    // 加密路径会被 signSimple 覆盖；明文回退路径依赖此签名
-    const signedHeaders = signSl(
-      { method: "POST", endpoint: this.chatUrl, data: mapped, headers: { ...headers } },
-      getCredentials(),
-    );
-    Object.assign(headers, signedHeaders);
 
-    const startMs = Date.now();
-    let resp: Response;
-    try {
-      resp = await this.chatUpstream(headers, mapped);
-    } catch (e: any) {
-      return jsonError(502, `upstream_error: ${e?.message ?? String(e)}`);
-    }
-    this.telemetry.recordChat({
-      traceId, spanId, startMs, endMs: Date.now(), otFunction: OT_FUNCTION, modelId: model.modelId,
-    });
+    // 每次尝试都重签：created-time / X-Sdk-Date / Authorization 随时间失效。
+    const signedHeaders = (): Record<string, string> => {
+      const headers: Record<string, string> = { ...baseHeaders, "created-time": secIsoZ() };
+      // provider 层 sl.sign（真实内核语义：payloadHash=sha256(JSON.stringify(body))，content-type 不参与签名）
+      // 加密路径会被 signSimple 覆盖；显式明文调试路径依赖此签名
+      const signed = signSl(
+        { method: "POST", endpoint: this.chatUrl, data: mapped, headers: { ...headers } },
+        getCredentials(),
+      );
+      return Object.assign(headers, signed);
+    };
 
-    if (!resp.ok && resp.status === 401) {
-      // STS 过期/失效：尝试强制刷新后重试一次（请求链内刷新与重发均进入四层记录）
-      const errText = await resp.text().catch(() => "");
+    // 单次上游发送 + 401 刷新重试；非 2xx 统一转成协议层可归一的代理错误信封。
+    const sendOnce = async (): Promise<Response> => {
+      const headers = signedHeaders();
+      const startMs = Date.now();
+      let resp: Response;
       try {
-        await refreshNow(this.fetchImpl);
-        console.log("[openai] 401 → STS 已刷新，重试一次");
         resp = await this.chatUpstream(headers, mapped);
-        if (!resp.ok) {
-          const retryText = await resp.text().catch(() => "");
-          return new Response(retryText || JSON.stringify({ error: { message: `upstream ${resp.status}` } }), {
-            status: resp.status, headers: { "Content-Type": "application/json" },
-          });
-        }
       } catch (e: any) {
-        return new Response(errText || JSON.stringify({ error: { message: `upstream 401, refresh failed: ${e?.message ?? e}` } }), {
-          status: 401, headers: { "Content-Type": "application/json" },
-        });
+        throw new Error(`upstream_error: ${e?.message ?? String(e)}`);
       }
-    }
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      return new Response(text || JSON.stringify({ error: { message: `upstream ${resp.status}` } }), {
-        status: resp.status,
-        headers: { "Content-Type": "application/json" },
+      this.telemetry.recordChat({
+        traceId, spanId, startMs, endMs: Date.now(), otFunction: OT_FUNCTION, modelId: model.modelId,
       });
-    }
+
+      if (!resp.ok && resp.status === 401) {
+        // STS 过期/失效：尝试强制刷新后重试一次（请求链内刷新与重发均进入四层记录）
+        const errText = await resp.text().catch(() => "");
+        try {
+          await refreshNow(this.fetchImpl);
+        } catch (e: any) {
+          const reason = extractUpstreamErrorMessage(errText) ?? `upstream 401, refresh failed: ${e?.message ?? e}`;
+          return jsonError(401, reason);
+        }
+        console.log("[openai] 401 → STS 已刷新，重试一次");
+        try {
+          resp = await this.chatUpstream(signedHeaders(), mapped);
+        } catch (e: any) {
+          // 刷新成功但重发网络失败：交给上层按瞬时错误处理，不要伪装成 401。
+          throw new Error(`upstream_error: ${e?.message ?? String(e)}`);
+        }
+      }
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        const message = extractUpstreamErrorMessage(text) ?? `upstream ${resp.status}`;
+        return jsonError(resp.status, message);
+      }
+      return resp;
+    };
+
     if (wantStream === true) {
+      let resp: Response;
+      try {
+        resp = await sendOnce();
+      } catch (e: any) {
+        const message = e?.message ?? String(e);
+        return jsonError(classifyUpstreamStatus(message), message);
+      }
+      if (!resp.ok) return resp; // 已是代理错误信封
       return new Response(resp.body ? normalizeChatSseUsage(resp.body) : resp.body, {
         status: 200,
         headers: {
@@ -244,19 +266,39 @@ export class OpenAIFacade {
         },
       });
     }
-    // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对非 stream 请求也回 SSE）
-    const ct = resp.headers.get("content-type") ?? "";
-    if (ct.includes("text/event-stream")) {
-      let completion: any;
+
+    // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对 non-stream 请求也回 SSE）。
+    // 只对「聚合/读取阶段」的瞬时故障重试一次：连接建立类失败已由 SnapClient 在同一 key 内
+    // 重试一次，这里再叠一层会让单次请求最坏发 4 次加密 POST（流式路径只有 snap 那一次）。
+    let lastMessage = "upstream error";
+    let lastStatus = 502;
+    for (let attempt = 1; attempt <= NON_STREAM_ATTEMPTS; attempt++) {
+      let resp: Response;
       try {
-        completion = await aggregateSseToCompletion(resp.body!);
+        resp = await sendOnce();
       } catch (e: any) {
-        return jsonError(502, `upstream_error: ${e?.message ?? String(e)}`);
+        // snap 已重试过：直接按分类返回，不再消耗外层预算
+        const message = e?.message ?? String(e);
+        return jsonError(classifyUpstreamStatus(message), message);
       }
-      return new Response(JSON.stringify(completion), { status: 200, headers: { "Content-Type": "application/json" } });
+      if (!resp.ok) return resp;
+      try {
+        const ct = resp.headers.get("content-type") ?? "";
+        // 上游对非 stream 请求也回 SSE：聚合为单个 completion JSON。
+        if (ct.includes("text/event-stream")) {
+          const completion = await aggregateSseToCompletion(resp.body!);
+          return new Response(JSON.stringify(completion), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        const text = await resp.text();
+        return new Response(text, { status: 200, headers: { "Content-Type": "application/json" } });
+      } catch (e: any) {
+        lastMessage = e?.message ?? String(e);
+        lastStatus = classifyUpstreamStatus(lastMessage);
+        if (attempt < NON_STREAM_ATTEMPTS && isTransientFailure(lastMessage)) continue;
+        break;
+      }
     }
-    const text = await resp.text();
-    return new Response(text, { status: 200, headers: { "Content-Type": "application/json" } });
+    return jsonError(lastStatus, lastMessage);
   }
 }
 

@@ -2,7 +2,7 @@
 // 依赖 ChatBackend.respond（OpenAI chat 形态）；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { pruneDanglingToolChoice, safeRespond } from "./util";
-import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
+import { anthropicErrorTypeForMessage, anthropicErrorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
 import { sseData, upstreamErrorFromChunk, NO_CHOICES } from "../shared/sse";
 
 function systemToMessage(system: any): any | null {
@@ -305,7 +305,7 @@ async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): P
     const j: any = await resp.clone().json();
     message = j?.error?.message ?? j?.message ?? message;
   } catch { /* ignore */ }
-  return anthroError(resp.status, message, errorTypeForStatus(resp.status));
+  return anthroError(resp.status, message, anthropicErrorTypeForStatus(resp.status));
 }
 
 function completionToAnthropic(c: any, model?: string, thinking = false, promptTokensIncludeCache = false): any {
@@ -449,7 +449,10 @@ async function anthropicSse(upstream: ReadableStream<Uint8Array>, thinking: bool
         });
         ev(ctrl, "message_stop", { type: "message_stop" });
       } catch (e: any) {
-        ev(ctrl, "error", { type: "error", error: { type: "api_error", message: e?.message ?? String(e) } });
+        const message = e?.message ?? String(e);
+        // 上游错误文本里带着 400/429/超时等语义；流式已无法改 HTTP 状态，
+        // 至少把 error type 选对，让客户端能区分限流与参数错。
+        ev(ctrl, "error", { type: "error", error: { type: anthropicErrorTypeForMessage(message), message } });
       } finally {
         ctrl.close();
       }

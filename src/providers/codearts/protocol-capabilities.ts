@@ -5,7 +5,8 @@ import type { ProtocolCapabilities } from "../../protocols";
 export const CODEARTS_PROTOCOL_CAPABILITIES: ProtocolCapabilities = {
   // full：支持 required/forced function。
   toolChoice: "full",
-  // 错误透传上游响应，归一为对应协议错误关闭。
+  // 裸上游错误原样透传；provider 生成的代理信封（x-any2api-error-source: proxy，
+  // 即 chat 失败路径）仍会按请求方协议归一。
   normalizeErrors: false,
   // 不把 Anthropic thinking 映射为 reasoning_effort。
   thinkingToEffort: false,

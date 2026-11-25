@@ -13,6 +13,7 @@
 - **显式拒绝**：对不支持的特性返回明确的错误响应（状态码 + 错误体），与静默丢弃相对。
 - **服务端执行工具（server tool）**：Anthropic 请求中由 Anthropic 基础设施执行的工具声明（如 `web_search_20250305`），结果以内容块随同一响应返回；OpenAI chat 形态没有对应类别，本仓库不透传、不自执行、不报错。
 - **自定义工具（custom tool）**：由客户端声明并执行的工具（Anthropic `type:"custom"`、OpenAI function），唯一可跨协议等价翻译的工具类别。
+- **namespace 工具（namespace tool）**：Responses 请求中按命名空间分组的客户端可执行工具声明（`type:"namespace"`，成员为 function）；协议翻译必须展开成员并在响应中还原命名空间，不得静默丢弃。与服务端执行工具相对。
 - **悬空 tool_choice（dangling tool_choice）**：强制工具选择引用的工具不在幸存工具列表中（被滤除或全部滤空）的翻译产物；上游确定性拒绝该形状，翻译层必须防悬空。
 
 ## 用量

@@ -9,6 +9,14 @@ const SM4_GCM_ALGO = "sm4-gcm";
 const ENCRYPT_PATHS = ["/api/v2/chat/completions"];
 const KEY_EXCHANGE_PATH = "/api/v1/security/key-exchange";
 const REUSE_MARGIN_MS = 300000; // 提前 5 分钟换新
+// 加密请求的瞬时故障重试：网关级 5xx 与连接类错误只重试一次；参数错/限流/鉴权不重试。
+const TRANSIENT_STATUS = new Set([500, 502, 503, 504]);
+const DEFAULT_IDLE_TIMEOUT_MS = 180000;
+
+function idleTimeoutMs(): number {
+  const n = Number(process.env.CODEARTS_UPSTREAM_IDLE_TIMEOUT_MS ?? DEFAULT_IDLE_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_IDLE_TIMEOUT_MS;
+}
 
 const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
 const unb64 = (s: string) => new Uint8Array(Buffer.from(s, "base64"));
@@ -89,11 +97,26 @@ function decryptChunk(cipher: SM4GCM, key: Uint8Array, keyId: string, frame: str
   return toUtf8(cipher.decrypt(key, iv, tag, ct, `${keyId}|${index}`));
 }
 
+function readWithIdleTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`upstream idle timeout after ${ms}ms`)), ms);
+    timer.unref?.();
+  });
+  return Promise.race([reader.read(), timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response {
   const reader = resp.body!.getReader();
   const cipher = new SM4GCM();
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
+  const idleMs = idleTimeoutMs();
   let buf = "";
   let chunkIndex = 0;
   const FRAME_SEP = "\n\n";
@@ -101,7 +124,7 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
     async start(controller) {
       try {
         for (;;) {
-          const { done, value } = await reader.read();
+          const { done, value } = await readWithIdleTimeout(reader, idleMs);
           if (done) {
             if (buf.length > 0) {
               const frame = buf.trim();
@@ -135,6 +158,7 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
         }
       } catch (e) {
         console.error("[snap] 解密流终止:", (e as any)?.message ?? e);
+        try { await reader.cancel(); } catch { /* reader 已释放 */ }
         controller.error(e);
       }
     },
@@ -146,7 +170,10 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
   return new Response(stream, { status: resp.status, statusText: resp.statusText, headers });
 }
 
-// ---- bz：加密 chat 客户端（失败回退链逐字：协商失败→明文；网络错误→明文重发；KEY_EXPIRED→换 key 重试一次；其余非 2xx→明文重发）----
+// ---- bz：加密 chat 客户端 ----
+// 与内核逐字行为的有意偏差：内核在协商失败/网络错误/非 2xx 时改发明文，但明文 chat 实测
+// 100% 被上游拒绝（内嵌 415），只会掩盖真实故障。这里改为「同 key 重试一次 → 返回错误」；
+// 保留 KEY_EXPIRED 换 key 重试与 CODEARTS_FORCE_PLAINTEXT=1 调试开关。
 export class SnapClient {
   public keys: SessionKeyManager;
   private cipher = new SM4GCM();
@@ -176,8 +203,10 @@ export class SnapClient {
     let key: NegotiatedKey;
     try {
       key = await this.keys.getOrNegotiateKey(baseUrl);
-    } catch {
-      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj)); // 协商失败→明文
+    } catch (e: any) {
+      // 明文回退对 chat 不可用（实测 8/8 得到内嵌 415）：直接报错，避免掩盖真实故障。
+      // 调试场景仍可用 CODEARTS_FORCE_PLAINTEXT=1 显式走明文。
+      throw new Error(`key exchange failed: ${e?.message ?? e}`);
     }
     const plaintext = JSON.stringify(bodyObj);
     const ts = Date.now();
@@ -210,9 +239,12 @@ export class SnapClient {
         { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj },
         { fetch: this.fetchImpl },
       );
-    } catch {
-      console.warn("[snap] 加密请求网络错误 → 明文重发");
-      return this.sendPlaintext(url, headers, plaintext); // 网络错误→明文重发
+    } catch (e: any) {
+      if (!isRetry) {
+        console.warn(`[snap] 加密请求网络错误，同 key 重试一次: ${e?.message ?? e}`);
+        return this.chat(url, headers, bodyObj, true);
+      }
+      throw new Error(`upstream network error: ${e?.message ?? e}`);
     }
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
@@ -221,7 +253,15 @@ export class SnapClient {
         this.keys.clearKey();
         return this.chat(url, headers, bodyObj, true);
       }
-      return this.sendPlaintext(url, headers, plaintext); // 非 2xx→明文重发
+      if (TRANSIENT_STATUS.has(resp.status) && !isRetry) {
+        console.warn(`[snap] 上游 ${resp.status}，加密重试一次`);
+        return this.chat(url, headers, bodyObj, true);
+      }
+      // 明文回退是死路径（实测 415），不再重发；把上游状态/原文交回 provider 归一。
+      const headersOut = new Headers();
+      const contentType = resp.headers.get("content-type");
+      if (contentType) headersOut.set("Content-Type", contentType);
+      return new Response(text, { status: resp.status, statusText: resp.statusText, headers: headersOut });
     }
     const algo = resp.headers.get("X-Encrypt-Algo");
     console.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);

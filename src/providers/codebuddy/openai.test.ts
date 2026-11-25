@@ -208,7 +208,7 @@ describe("openai facade", () => {
     expect(resp.status).toBe(502);
     const j: any = await resp.json();
     expect(j.error.message).toContain("network down");
-    expect(j.error.type).toBe("upstream_error");
+    expect(j.error.type).toBe("server_error");
   });
 
   test("empty upstream stream becomes a 502", async () => {

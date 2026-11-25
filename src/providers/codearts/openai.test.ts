@@ -21,14 +21,39 @@ function makeFacade(chat: () => Promise<Response>): OpenAIFacade {
 
 const body = { model: "m", messages: [{ role: "user", content: "hi" }] };
 
-test("empty SSE on a non-stream request becomes 502", async () => {
-  const facade = makeFacade(async () =>
-    new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+const okSse = [
+  `data:{"id":"1","created":1,"object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"OK"}}]}`,
+  "",
+  `data:{"id":"1","created":1,"object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}`,
+  "",
+  "data:[DONE]",
+  "",
+].join("\n");
+
+/** 上游先吐一点内容，再以连接重置终止 */
+function resetStream(): Response {
+  const enc = new TextEncoder();
+  return new Response(new ReadableStream<Uint8Array>({
+    start(ctrl) {
+      ctrl.enqueue(enc.encode(`data:{"id":"1","created":1,"object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"content":"par"}}]}\n\n`));
+      ctrl.error(new Error("ECONNRESET: The socket connection was closed unexpectedly."));
+    },
+  }), { status: 200, headers: { "Content-Type": "text/event-stream" } });
+}
+
+test("empty SSE on a non-stream request becomes 502 without a retry", async () => {
+  let calls = 0;
+  const facade = makeFacade(async () => {
+    calls++;
+    return new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  });
   const resp = await facade.respond(body, false, "session");
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
-  expect(j.error.message).toContain("upstream_error");
-  expect(j.error.type).toBe("upstream_error");
+  expect(j.error.message).toContain("no choices");
+  expect(j.error.type).toBe("server_error");
+  // 真空流不是瞬时网络故障：只发一次上游请求
+  expect(calls).toBe(1);
 });
 
 test("error-only SSE on a non-stream request becomes 502", async () => {
@@ -40,7 +65,80 @@ test("error-only SSE on a non-stream request becomes 502", async () => {
   const resp = await facade.respond(body, false, "session2");
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
-  expect(j.error.type).toBe("upstream_error");
+  expect(j.error.type).toBe("server_error");
+});
+
+test("an embedded 429 inside a 200 SSE becomes a 429 rate_limit error", async () => {
+  const facade = makeFacade(async () =>
+    new Response('data: {"error":{"code":"InferHub.ModelArts.81101.429","message":"Too many requests"}}\n\n', {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }));
+  const resp = await facade.respond(body, false, "session429");
+  expect(resp.status).toBe(429);
+  expect(resp.headers.get("x-any2api-error-source")).toBe("proxy");
+  const j: any = await resp.json();
+  expect(j.error.type).toBe("rate_limit_error");
+  expect(j.error.message).toContain("429");
+});
+
+test("an embedded 400 inside a 200 SSE is not retried and becomes a 400", async () => {
+  let calls = 0;
+  const facade = makeFacade(async () => {
+    calls++;
+    return new Response('data: {"error":{"code":"InferHub.001001005.400","message":"request param is invalid"}}\n\n', {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  });
+  const resp = await facade.respond(body, false, "session400");
+  expect(resp.status).toBe(400);
+  const j: any = await resp.json();
+  expect(j.error.type).toBe("invalid_request_error");
+  expect(calls).toBe(1);
+});
+
+test("a non-2xx upstream status becomes a proxy error with the upstream message", async () => {
+  const facade = makeFacade(async () =>
+    new Response(JSON.stringify({ error_msg: "Backend timeout", error_code: "APIG.0203" }), {
+      status: 504,
+      headers: { "Content-Type": "application/json" },
+    }));
+  const resp = await facade.respond(body, false, "session504");
+  expect(resp.status).toBe(504);
+  expect(resp.headers.get("x-any2api-error-source")).toBe("proxy");
+  const j: any = await resp.json();
+  expect(j.error.message).toBe("Backend timeout");
+  expect(j.error.type).toBe("server_error");
+});
+
+test("a transient reset during non-stream aggregation is retried once", async () => {
+  let calls = 0;
+  const facade = makeFacade(async () => {
+    calls++;
+    return calls === 1
+      ? resetStream()
+      : new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  });
+  const resp = await facade.respond(body, false, "sessionRetry");
+  expect(resp.status).toBe(200);
+  const j: any = await resp.json();
+  expect(j.choices[0].message.content).toBe("OK");
+  expect(calls).toBe(2);
+});
+
+test("a connection failure is retried by the snap layer only, not again by the facade", async () => {
+  let calls = 0;
+  const facade = makeFacade(async () => {
+    calls++;
+    throw new Error("socket connection was closed");
+  });
+  const resp = await facade.respond(body, false, "sessionConn");
+  expect(resp.status).toBe(502);
+  const j: any = await resp.json();
+  expect(j.error.type).toBe("server_error");
+  // SnapClient 内部已有一次同 key 重试；门面不再叠加预算
+  expect(calls).toBe(1);
 });
 
 test("unknown model is rejected with 404 instead of falling back to models[0]", async () => {
@@ -58,7 +156,7 @@ test("unknown model is rejected with 404 instead of falling back to models[0]", 
   expect(resp.status).toBe(404);
   expect(resp.headers.get("x-any2api-error-source")).toBe("proxy");
   const j: any = await resp.json();
-  expect(j.error.type).toBe("invalid_request_error");
+  expect(j.error.type).toBe("not_found_error");
   expect(j.error.message).toContain("model_not_found");
 });
 
