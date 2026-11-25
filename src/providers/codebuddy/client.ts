@@ -1,6 +1,6 @@
 // 传输层：头集合、gzip、401 刷新重试 — 对应 RFC-0001 §5.2/§5.7/§5.9
 import { gzipSync } from "node:zlib";
-import { dumpUpstream } from "../../shared/trace";
+import { dumpUpstream, traceUpstream } from "../../shared/trace";
 import type { Credentials, ProductConfig } from "./types";
 
 export interface HeaderContext {
@@ -73,11 +73,17 @@ export async function fetchQueueStatus(opts: {
     "X-Conversation-Request-ID": opts.requestId,
   };
   if (opts.credentials.domain) headers["X-Domain"] = opts.credentials.domain;
-  const resp = await (opts.fetchImpl ?? fetch)(`${opts.config.endpoint}/v2/chat/queue/status`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ model: opts.model }),
-  });
+  const body = { model: opts.model };
+  const resp = await traceUpstream(
+    {
+      method: "POST",
+      url: `${opts.config.endpoint}/v2/chat/queue/status`,
+      headers,
+      body: JSON.stringify(body),
+      recordBody: body,
+    },
+    { fetch: opts.fetchImpl ?? fetch },
+  );
   if (!resp.ok) {
     await resp.text().catch(() => {});
     return null;
@@ -104,13 +110,20 @@ export async function postChat(opts: {
   const fetchImpl = opts.fetchImpl ?? fetch;
   dumpUpstream("codebuddy", opts.url, opts.body);
   const payload = gzipBody(opts.body);
+  // 每次实际发送是一次独立尝试；L2 body 记 gzip 前明文，wire body 仍是 gzip。
   let headers = { ...opts.headers, "Content-Encoding": "gzip" };
-  let resp = await fetchImpl(opts.url, { method: "POST", headers, body: payload });
+  let resp = await traceUpstream(
+    { method: "POST", url: opts.url, headers, body: payload, recordBody: opts.body },
+    { fetch: fetchImpl },
+  );
   if (resp.status === 401 && opts.onUnauthorized) {
     const refreshed = await opts.onUnauthorized();
     if (refreshed) {
       headers = { ...refreshed, "Content-Encoding": "gzip" };
-      resp = await fetchImpl(opts.url, { method: "POST", headers, body: payload });
+      resp = await traceUpstream(
+        { method: "POST", url: opts.url, headers, body: payload, recordBody: opts.body },
+        { fetch: fetchImpl },
+      );
     }
   }
   if (opts.onQueue && resp.ok) {
@@ -120,7 +133,10 @@ export async function postChat(opts: {
       if (peek?.code === 6020) {
         const retry = await opts.onQueue(peek);
         if (retry) {
-          resp = await fetchImpl(opts.url, { method: "POST", headers, body: payload });
+          resp = await traceUpstream(
+            { method: "POST", url: opts.url, headers, body: payload, recordBody: opts.body },
+            { fetch: fetchImpl },
+          );
         }
       }
     }
@@ -147,7 +163,10 @@ export async function refreshAccessToken(opts: {
   };
   if (opts.credentials.domain) headers["X-Domain"] = opts.credentials.domain;
   try {
-    const resp = await (opts.fetchImpl ?? fetch)(url, { method: "POST", headers, body: "{}" });
+    const resp = await traceUpstream(
+      { method: "POST", url, headers, body: "{}", recordBody: {} },
+      { fetch: opts.fetchImpl ?? fetch },
+    );
     if (!resp.ok) return null;
     const json: any = await resp.json();
     const data = json?.data;

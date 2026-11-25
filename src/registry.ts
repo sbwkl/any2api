@@ -1,6 +1,6 @@
 // Provider 注册表与路由分发 — 对应 RFC-0001 的 provider 边界重构
 // 路由层只回答：哪个前缀、交给谁、失败怎么退化；provider 不再知道自己的公开前缀。
-import { startTraceCapture } from "./shared/trace";
+import { abortReasonForError, markAbort, runWithRequestTrace } from "./shared/trace";
 
 export interface Route {
   method: string;
@@ -132,6 +132,8 @@ export async function mountProviders(modules: ProviderModule[]): Promise<(req: R
         try {
           return await route.handle(req);
         } catch (e: any) {
+          // handler 异常 = 代理内部异常；超时类异常单独记 timeout（D6 中断标记）
+          markAbort(abortReasonForError(e));
           return Response.json(
             { error: { message: `provider ${m.module.name} error: ${e?.message ?? String(e)}`, type: "internal_error", code: null } },
             { status: 500 },
@@ -146,10 +148,7 @@ export async function mountProviders(modules: ProviderModule[]): Promise<(req: R
     return new Response("not found", { status: 404 });
   };
 
-  return async (req) => {
-    const capture = startTraceCapture(req);
-    const res = await routeRequest(req);
-    if (capture) void capture.finish(res).catch(() => {});
-    return res;
-  };
+  // 每个入站请求建立独立的异步上下文（含 /healthz、404 等全部路径）；
+  // 处理结束后旁路组装 L4 并写盘，finish 不 await，不改变响应内容与延迟。
+  return async (req) => runWithRequestTrace(req, () => routeRequest(req));
 }
