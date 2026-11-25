@@ -96,7 +96,7 @@ describe("postChat trace records", () => {
     await trace.finish(Response.json({ ok: true }));
 
     const rec = readRecords()[0];
-    expect(rec.schema).toBe(2);
+    expect(rec.schema).toBe(3);
     expect(rec.provider).toBe("codebuddy");
     expect(rec.upstream).toHaveLength(2);
 

@@ -177,7 +177,7 @@ describe("snap.chat request-scoped attempts", () => {
     expect(JSON.stringify(upstream)).not.toContain("business-secret");
   });
 
-  test("L3 keeps the raw ciphertext frames while the caller receives decrypted SSE", async () => {
+  test("L3 records decrypted plaintext SSE with schema 3 while the caller receives the same plaintext", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
     const cipher = new SM4GCM();
@@ -228,20 +228,27 @@ describe("snap.chat request-scoped attempts", () => {
     expect(plaintext).toBe(plainFrames.map((frame) => frame + "\n\n").join(""));
     expect(Buffer.from(plaintext).includes(encoder.encode("data:"))).toBe(true);
 
-    const upstream = readRecords()[0].upstream;
+    const record = readRecords()[0];
+    expect(record.schema).toBe(3);
+    const upstream = record.upstream;
     expect(upstream).toHaveLength(2);
-    const encryptedAttempt = upstream[1];
-    // 响应头在 decryptStream 删除加密头之前快照
-    expect(recordedHeader(encryptedAttempt.response.headers, "x-encrypt-algo")).toBe("sm4-gcm");
-    expect(recordedHeader(encryptedAttempt.response.headers, "x-encrypt-key-id")).toBe(keyId);
-    // L3 记录上游原始密文文本（g4 帧），不是解密后的明文
-    expect(encryptedAttempt.response.body).toBe(rawBody());
-    expect(encryptedAttempt.response.body).not.toContain("data:");
-    expect(encryptedAttempt.response.chunks.length).toBeGreaterThanOrEqual(1);
-    expect(encryptedAttempt.response.chunks.reduce((n: number, c: any) => n + c.bytes, 0)).toBe(
-      encoder.encode(rawBody()).byteLength,
+    const chatAttempt = upstream[1];
+    // L3 是 provider 解码后的可读响应：无加密头，content-type 为解码后的类型
+    expect(recordedHeader(chatAttempt.response.headers, "x-encrypt-algo")).toBeNull();
+    expect(recordedHeader(chatAttempt.response.headers, "x-encrypt-key-id")).toBeNull();
+    expect(recordedHeader(chatAttempt.response.headers, "content-type")).toBe("text/event-stream");
+    // L3 正文为明文 SSE，与调用方收到的内容一致，且不含密文帧形态
+    const expectedPlaintext = plainFrames.map((frame) => frame + "\n\n").join("");
+    expect(chatAttempt.response.body).toBe(expectedPlaintext);
+    expect(chatAttempt.response.body).toBe(plaintext);
+    expect(chatAttempt.response.body).toContain("data:");
+    expect(chatAttempt.response.body).not.toContain(`${keyId}|`);
+    for (const frame of rawFrames) expect(chatAttempt.response.body).not.toContain(frame);
+    expect(chatAttempt.response.chunks.length).toBeGreaterThanOrEqual(1);
+    expect(chatAttempt.response.chunks.reduce((n: number, c: any) => n + c.bytes, 0)).toBe(
+      encoder.encode(expectedPlaintext).byteLength,
     );
-    expect(encryptedAttempt.response.complete).toBe(true);
+    expect(chatAttempt.response.complete).toBe(true);
   });
 
   test("key-exchange failure rejects instead of sending a useless plaintext chat", async () => {

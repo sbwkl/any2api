@@ -15,7 +15,7 @@ src/
 ├── shared/
 │   ├── ids.ts                # 通用 ID 生成（跨 provider 复用）
 │   ├── sse.ts                # 通用 SSE 解析 + chat.completion 聚合
-│   └── trace.ts              # 四层请求记录（schema 2）+ 上游请求转储（opt-in）
+│   └── trace.ts              # 四层请求记录（schema 3）+ 上游请求转储（opt-in）
 ├── protocols/                # 共享协议层（只依赖 ChatBackend，不感知 provider 名称）
 │   ├── index.ts              # createProtocolRoutes（models/chat/messages/responses/health）
 │   ├── types.ts              # ChatBackend / ProtocolCapabilities
@@ -161,11 +161,11 @@ resp = client.chat.completions.create(
 
 ## 请求采集（opt-in）
 
-默认关闭；设置 `TRACE_CAPTURE_DIR` 后，每个入站请求（含 `/healthz`、404）产生一行 JSONL（`capture-YYYY-MM-DD.jsonl`，`schema: 2`），一次请求的记录内嵌四层观测：
+默认关闭；设置 `TRACE_CAPTURE_DIR` 后，每个入站请求（含 `/healthz`、404）产生一行 JSONL（`capture-YYYY-MM-DD.jsonl`，`schema: 3`），一次请求的记录内嵌四层观测：
 
 - **L1 入站请求**：方法、路径、请求头（Authorization / x-api-key / cookie 等敏感值记 `<redacted>`）、解析后的请求 JSON；解析失败时改记 `raw_request` 原文。
 - **L2 上游请求**：请求上下文内的每次上游调用按发生顺序进入 `upstream[]`，含方法、URL、请求头（同样脱敏）与加密 / gzip 前的明文 body；401 刷新重发、排队重试、加密协商重发各算一次尝试。
-- **L3 上游原始响应**：每次尝试的原始状态、头、完整响应文本（SSE 原文）与网络 chunk 到达时间（`t_ms` / `bytes`）。
+- **L3 上游可读响应**：每次尝试经 provider 解码后、协议翻译前的状态、头、完整响应文本与输出块到达时间（`t_ms` / `bytes`）。CodeArts 加密 chat 记录解密后的 SSE 明文，不含 `x-encrypt-*` 头，`content-type` 为解码后的类型；`chunks[].bytes` 为解码后输出块的 UTF-8 字节数，可与 L3 body 对账。非加密上游保持现有记录语义。
 - **L4 出站响应**：状态、头、`content_type`、重组后的完整正文、`first_byte_ms` / `duration_ms`、`complete` 与 `abort_reason`。
 
 请求结束（流式为流结束）时一次性追加；运行时可识别的中断记 `complete:false`，`abort_reason` 取 `client_disconnect` / `upstream_error` / `timeout` / `proxy_error`。记录不截断、不轮转、不清理（按天文件持续保留，删除由用户手工执行），新文件权限 `0600`；写入失败静默，不影响响应内容与延迟。后台主动调用（心跳、遥测上报、凭证保活、消息中心轮询、启动时模型发现）不继承请求上下文，因此不进入记录。
@@ -181,7 +181,7 @@ resp = client.chat.completions.create(
 ```bash
 E2E_MAX_CALLS=60 E2E_RECORD=1 bun run e2e --baseline   # 一轮全矩阵，基线写入 docs/generated/
 E2E_ONLY=image bun run e2e                             # 只跑 id 含 image 的场景
-bun run e2e:corpus [dir]                               # 对入站采集 JSONL 做 L1 校验（默认 e2e/corpus；仍按 v1 记录字段解析，schema 2 记录未适配）
+bun run e2e:corpus [dir]                               # 对入站采集 JSONL 做 L1 校验（默认 e2e/corpus；仍按 v1 记录字段解析，schema 2 / 3 记录均未适配）
 ```
 
 | 环境变量 | 默认 | 说明 |

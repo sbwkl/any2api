@@ -170,6 +170,18 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
   return new Response(stream, { status: resp.status, statusText: resp.statusText, headers });
 }
 
+// ---- 请求记录专用：在 traceUpstream 读取响应之前完成 provider 解码 ----
+// 仅 CodeArts chat 的成功加密响应走这里；trace 与调用方拿到同一个明文 Response。
+function decryptingFetch(fetchImpl: FetchLike, key: NegotiatedKey): FetchLike {
+  return async (input, init) => {
+    const resp = await fetchImpl(input, init);
+    const algo = resp.headers.get("X-Encrypt-Algo");
+    if (!resp.ok || algo !== SM4_GCM_ALGO) return resp;
+    console.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);
+    return decryptStream(key.sessionKey, key.keyId, resp);
+  };
+}
+
 // ---- bz：加密 chat 客户端 ----
 // 与内核逐字行为的有意偏差：内核在协商失败/网络错误/非 2xx 时改发明文，但明文 chat 实测
 // 100% 被上游拒绝（内嵌 415），只会掩盖真实故障。这里改为「同 key 重试一次 → 返回错误」；
@@ -237,7 +249,7 @@ export class SnapClient {
       // L2 记录加密前明文（recordBody）；线上 body 为 base64 密文；线上头含 X-Encrypt-* 与重签名
       resp = await traceUpstream(
         { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj },
-        { fetch: this.fetchImpl },
+        { fetch: decryptingFetch(this.fetchImpl, key) },
       );
     } catch (e: any) {
       if (!isRetry) {
@@ -263,9 +275,6 @@ export class SnapClient {
       if (contentType) headersOut.set("Content-Type", contentType);
       return new Response(text, { status: resp.status, statusText: resp.statusText, headers: headersOut });
     }
-    const algo = resp.headers.get("X-Encrypt-Algo");
-    console.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);
-    if (algo === SM4_GCM_ALGO) return decryptStream(key.sessionKey, key.keyId, resp);
     return resp;
   }
 }
