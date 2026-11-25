@@ -1,5 +1,6 @@
 // 消息中心轮询（可选旁路信号）— RFC-0001 §5.8
 // 真实 IDE 每 30s GET /v2/msg-center/message/summary；默认关闭，CODEBUDDY_MSG_CENTER=1 开启。
+import { traceUpstream } from "../../shared/trace";
 import type { Credentials, ProductConfig } from "./types";
 
 export interface MsgCenterOptions {
@@ -41,7 +42,11 @@ export class MsgCenterPoller {
     };
     if (creds.domain) headers["X-Domain"] = creds.domain;
     const url = `${this.opts.config.endpoint}/v2/msg-center/message/summary`;
-    const resp = await (this.opts.fetchImpl ?? fetch)(url, { headers });
+    // 后台主动调用：定时器回调不继承请求上下文，入口自然 no-op、不落记录。
+    const resp = await traceUpstream(
+      { method: "GET", url, headers },
+      { fetch: this.opts.fetchImpl ?? fetch },
+    );
     if (!resp.ok) {
       await resp.text().catch(() => {});
       return;
