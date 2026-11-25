@@ -11,7 +11,7 @@ export async function safeRespond(
     return await backend.respond(body, opts);
   } catch (e: any) {
     return Response.json(
-      { error: { message: e?.message ?? String(e), type: "upstream_error", code: null } },
+      { error: { message: e?.message ?? String(e), type: "server_error", code: null } },
       { status: 502, headers: { [PROXY_ERROR_HEADER]: "proxy" } },
     );
   }

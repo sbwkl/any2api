@@ -84,7 +84,7 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect(resp.status).toBe(404);
     const j: any = await resp.json();
     expect(j.type).toBe("error");
-    expect(j.error.type).toBe("invalid_request_error");
+    expect(j.error.type).toBe("not_found_error");
     expect(j.error.message).toContain("model_not_found");
   });
 
@@ -205,7 +205,52 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect((await r.json() as any).error.type).toBe("rate_limit_error");
 
     const s = await dispatch(make(502), "/v1/responses", "POST", { model: "m", input: "hi" });
-    expect((await s.json() as any).error.type).toBe("upstream_error");
+    expect((await s.json() as any).error.type).toBe("server_error");
+
+    // Anthropic 使用自己的合法类型词汇：5xx 是 api_error 而不是 server_error
+    const a502 = await dispatch(make(502), "/v1/messages", "POST", {
+      model: "m", max_tokens: 1, messages: [{ role: "user", content: "hi" }],
+    });
+    expect((await a502.json() as any).error.type).toBe("api_error");
+    const a429 = await dispatch(make(429), "/v1/messages", "POST", {
+      model: "m", max_tokens: 1, messages: [{ role: "user", content: "hi" }],
+    });
+    expect((await a429.json() as any).error.type).toBe("rate_limit_error");
+  });
+
+  test("streaming upstream errors keep their class in the Anthropic error event", async () => {
+    const sse = 'data: {"error":{"code":"InferHub.ModelArts.81101.429","message":"Too many requests"}}\n\n';
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+    }), { normalizeErrors: true });
+    const resp = await dispatch(local, "/v1/messages", "POST", {
+      model: "m", max_tokens: 10, messages: [{ role: "user", content: "hi" }], stream: true,
+    });
+    const text = await resp.text();
+    expect(text).toContain("event: error");
+    expect(text).toContain('"type":"rate_limit_error"');
+  });
+
+  test("streaming upstream errors keep their class in the Responses error event", async () => {
+    const sse = 'data: {"error":{"code":"InferHub.ModelArts.81101.429","message":"Too many requests"}}\n\n';
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+    }), { normalizeErrors: true });
+    const resp = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi", stream: true });
+    const text = await resp.text();
+    expect(text).toContain("event: error");
+    expect(text).toContain('"code":"rate_limit_exceeded"');
+  });
+
+  test("an empty Responses stream is an error, not a completed empty response", async () => {
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+    }), { normalizeErrors: true });
+    const resp = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi", stream: true });
+    const text = await resp.text();
+    expect(text).toContain("event: error");
+    expect(text).toContain('"code":"server_error"');
+    expect(text).not.toContain("response.completed");
   });
 
   test("a single Responses function_call stays one assistant message with one tool_call", () => {

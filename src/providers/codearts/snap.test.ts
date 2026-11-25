@@ -105,7 +105,7 @@ describe("snap.chat request-scoped attempts", () => {
     expect(readRecords()).toHaveLength(0);
   });
 
-  test("records key-exchange, encrypted send and plaintext fallback as separate attempts", async () => {
+  test("records key-exchange and one encrypted retry for a transient 5xx", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
     const bodyObj = chatBody();
@@ -133,8 +133,9 @@ describe("snap.chat request-scoped attempts", () => {
       await trace.finish(Response.json({ ok: true }));
     }
 
-    expect(resStatus).toBe(200);
-    expect(resText).toBe('data: {"ok":1}\n\n');
+    // 瞬时 5xx 只重试一次加密请求；明文回退已移除
+    expect(resStatus).toBe(500);
+    expect(resText).toBe("ENCRYPTED_STAGE_FAILED");
     expect(calls.map((c) => c.url)).toEqual([KEY_EXCHANGE_URL, CHAT_URL, CHAT_URL]);
 
     const upstream = readRecords()[0].upstream;
@@ -162,15 +163,12 @@ describe("snap.chat request-scoped attempts", () => {
     expect(upstream[1].response.status).toBe(500);
     expect(upstream[1].response.body).toBe("ENCRYPTED_STAGE_FAILED");
 
-    // L2 + L3：非 2xx 后的明文重发
+    // 第二次仍是加密重试，而不是不可用的明文
     expect(upstream[2].url).toBe(CHAT_URL);
     expect(upstream[2].body).toEqual(bodyObj);
-    expect(recordedHeader(upstream[2].headers, "x-encrypt-algo")).toBeNull();
+    expect(recordedHeader(upstream[2].headers, "x-encrypt-algo")).toBe("sm4-gcm");
     expect(recordedHeader(upstream[2].headers, "x-ot-trace-id")).toBe("trace-1");
-    expect(recordedHeader(upstream[2].headers, "authorization")).toBe("<redacted>");
-    expect(upstream[2].response.status).toBe(200);
-    expect(upstream[2].response.body).toBe('data: {"ok":1}\n\n');
-    expect(upstream[2].response.complete).toBe(true);
+    expect(upstream[2].response.status).toBe(500);
 
     // 尝试按发生顺序
     expect(upstream[0].t_ms).toBeLessThanOrEqual(upstream[1].t_ms);
@@ -246,7 +244,7 @@ describe("snap.chat request-scoped attempts", () => {
     expect(encryptedAttempt.response.complete).toBe(true);
   });
 
-  test("records the plaintext fallback when key-exchange itself fails", async () => {
+  test("key-exchange failure rejects instead of sending a useless plaintext chat", async () => {
     const { fetch: fake } = recordingFetch((call) => {
       if (call.url === KEY_EXCHANGE_URL) return new Response("KX_DOWN", { status: 500 });
       return new Response('data: {"ok":1}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } });
@@ -254,50 +252,75 @@ describe("snap.chat request-scoped attempts", () => {
 
     const trace = startRequestTrace(inbound(), { dir })!;
     const snap = new SnapClient("https://snap.test", fake);
-    let status = 0;
+    let error: any;
     try {
-      status = (await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-3" }, chatBody())).status;
+      await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-3" }, chatBody());
+    } catch (e) {
+      error = e;
     } finally {
       await trace.finish(Response.json({ ok: true }));
     }
 
-    expect(status).toBe(200);
+    expect(String(error?.message)).toContain("key exchange failed");
     const upstream = readRecords()[0].upstream;
-    expect(upstream.map((u: any) => u.url)).toEqual([KEY_EXCHANGE_URL, CHAT_URL]);
+    expect(upstream.map((u: any) => u.url)).toEqual([KEY_EXCHANGE_URL]);
     expect(upstream[0].response.status).toBe(500);
     expect(upstream[0].response.body).toBe("KX_DOWN");
-    expect(upstream[1].body).toEqual(chatBody());
-    expect(recordedHeader(upstream[1].headers, "x-encrypt-algo")).toBeNull();
-    expect(upstream[1].response.status).toBe(200);
   });
 
-  test("records the plaintext resend after an encrypted network error", async () => {
+  test("an encrypted network error is retried once, then surfaced without plaintext chat", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
     const { fetch: fake } = recordingFetch((call) => {
       if (call.url === KEY_EXCHANGE_URL) return Response.json({ serverPublicKey, keyId: "kid-1", expiresIn: 3600 });
-      if (headerValue(call, "X-Encrypt-Algo")) throw new Error("socket closed");
-      return new Response('data: {"ok":1}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } });
+      throw new Error("socket closed");
     });
 
     const trace = startRequestTrace(inbound(), { dir })!;
     const snap = new SnapClient("https://snap.test", fake);
-    let status = 0;
+    let error: any;
     try {
-      status = (await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-4" }, chatBody())).status;
+      await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-4" }, chatBody());
+    } catch (e) {
+      error = e;
     } finally {
       await trace.finish(Response.json({ ok: true }));
     }
 
-    expect(status).toBe(200);
+    expect(String(error?.message)).toContain("upstream network error");
     const upstream = readRecords()[0].upstream;
+    // key-exchange + 两次加密尝试；没有明文尝试
     expect(upstream).toHaveLength(3);
     expect(upstream[1].response.status).toBe(0);
     expect(upstream[1].response.complete).toBe(false);
     expect(recordedHeader(upstream[1].headers, "x-encrypt-algo")).toBe("sm4-gcm");
-    expect(upstream[2].body).toEqual(chatBody());
-    expect(recordedHeader(upstream[2].headers, "x-encrypt-algo")).toBeNull();
-    expect(upstream[2].response.status).toBe(200);
+    expect(upstream[2].response.status).toBe(0);
+    expect(upstream[2].response.complete).toBe(false);
+    expect(recordedHeader(upstream[2].headers, "x-encrypt-algo")).toBe("sm4-gcm");
+  });
+
+  test("a stalled upstream body fails with an idle timeout", async () => {
+    process.env.CODEARTS_UPSTREAM_IDLE_TIMEOUT_MS = "50";
+    const server = createECDH("prime256v1");
+    const serverPublicKey = server.generateKeys().toString("base64");
+    const { fetch: fake } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL) return Response.json({ serverPublicKey, keyId: "kid-1", expiresIn: 3600 });
+      return new Response(new ReadableStream<Uint8Array>({ start() { /* 永不产出 */ } }), {
+        status: 200,
+        headers: { "X-Encrypt-Algo": "sm4-gcm", "X-Encrypt-Key-Id": "kid-1", "Content-Type": "text/event-stream" },
+      });
+    });
+
+    // 不开请求上下文：trace 的上游旁路会一直等这条卡住的流，测试无法收尾
+    const snap = new SnapClient("https://snap.test", fake);
+    const res = await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-idle" }, chatBody());
+    let error: any;
+    try {
+      await res.text();
+    } catch (e) {
+      error = e;
+    }
+    expect(String(error?.message)).toContain("upstream idle timeout");
   });
 
   test("KEY_EXPIRED re-negotiates the key and records the retry attempts", async () => {
