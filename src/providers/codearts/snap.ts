@@ -306,7 +306,7 @@ export class HeartbeatManager {
   }
 
   /** 响应检查（两条发送路径共享）：非 2xx warn（含状态码与响应片段）、网络异常 error；成功静默 */
-  private async checkHeartbeat(sessionId: string, status: "busy" | "idle", send: () => Promise<Response>): Promise<void> {
+  private async sendHeartbeat(sessionId: string, status: "busy" | "idle", send: () => Promise<Response>): Promise<void> {
     let resp: Response;
     try {
       resp = await send();
@@ -323,7 +323,7 @@ export class HeartbeatManager {
   /** 请求链内发送：走请求记录入口（无请求上下文时自然 no-op） */
   private async sendRecorded(sessionId: string, status: "busy" | "idle"): Promise<void> {
     const { url, headers, body } = this.buildHeartbeat(sessionId, status);
-    await this.checkHeartbeat(sessionId, status, () =>
+    await this.sendHeartbeat(sessionId, status, () =>
       traceUpstream({ method: "PUT", url, headers, body }, { fetch: this.fetchImpl }),
     ).catch(() => {});
   }
@@ -331,7 +331,7 @@ export class HeartbeatManager {
   /** 定时器 / idle 等后台发送：显式用原始 fetch，不继承请求上下文 */
   private async sendBackground(sessionId: string, status: "busy" | "idle"): Promise<void> {
     const { url, headers, body } = this.buildHeartbeat(sessionId, status);
-    await this.checkHeartbeat(sessionId, status, () =>
+    await this.sendHeartbeat(sessionId, status, () =>
       this.fetchImpl(url, { method: "PUT", headers, body }),
     ).catch(() => {});
   }
