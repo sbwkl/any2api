@@ -8,7 +8,6 @@ import {
   markAbort,
   runWithRequestTrace,
   startRequestTrace,
-  startTraceCapture,
   traceUpstream,
 } from "./trace";
 
@@ -18,14 +17,12 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "any2api-trace-"));
   delete process.env.TRACE_CAPTURE_DIR;
   delete process.env.UPSTREAM_DUMP_DIR;
-  delete process.env.TRACE_CAPTURE_MAX_BYTES;
 });
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
   delete process.env.TRACE_CAPTURE_DIR;
   delete process.env.UPSTREAM_DUMP_DIR;
-  delete process.env.TRACE_CAPTURE_MAX_BYTES;
 });
 
 function today(): string {
@@ -179,8 +176,7 @@ describe("request record (schema 2)", () => {
     expect(rec.raw_request).toBeUndefined();
   });
 
-  test("records bodies in full regardless of the legacy size variable", async () => {
-    process.env.TRACE_CAPTURE_MAX_BYTES = "8";
+  test("records large bodies in full", async () => {
     const big = "x".repeat(100_000);
     const trace = startRequestTrace(inbound("/v1/messages", { method: "POST", body: JSON.stringify({ text: big }) }), { dir })!;
     await trace.finish(new Response(big));
@@ -243,6 +239,25 @@ describe("streamed outbound response (L4)", () => {
     // 旧缺陷：duration_ms 被记成首字节耗时。现在必须覆盖完整流时长。
     expect(rec.response.duration_ms - (rec.response.first_byte_ms ?? 0)).toBeGreaterThanOrEqual(20);
     expect(rec.response.complete).toBe(true);
+  });
+
+  test("uses the header return time as first_byte_ms when the response has no body", async () => {
+    const noContent = startRequestTrace(jsonRequest(), { dir })!;
+    await noContent.finish(new Response(null, { status: 204 }));
+    const empty = startRequestTrace(jsonRequest(), { dir })!;
+    await empty.finish(new Response("", { status: 200, headers: { "content-type": "text/plain" } }));
+
+    const [a, b] = readRecords();
+    expect(a.response.status).toBe(204);
+    expect(a.response.body).toBe("");
+    expect(a.response.complete).toBe(true);
+    expect(typeof a.response.first_byte_ms).toBe("number");
+    expect(a.response.first_byte_ms).toBeGreaterThanOrEqual(0);
+    expect(b.response.status).toBe(200);
+    expect(b.response.body).toBe("");
+    expect(b.response.complete).toBe(true);
+    expect(typeof b.response.first_byte_ms).toBe("number");
+    expect(b.response.first_byte_ms).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -396,12 +411,65 @@ describe("request-scoped tracing (runWithRequestTrace)", () => {
       }, { dir }),
     ).rejects.toThrow();
 
+    await flushRequestTraces();
     const records = readRecords();
     expect(records).toHaveLength(2);
     expect(records[0].response.status).toBe(500);
     expect(records[0].response.complete).toBe(false);
     expect(records[0].response.abort_reason).toBe("proxy_error");
     expect(records[1].response.abort_reason).toBe("timeout");
+  });
+
+  test("fails the response immediately while an upstream stream is still open", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // 兜底：旧实现会等待 pending 上游流；到时释放避免测试挂死
+    const safety = setTimeout(() => release(), 1000);
+    const upstreamFetch = async () =>
+      new Response(
+        new ReadableStream({
+          async start(c) {
+            c.enqueue(encoder.encode("partial"));
+            await gate;
+            c.close();
+          },
+        }),
+      );
+
+    const startedAt = Date.now();
+    let caught: unknown;
+    try {
+      await runWithRequestTrace(
+        jsonRequest(),
+        async () => {
+          await traceUpstream(
+            { method: "POST", url: "https://upstream/sse", headers: {}, body: "{}" },
+            { fetch: upstreamFetch },
+          );
+          throw new Error("boom");
+        },
+        { dir },
+      );
+    } catch (error) {
+      caught = error;
+    }
+    const elapsed = Date.now() - startedAt;
+    clearTimeout(safety);
+    release();
+
+    expect((caught as Error | undefined)?.message).toBe("boom");
+    // 不得等待上游 pending 流结束才把异常抛给调用方
+    expect(elapsed).toBeLessThan(500);
+
+    await flushRequestTraces();
+    const rec = readRecords()[0];
+    expect(rec.response.status).toBe(500);
+    expect(rec.response.complete).toBe(false);
+    expect(rec.response.abort_reason).toBe("proxy_error");
+    expect(rec.upstream[0].response.body).toBe("partial");
+    expect(rec.upstream[0].response.complete).toBe(true);
   });
 
   test("marks client_disconnect when the inbound request aborts before the stream ends", async () => {
@@ -460,22 +528,5 @@ describe("request-scoped tracing (runWithRequestTrace)", () => {
     expect(rec.response.body).toBe("partial");
     expect(rec.response.complete).toBe(false);
     expect(rec.response.abort_reason).toBe("upstream_error");
-  });
-});
-
-describe("legacy wrapper", () => {
-  test("startTraceCapture delegates to the schema 2 recorder", async () => {
-    expect(startTraceCapture(jsonRequest())).toBeNull();
-
-    const capture = startTraceCapture(jsonRequest(), { dir })!;
-    expect(capture).not.toBeNull();
-    await capture.finish(Response.json({ ok: true }), 12);
-
-    const rec = readRecords()[0];
-    expect(rec.schema).toBe(2);
-    expect(rec.path).toBe("/codearts/v1/chat/completions");
-    expect(rec.provider).toBe("codearts");
-    expect(rec.response.status).toBe(200);
-    expect(rec.response.duration_ms).toBe(12);
   });
 });
