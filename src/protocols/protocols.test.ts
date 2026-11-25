@@ -3,6 +3,7 @@ import { createProtocolRoutes } from "./index";
 import { responsesToOpenAi } from "./responses";
 import { PROXY_ERROR_HEADER } from "../shared/errors";
 import type { ChatBackend } from "./types";
+import { CODEARTS_PROTOCOL_CAPABILITIES } from "../providers/codearts/protocol-capabilities";
 
 const completion = {
   id: "1", model: "m", created: 1,
@@ -373,5 +374,60 @@ describe("shared protocol routes (codearts capabilities)", () => {
     const b: any = await (await dispatch(withCap, "/v1/messages", "POST", body)).json();
     expect(a.usage.input_tokens).toBe(31);
     expect(b.usage.input_tokens).toBe(24);
+  });
+});
+
+// CodeArts 的「未缓存输入」语义：能力位驱动共享 Anthropic 映射，
+// 在共享路由 seam 上用假 backend 锁定，离线确定性。证据见 spec #14 / ticket #15。
+describe("CodeArts Anthropic usage semantics", () => {
+  const usage = {
+    prompt_tokens: 31,
+    completion_tokens: 5,
+    total_tokens: 36,
+    prompt_tokens_details: { cached_tokens: 7, cache_creation_tokens: 2 },
+  };
+  const withUsage = { ...completion, usage };
+  const body = { model: "m", max_tokens: 10, messages: [{ role: "user", content: "hi" }] };
+
+  function streamText(frames: string[]): Promise<string> {
+    return (async () => {
+      const local = createProtocolRoutes(makeBackend({
+        respond: async () => new Response(frames.join("\n"), { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+      }), CODEARTS_PROTOCOL_CAPABILITIES);
+      return (await dispatch(local, "/v1/messages", "POST", { ...body, stream: true })).text();
+    })();
+  }
+
+  function messageDeltaUsage(text: string): any {
+    const line = text.split("\n").find((l) => l.startsWith('data: {"type":"message_delta"'));
+    if (!line) throw new Error("no message_delta frame");
+    return JSON.parse(line.slice("data: ".length)).usage;
+  }
+
+  test("CodeArts capability declares promptTokensIncludeCache = true", () => {
+    expect(CODEARTS_PROTOCOL_CAPABILITIES.promptTokensIncludeCache).toBe(true);
+  });
+
+  test("non-stream Anthropic usage reports uncached input_tokens and preserves cache parts", async () => {
+    const local = createProtocolRoutes(makeBackend({ respond: async () => Response.json(withUsage) }), CODEARTS_PROTOCOL_CAPABILITIES);
+    const j: any = await (await dispatch(local, "/v1/messages", "POST", body)).json();
+    expect(j.usage.input_tokens).toBe(22);
+    expect(j.usage.cache_read_input_tokens).toBe(7);
+    expect(j.usage.cache_creation_input_tokens).toBe(2);
+  });
+
+  test("streaming Anthropic final usage reports the same uncached input_tokens semantics", async () => {
+    const text = await streamText([
+      `data: ${JSON.stringify({ id: "1", model: "m", created: 1, choices: [{ index: 0, delta: { role: "assistant", content: "hi" } }] })}`,
+      "",
+      `data: ${JSON.stringify({ id: "1", model: "m", created: 1, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage })}`,
+      "",
+      "data: [DONE]",
+      "",
+    ]);
+    const u = messageDeltaUsage(text);
+    expect(u.input_tokens).toBe(22);
+    expect(u.cache_read_input_tokens).toBe(7);
+    expect(u.cache_creation_input_tokens).toBe(2);
   });
 });
