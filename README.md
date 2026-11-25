@@ -174,7 +174,7 @@ resp = client.chat.completions.create(
 
 ## 一致性 e2e（实弹）
 
-`bun test` 只跑离线单测；实弹矩阵会启动本地服务并真实调用 CodeBuddy / CodeArts 上游，**消耗真实 token**。两个 provider 共用同一份 28 个场景模板，按相同顺序执行；provider 只改变结果，不改变场景清单或判定逻辑。当前状态以 [`docs/generated/e2e-baseline.html`](docs/generated/e2e-baseline.html)（人类可读，跨 provider 对照矩阵 + 按 provider 分区的场景证据）与 [`docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md`](docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md) 的缺陷清单为准；[`e2e-baseline.json`](docs/generated/e2e-baseline.json) 保留机器可读原文与场景集覆盖元数据，[`e2e-baseline.md`](docs/generated/e2e-baseline.md) 只是入口。
+`bun test` 只跑离线单测；实弹矩阵会启动本地服务并真实调用 CodeBuddy / CodeArts 上游，**消耗真实 token**。两个 provider 共用同一份 29 个场景模板，按相同顺序执行；provider 只改变结果，不改变场景清单或判定逻辑。当前状态以 [`docs/generated/e2e-baseline.html`](docs/generated/e2e-baseline.html)（人类可读，跨 provider 对照矩阵 + 按 provider 分区的场景证据；注意该基线是 2026-11-24 的 28 场景快照，早于缓存语义场景）与 [`docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md`](docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md) 的缺陷清单为准；[`e2e-baseline.json`](docs/generated/e2e-baseline.json) 保留机器可读原文与场景集覆盖元数据，[`e2e-baseline.md`](docs/generated/e2e-baseline.md) 只是入口。
 
 ```bash
 E2E_MAX_CALLS=60 E2E_RECORD=1 bun run e2e --baseline   # 一轮全矩阵，基线写入 docs/generated/
