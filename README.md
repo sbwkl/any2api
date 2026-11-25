@@ -15,7 +15,7 @@ src/
 ├── shared/
 │   ├── ids.ts                # 通用 ID 生成（跨 provider 复用）
 │   ├── sse.ts                # 通用 SSE 解析 + chat.completion 聚合
-│   └── trace.ts              # 入站流量采集 + 上游请求转储（opt-in）
+│   └── trace.ts              # 四层请求记录（schema 2）+ 上游请求转储（opt-in）
 ├── protocols/                # 共享协议层（只依赖 ChatBackend，不感知 provider 名称）
 │   ├── index.ts              # createProtocolRoutes（models/chat/messages/responses/health）
 │   ├── types.ts              # ChatBackend / ProtocolCapabilities
@@ -84,6 +84,8 @@ bun src/index.ts
 | `CODEBUDDY_GENIE_HOME` | 本机 CodeBuddy 安装路径 | codebuddy 产品配置/提示词来源 |
 | `CODEBUDDY_STATE_DB` | CodeBuddy 的 `state.vscdb` | 凭证与云端产品缓存来源（测试或自定义路径） |
 | `CODEBUDDY_PRODUCT_CACHE` | `1` | codebuddy 是否读取云端产品缓存（`0` 关闭，回退 product.json） |
+| `TRACE_CAPTURE_DIR` | 空（关闭） | 四层请求记录输出目录（opt-in）；按天写 `capture-YYYY-MM-DD.jsonl`，详见「请求采集（opt-in）」 |
+| `UPSTREAM_DUMP_DIR` | 空（关闭） | 上游请求转储目录（e2e 依赖）；追加写 `upstream.jsonl`，不改动 |
 
 ## 使用方式
 
@@ -155,6 +157,21 @@ resp = client.chat.completions.create(
 - token 过期：401 时调用 `/v2/plugin/auth/token/refresh` 刷新并重试一次；失败提示重新登录。
 - 无需 IDE 在线；Keychain 授权只需一次。
 
+## 请求采集（opt-in）
+
+默认关闭；设置 `TRACE_CAPTURE_DIR` 后，每个入站请求（含 `/healthz`、404）产生一行 JSONL（`capture-YYYY-MM-DD.jsonl`，`schema: 2`），一次请求的记录内嵌四层观测：
+
+- **L1 入站请求**：方法、路径、请求头（Authorization / x-api-key / cookie 等敏感值记 `<redacted>`）、解析后的请求 JSON；解析失败时改记 `raw_request` 原文。
+- **L2 上游请求**：请求上下文内的每次上游调用按发生顺序进入 `upstream[]`，含方法、URL、请求头（同样脱敏）与加密 / gzip 前的明文 body；401 刷新重发、排队重试、加密协商重发各算一次尝试。
+- **L3 上游原始响应**：每次尝试的原始状态、头、完整响应文本（SSE 原文）与网络 chunk 到达时间（`t_ms` / `bytes`）。
+- **L4 出站响应**：状态、头、`content_type`、重组后的完整正文、`first_byte_ms` / `duration_ms`、`complete` 与 `abort_reason`。
+
+请求结束（流式为流结束）时一次性追加；运行时可识别的中断记 `complete:false`，`abort_reason` 取 `client_disconnect` / `upstream_error` / `timeout` / `proxy_error`。记录不截断、不轮转、不清理（按天文件持续保留，删除由用户手工执行），新文件权限 `0600`；写入失败静默，不影响响应内容与延迟。后台主动调用（心跳、遥测上报、凭证保活、消息中心轮询、启动时模型发现）不继承请求上下文，因此不进入记录。
+
+提示：记录含提示词、工具内容等明文，仅建议在本地私有环境开启；磁盘占用无上限。
+
+`UPSTREAM_DUMP_DIR` 是独立开关（e2e 依赖，行为保持不变）：只把翻译后的上游请求 body 追加到 `upstream.jsonl`，供 e2e 做「字段是否被静默丢弃」的结构断言，不随四层记录变化。
+
 ## 一致性 e2e（实弹）
 
 `bun test` 只跑离线单测；实弹矩阵会启动本地服务并真实调用 CodeBuddy / CodeArts 上游，**消耗真实 token**。两个 provider 共用同一份 28 个场景模板，按相同顺序执行；provider 只改变结果，不改变场景清单或判定逻辑。当前状态以 [`docs/generated/e2e-baseline.html`](docs/generated/e2e-baseline.html)（人类可读，跨 provider 对照矩阵 + 按 provider 分区的场景证据）与 [`docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md`](docs/exec-plans/active/2026-11-24-e2e-conformance-suite.md) 的缺陷清单为准；[`e2e-baseline.json`](docs/generated/e2e-baseline.json) 保留机器可读原文与场景集覆盖元数据，[`e2e-baseline.md`](docs/generated/e2e-baseline.md) 只是入口。
@@ -162,7 +179,7 @@ resp = client.chat.completions.create(
 ```bash
 E2E_MAX_CALLS=60 E2E_RECORD=1 bun run e2e --baseline   # 一轮全矩阵，基线写入 docs/generated/
 E2E_ONLY=image bun run e2e                             # 只跑 id 含 image 的场景
-bun run e2e:corpus [dir]                               # 对入站采集 JSONL 做 L1 校验（默认 e2e/corpus）
+bun run e2e:corpus [dir]                               # 对入站采集 JSONL 做 L1 校验（默认 e2e/corpus；仍按 v1 记录字段解析，schema 2 记录未适配）
 ```
 
 | 环境变量 | 默认 | 说明 |
@@ -178,7 +195,7 @@ bun run e2e:corpus [dir]                               # 对入站采集 JSONL �
 | `E2E_IMAGE_URL` | `https://pic.rmb.bdstatic.com/bjh/news/49a357178ac9972519fab6f835ba61aa.jpeg` | 公网图片 URL；默认公共图片，可用 env 覆盖 |
 | `E2E_FIXTURES_DIR` / `E2E_REPORTS_DIR` | `e2e/fixtures` / `e2e/reports` | 产物目录；`e2e/reports/` 已 gitignore |
 
-报告写入 `e2e/reports/latest.html`（一张跨 provider 对照矩阵，状态筛选、点击状态格展开对应 provider 的输入 / 上游请求 / 输出摘要）与 `latest.json`（含入站请求、上游请求与响应原文，单条 ≤64KB，并记录 `scenarioSet` / `coverage`）。观测开关：`TRACE_CAPTURE_DIR` 采集入站 JSONL（Authorization / x-api-key / cookie 等记为 `<redacted>`，单条 ≤256KB，按天轮转）；`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求 JSONL，供「字段是否被静默丢弃」的结构断言。
+报告写入 `e2e/reports/latest.html`（一张跨 provider 对照矩阵，状态筛选、点击状态格展开对应 provider 的输入 / 上游请求 / 输出摘要）与 `latest.json`（含入站请求、上游请求与响应原文，单条 ≤64KB，并记录 `scenarioSet` / `coverage`）。观测开关：`UPSTREAM_DUMP_DIR` 记录翻译后的上游请求 JSONL，供「字段是否被静默丢弃」的结构断言（e2e 依赖，行为不变）；`TRACE_CAPTURE_DIR` 的四层请求记录见上节「请求采集（opt-in）」，e2e 子进程也会开启并写入临时目录，但不参与报告断言。
 
 ## 已知限制
 

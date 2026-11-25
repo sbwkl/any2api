@@ -1,7 +1,10 @@
 // 遥测仿真器（最小 OTLP/JSON）— spec §5.3：与 chat 同 traceId 的 trace/log，5s 或 30 条批量
 // UA=OTel-OTLP-Exporter-JavaScript；Sh 签名（signBody:false → UNSIGNED-PAYLOAD）
+// D12：遥测属于后台主动调用，直接用原始 fetch（不经 traceUpstream），无论由定时器还是
+// 请求上下文内的批量满触发 flush 都不得进入四层记录。
 import { signSh } from "./signer";
 import { getCredentials } from "./config";
+import type { FetchLike } from "../../shared/trace";
 
 const TRACE_URL = "https://collector-agents-access.cn-north-4.myhuaweicloud.com/collector/v1/traces";
 const LOG_URL = "https://collector-agents-access.cn-north-4.myhuaweicloud.com/collector/v1/logs";
@@ -18,7 +21,7 @@ export class TelemetrySimulator {
   private logs: LogRecord[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private enabled: boolean, private serviceName: string) {
+  constructor(private enabled: boolean, private serviceName: string, private fetchImpl: FetchLike = fetch) {
     if (enabled) this.timer = setInterval(() => this.flush().catch(() => {}), BATCH_DELAY_MS);
   }
 
@@ -103,7 +106,7 @@ export class TelemetrySimulator {
     const headers = signSh({ method: "POST", endpoint: url, headers: { "Content-Type": "application/json" } }, getCredentials(), { signBody: false });
     headers["User-Agent"] = "OTel-OTLP-Exporter-JavaScript";
     try {
-      const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
+      const resp = await this.fetchImpl(url, { method: "POST", headers, body: JSON.stringify(payload) });
       if (!resp.ok) await resp.text().catch(() => {});
     } catch {}
   }

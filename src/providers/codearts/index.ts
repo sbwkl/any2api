@@ -12,6 +12,7 @@ import {
 } from "./refresher";
 import { createProtocolRoutes, type ChatBackend } from "../../protocols";
 import { mountProviders, type ProviderModule, type ProviderInstance } from "../../registry";
+import { traceUpstream } from "../../shared/trace";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -60,10 +61,13 @@ export async function createProvider(): Promise<ProviderInstance> {
   const telemetry = new TelemetrySimulator(process.env.OTLP_ENABLED !== "false", process.env.OTLP_SERVICE_NAME ?? "codeagent-kernel");
 
   // 启动旁路信号：statistics/plugin（真实客户端启动/git-ai 判定时调用）
-  fetch(`${snapOrigin}/snap-manager/v1/statistics/plugin`, {
+  // 启动上下文无请求 store，共享记录入口自然 no-op
+  const statisticsUrl = `${snapOrigin}/snap-manager/v1/statistics/plugin`;
+  traceUpstream({
     method: "GET",
+    url: statisticsUrl,
     headers: signSh(
-      { method: "GET", endpoint: `${snapOrigin}/snap-manager/v1/statistics/plugin`, headers: { "Content-Type": "application/json" } },
+      { method: "GET", endpoint: statisticsUrl, headers: { "Content-Type": "application/json" } },
       creds,
     ),
   }).then((r) => console.log(`[codearts] statistics/plugin -> ${r.status}`)).catch(() => {});
