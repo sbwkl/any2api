@@ -250,31 +250,35 @@ export function anthropicScenarios(): ScenarioTemplate[] {
           "You are a terse assistant embedded in a long-lived cached system prompt. ".repeat(880);
         const userText = "Reply with exactly: OK";
 
+        const marker = crypto.randomUUID();
+        const body = (maxTokens: number) => ({
+          model: ctx.model,
+          max_tokens: maxTokens,
+          system: cachePrompt(marker),
+          messages: [{ role: "user", content: userText }],
+        });
+        const callJson = async (label: string, maxTokens: number) => {
+          const res = await call(ctx, "/v1/messages", { body: body(maxTokens) });
+          const { json, error } = jsonOf(res);
+          if (res.status !== 200 || error || !json) {
+            throw new Error(`${label}请求 HTTP ${res.status}；${error ?? truncate(res.text)}`);
+          }
+          return json;
+        };
+
         let first: any;
         let second: any;
         let attempts = 0;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          attempts = attempt + 1;
-          const marker = crypto.randomUUID();
-          const body = (maxTokens: number) => ({
-            model: ctx.model,
-            max_tokens: maxTokens,
-            system: cachePrompt(marker),
-            messages: [{ role: "user", content: userText }],
-          });
-          const firstRes = await call(ctx, "/v1/messages", { body: body(32) });
-          const firstJson = jsonOf(firstRes);
-          if (firstRes.status !== 200 || firstJson.error || !firstJson.json) {
-            return fail(`第一次请求 HTTP ${firstRes.status}；${firstJson.error ?? truncate(firstRes.text)}`);
+        try {
+          attempts = 1;
+          first = await callJson("第一次", 32);
+          for (let retry = 0; retry < 2; retry++) {
+            attempts += 1;
+            second = await callJson("第二次", 32);
+            if ((second?.usage?.cache_read_input_tokens ?? 0) > 0) break;
           }
-          const secondRes = await call(ctx, "/v1/messages", { body: body(32) });
-          const secondJson = jsonOf(secondRes);
-          if (secondRes.status !== 200 || secondJson.error || !secondJson.json) {
-            return fail(`第二次请求 HTTP ${secondRes.status}；${secondJson.error ?? truncate(secondRes.text)}`);
-          }
-          first = firstJson.json;
-          second = secondJson.json;
-          if ((second?.usage?.cache_read_input_tokens ?? 0) > 0) break;
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
         }
 
         const firstUsage = first?.usage ?? {};
@@ -286,7 +290,7 @@ export function anthropicScenarios(): ScenarioTemplate[] {
 
         if (firstRead !== 0) return fail(`第一次 cache_read_input_tokens 应为 0（实际 ${firstRead}）`);
         if (secondRead <= 0) {
-          return fail(`重试 ${attempts} 次后第二次仍无缓存命中（cache_read_input_tokens=${secondRead}）`);
+          return fail(`尝试 ${attempts} 次后第二次仍无缓存命中（cache_read_input_tokens=${secondRead}）`);
         }
         if (!(typeof firstInput === "number" && typeof secondInput === "number")) {
           return fail(`usage.input_tokens 非数字（first=${firstInput}，second=${secondInput}）`);

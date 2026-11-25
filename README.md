@@ -184,7 +184,7 @@ bun run e2e:corpus [dir]                               # 对入站采集 JSONL �
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
-| `E2E_MAX_CALLS` | `200` | 模型调用硬上限；`models` / `healthz` 不计。全矩阵约 54 次 |
+| `E2E_MAX_CALLS` | `200` | 模型调用硬上限；`models` / `healthz` 不计。全矩阵约 54 次；新增缓存语义场景后每 provider 2–4 次（`E2E_ONLY=messages.usage.cache_semantics E2E_MAX_CALLS=6` 定点复测），全矩阵按 `E2E_MAX_CALLS` 预算控制 |
 | `E2E_PROVIDERS` | `codearts,codebuddy` | 参与矩阵的 provider |
 | `E2E_MODEL_PREFERENCE` | `GLM-5.3-Flash,DeepSeek-v4.1-Flash(1017)` | 优先模型，逗号分隔；大小写不敏感、容忍括号后缀 |
 | `E2E_MODEL_FALLBACK` | 空 | 偏好都不存在时的指定模型；仍无则启发式选 flash/mini/lite/small，绝不静默取 `models[0]` |
