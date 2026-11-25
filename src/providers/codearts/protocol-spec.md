@@ -363,10 +363,12 @@ JS 对象构造序 → fetch 按插入序发出（Bun undici-ish）。拟真顺�
 
 | 层 | 字段 | 值 |
 |---|---|---|
-| L4（上游响应） | `usage.input_tokens` | 127,983 |
-| L4（上游响应） | `usage.cache_read_input_tokens` | 127,232 |
-| L4（上游响应） | `usage.cache_creation_input_tokens` | 0 |
+| L4（出站响应，翻译后） | `usage.input_tokens` | 127,983 |
+| L4（出站响应，翻译后） | `usage.cache_read_input_tokens` | 127,232 |
+| L4（出站响应，翻译后） | `usage.cache_creation_input_tokens` | 0 |
 | L1（入站请求） | 请求体规模 | 约 467,744 字符 |
+
+注：上游原始响应（L3）为 SM4 加密的 SSE 原文，未直接读取；结论依据为 L4 出站响应（翻译后）加 L1 请求体规模（约 467,744 字符，按约 3.65 字符/token 折算约 128k tokens）。
 
 按约 3.65 字符/token 折算，L1 约 128k tokens，与 `input_tokens=127,983` 同量级；若 127,983 是未缓存输入，总输入将达 ~256k tokens，与请求体规模不符。故 127,983 是**总输入**而非未缓存输入，真实未缓存输入约 751（127,983 − 127,232）。
 

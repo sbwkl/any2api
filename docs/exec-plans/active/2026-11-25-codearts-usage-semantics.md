@@ -1,12 +1,13 @@
 # CodeArts Anthropic usage 未缓存输入语义修复
 
 类型：修复（CodeArts provider + 共享协议能力位）
-状态：开发中（本地验证通过，未合并）
+状态：已验证（未合并，待评审修复完成后合并）
 Owner：wayne
 所属模块/入口：`src/providers/codearts/`、`src/protocols/`
 功能卡：[CodeBuddy provider](../../product-specs/codebuddy-provider.md)（R37）
 关联：[R37](../../product-specs/codebuddy-provider.md)、[2026-11-23-usage-field-semantics](2026-11-23-usage-field-semantics.md)、[2026-11-24-e2e-conformance-suite](2026-11-24-e2e-conformance-suite.md)
 上游规格：[codearts/protocol-spec.md](../../../src/providers/codearts/protocol-spec.md) §7.3.1
+验证命令：测试 `bun test`；编译/构建/静态检查 `bun build src/index.ts --target=bun`；文档结构与本地链接检查：未配置；待补。
 
 ## 1. 摘要
 
@@ -52,10 +53,13 @@ CodeArts 上游 OpenAI Chat usage 的 `prompt_tokens` 是**总输入**（含缓�
   - 关键断言：能力位 `promptTokensIncludeCache === true`；假 backend 返回 `prompt_tokens=31 / cached=7 / creation=2` 时非流式与流式均得 `input_tokens=22`，且 `cache_read=7` / `cache_creation=2` 保留。
 - **构建**：`bun build src/index.ts --target=bun` → exit 0。
 - **定点 e2e（只跑新场景 `messages.usage.cache_semantics`，真实 token）**：
+  - 命令：`E2E_ONLY=messages.usage.cache_semantics E2E_MAX_CALLS=6 ~/.bun/bin/bun run e2e`
+  - 预算：每个 provider 最少 2 次调用（首次 + 第二次）；第二次未命中最多重试 2 次，每 provider 最多 4 次；两 provider 合计最少 4 / 最多 8 次。`E2E_MAX_CALLS=6` 不足以跑满两 provider 的最坏情况（8 次），预算不足时余下场景记 skipped(budget)。
   - CodeArts：第一次 `input=12371 / read=0`，第二次 `input=19 / read=12352` → pass。
   - CodeBuddy：第一次 `input=12373 / read=0`，第二次 `input=21 / read=12352` → pass。
   - 场景集计数 28 → 29；两 provider 执行同一判定，不按 provider 分支。
-- **场景前缀调整**：初版用约 4k 字符 system 无法稳定越过上游可缓存前缀阈值（阈值在 ~1.3k tokens 以上），改为约 64k 字符（880 段重复句 + 唯一 marker）保证首轮冷缓存；第二次无命中时最多重试 2 次，仍无命中判 fail 而非 skip。
+- **场景前缀调整**：初版用约 4k 字符 system（spec 猜测值）无法稳定越过上游可缓存前缀阈值（阈值在 ~1.3k tokens 以上），改为约 64k 字符（880 段重复句 + 唯一 marker，约 16k tokens）保证首轮冷缓存；第二次无命中时最多重试 2 次，仍无命中判 fail 而非 skip。断言为相对比较（第二次 `cache_read>0` 且 `input_tokens` 小于第一次），不钉死具体模型。
+- **术语说明**：本变更在 GLOSSARY 增加「未缓存输入」术语条目，是评审 Q2 约定的改动，不属于范围蔓延；`GLOSSARY.md` 本次评审修复不再改动。
 - **未做**：`message_start` 路径的 usage 断言（#18）；cc-switch 行级回归；全量基线重跑。
 
 ## 6. 回滚方案

@@ -166,6 +166,7 @@ Owner：wayne
 | 2026-11-23-usage-field-semantics | 修复三协议 usage 字段语义（Anthropic / Chat / Responses） | 进行中 | [2026-11-23-usage-field-semantics](../exec-plans/active/2026-11-23-usage-field-semantics.md) |
 | 2026-11-24-anthropic-tool-assembly | 修复 Anthropic 消息组装：图片丢失、工具调用拆分、静默空回答（R40–R43） | 进行中 | [2026-11-24-anthropic-tool-assembly](../exec-plans/active/2026-11-24-anthropic-tool-assembly.md) |
 | 2026-11-24-e2e-conformance-suite | 实弹 e2e 相似度矩阵与基线（测试基础设施，暴露的缺口另开分支修复） | 已验证（未合并） | [2026-11-24-e2e-conformance-suite](../exec-plans/active/2026-11-24-e2e-conformance-suite.md) |
+| 2026-11-25-codearts-usage-semantics | CodeArts Anthropic usage 未缓存输入语义修复（R37） | 开发中 | [2026-11-25-codearts-usage-semantics](../exec-plans/active/2026-11-25-codearts-usage-semantics.md) |
 
 ## 11. 链接
 

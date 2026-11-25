@@ -12,22 +12,6 @@ describe("scenario set", () => {
     }
   });
 
-  test("cache semantics scenario shares the same metadata for both providers", () => {
-    const templates = baseScenarios();
-    const scenarios = buildScenarios(["codearts", "codebuddy"]);
-    const id = "messages.usage.cache_semantics";
-    const template = templates.find((t) => t.id === id);
-    expect(template).toBeDefined();
-    expect(template!.endpoint).toBe("/v1/messages");
-    for (const provider of ["codearts", "codebuddy"] as const) {
-      const bound = scenarios.find((s) => s.provider === provider && s.id === id);
-      expect(bound).toBeDefined();
-      expect(bound!.endpoint).toBe("/v1/messages");
-      expect(bound!.feature).toBe(template!.feature);
-      expect(bound!.clause).toBe(template!.clause);
-    }
-  });
-
   test("every provider gets the exact same scenario sequence and metadata", () => {
     const templates = baseScenarios();
     const scenarios = buildScenarios(["codearts", "codebuddy"]);
