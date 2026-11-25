@@ -1,7 +1,7 @@
 // OpenAI Responses API 适配 — 共享协议层
 // 依赖 ChatBackend.respond；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
-import { safeRespond } from "./util";
+import { pruneDanglingToolChoice, safeRespond } from "./util";
 import { errorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
 import { sseData } from "../shared/sse";
 
@@ -104,11 +104,7 @@ export function responsesToOpenAi(body: any, caps: ProtocolCapabilities = {}): a
     if (typeof tc === "string") out.tool_choice = tc;
     else if (tc?.type === "function") out.tool_choice = { type: "function", function: { name: tc.name } };
   }
-  // 防悬空：上游拒绝「无幸存工具 / 引用被滤工具」的强制 tool_choice（InferHub.001001005 实测）
-  const surviving = new Set((out.tools ?? []).map((t) => t.function?.name));
-  if (surviving.size === 0) delete out.tool_choice;
-  else if (out.tool_choice?.type === "function" && !surviving.has(out.tool_choice.function?.name)) delete out.tool_choice;
-  return out;
+  return pruneDanglingToolChoice(out);
 }
 
 function validateResponses(body: any): string | null {

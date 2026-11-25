@@ -34,7 +34,7 @@ Anthropic 请求携带服务端执行工具（`web_search_20250305` 等）时，
 
 ## 4. 影响范围与非目标
 
-**受影响**：`src/protocols/anthropic.ts`、`src/protocols/protocols.test.ts`、`src/protocols/anthropic-assembly.test.ts`（新增 5 例）、`src/protocols/responses.ts`。
+**受影响**：`src/protocols/anthropic.ts`、`src/protocols/responses.ts`、`src/protocols/util.ts`（两轴评审后新增共享防悬空助手）、`src/protocols/protocols.test.ts`、`src/protocols/anthropic-assembly.test.ts`（新增 5 例）。
 
 **本次明确不做**：网关自执行服务端工具（#22 评估）；显式 400 拒绝悬空形状；服务端工具结果块回填；`mapBody`/`respond` 双构建路径的键序统一；采集脱敏名单补充（`user-session-id` / `x-session-affinity`，独立任务）；语料评估器适配 schema 2。
 
@@ -57,3 +57,5 @@ Anthropic 请求携带服务端执行工具（`web_search_20250305` 等）时，
 非流式响应 `stop_reason: max_tokens`（模型推理耗尽 1000 输出 token，文本为空）——与「无搜索能力下模型直接作答」的预期行为一致，属既有聚合语义，不在本变更范围。
 
 **未做 / 待补**：`bun test` 中 4 例红灯到绿灯的过程截图未留存（终端输出即证据）；e2e 矩阵无服务端工具场景（#22 立项时一并考虑）。
+
+**文档结构与本地链接检查**：未配置；待补（两轴评审时已人工核验本记录全部链接目标存在）。
