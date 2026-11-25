@@ -4,7 +4,7 @@ import { baseScenarios, buildScenarios } from "./index";
 describe("scenario set", () => {
   test("templates are unique and provider-independent", () => {
     const templates = baseScenarios();
-    expect(templates.length).toBe(28);
+    expect(templates.length).toBe(29);
     expect(new Set(templates.map((template) => template.id)).size).toBe(templates.length);
     for (const template of templates) {
       expect(template.id.length).toBeGreaterThan(0);

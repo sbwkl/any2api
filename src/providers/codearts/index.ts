@@ -11,6 +11,7 @@ import {
   startCredentialMaintainer,
 } from "./refresher";
 import { createProtocolRoutes, type ChatBackend } from "../../protocols";
+import { CODEARTS_PROTOCOL_CAPABILITIES } from "./protocol-capabilities";
 import { mountProviders, type ProviderModule, type ProviderInstance } from "../../registry";
 import { traceUpstream } from "../../shared/trace";
 
@@ -80,12 +81,9 @@ export async function createProvider(): Promise<ProviderInstance> {
     handleChat: (req) => facade.handleChat(req),
     respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey),
   };
-  // codearts：full tool_choice（支持 required/forced function），错误透传上游响应。
-  const routes = createProtocolRoutes(backend, {
-    toolChoice: "full",
-    normalizeErrors: false,
-    thinkingToEffort: false,
-  });
+  // codearts：full tool_choice（支持 required/forced function），错误透传上游响应，
+  // prompt_tokens 含缓存分量（input_tokens 需扣除缓存）。能力声明见 protocol-capabilities.ts。
+  const routes = createProtocolRoutes(backend, CODEARTS_PROTOCOL_CAPABILITIES);
   return { routes, health: () => ({ ok: true }) };
 }
 

@@ -355,6 +355,33 @@ JS 对象构造序 → fetch 按插入序发出（Bun undici-ish）。拟真顺�
 - 错误映射：`InferHub.MaaS.*/ModelArts.*/TM.*` → 按 `x-session-retry` 协议实现重试（407 ×3、Busy 81101 系退避 ≤10~20 次、429/406 读 `retry-after` 与 `need-switch-model` 头），最终归一为 OpenAI 4xx/5xx + 错误体
 - `TM.00020005`（租户冻结）、`TM.00001054`（内容安全）→ 直接 4xx + 原文 error_msg
 
+### 7.3.1 上游 usage 语义（OpenAI Chat 与 Anthropic 映射）
+
+实测结论：CodeArts 上游 OpenAI Chat usage 的 `prompt_tokens` 为**总输入**，包含缓存命中分量；`prompt_tokens_details.cached_tokens` 为其中缓存读取部分。因此映射到 Anthropic Messages 时不能直接透传 `input_tokens`，须扣除缓存分项。
+
+证据（四层请求记录，trace 记录 `2026-11-25T01:33:36.888Z`）：
+
+| 层 | 字段 | 值 |
+|---|---|---|
+| L4（出站响应，翻译后） | `usage.input_tokens` | 127,983 |
+| L4（出站响应，翻译后） | `usage.cache_read_input_tokens` | 127,232 |
+| L4（出站响应，翻译后） | `usage.cache_creation_input_tokens` | 0 |
+| L1（入站请求） | 请求体规模 | 约 467,744 字符 |
+
+注：上游原始响应（L3）为 SM4 加密的 SSE 原文，未直接读取；结论依据为 L4 出站响应（翻译后）加 L1 请求体规模（约 467,744 字符，按约 3.65 字符/token 折算约 128k tokens）。
+
+按约 3.65 字符/token 折算，L1 约 128k tokens，与 `input_tokens=127,983` 同量级；若 127,983 是未缓存输入，总输入将达 ~256k tokens，与请求体规模不符。故 127,983 是**总输入**而非未缓存输入，真实未缓存输入约 751（127,983 − 127,232）。
+
+映射（能力位 `promptTokensIncludeCache=true`，见 `protocol-capabilities.ts`）：
+
+```
+input_tokens = max(0, prompt_tokens - cached_tokens - cache_creation_tokens)
+```
+
+- `cache_read_input_tokens` / `cache_creation_input_tokens` 继续透传上游值，缺失按 0；不推导、不伪造。
+- 总输入由 `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` 还原。
+- 共享协议路由的默认能力位为 false，仅 CodeArts / CodeBuddy 显式开启（规格见产品规格 R37）。
+
 ### 7.4 启动与发现流程
 
 1. 载入凭证（§1.1）

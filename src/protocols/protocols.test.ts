@@ -375,3 +375,49 @@ describe("shared protocol routes (codearts capabilities)", () => {
     expect(b.usage.input_tokens).toBe(24);
   });
 });
+
+// 共享路由 usage 映射（provider 无关）：能力位用内联对象，
+// prompt_tokens=31 / cached=7 / creation=2 时 input_tokens=22；流式最终 usage 同语义。
+describe("shared Anthropic usage mapping", () => {
+  const usage = {
+    prompt_tokens: 31,
+    completion_tokens: 5,
+    total_tokens: 36,
+    prompt_tokens_details: { cached_tokens: 7, cache_creation_tokens: 2 },
+  };
+  const withUsage = { ...completion, usage };
+  const body = { model: "m", max_tokens: 10, messages: [{ role: "user", content: "hi" }] };
+  const caps = { toolChoice: "full" as const, normalizeErrors: false, promptTokensIncludeCache: true };
+
+  function messageDeltaUsage(text: string): any {
+    const line = text.split("\n").find((l) => l.startsWith('data: {"type":"message_delta"'));
+    if (!line) throw new Error("no message_delta frame");
+    return JSON.parse(line.slice("data: ".length)).usage;
+  }
+
+  test("non-stream usage reports uncached input_tokens and preserves cache parts", async () => {
+    const local = createProtocolRoutes(makeBackend({ respond: async () => Response.json(withUsage) }), caps);
+    const j: any = await (await dispatch(local, "/v1/messages", "POST", body)).json();
+    expect(j.usage.input_tokens).toBe(22);
+    expect(j.usage.cache_read_input_tokens).toBe(7);
+    expect(j.usage.cache_creation_input_tokens).toBe(2);
+  });
+
+  test("streaming final usage reports the same uncached input_tokens semantics", async () => {
+    const local = createProtocolRoutes(makeBackend({
+      respond: async () => new Response([
+        `data: ${JSON.stringify({ id: "1", model: "m", created: 1, choices: [{ index: 0, delta: { role: "assistant", content: "hi" } }] })}`,
+        "",
+        `data: ${JSON.stringify({ id: "1", model: "m", created: 1, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage })}`,
+        "",
+        "data: [DONE]",
+        "",
+      ].join("\n"), { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+    }), caps);
+    const text = await (await dispatch(local, "/v1/messages", "POST", { ...body, stream: true })).text();
+    const u = messageDeltaUsage(text);
+    expect(u.input_tokens).toBe(22);
+    expect(u.cache_read_input_tokens).toBe(7);
+    expect(u.cache_creation_input_tokens).toBe(2);
+  });
+});

@@ -240,6 +240,72 @@ export function anthropicScenarios(): ScenarioTemplate[] {
       },
     },
     {
+      id: "messages.usage.cache_semantics",
+      endpoint: "/v1/messages",
+      feature: "缓存语义：未缓存输入递减",
+      clause: "ANT-MSG-08",
+      run: async (ctx) => {
+        const cachePrompt = (marker: string) =>
+          `Session marker: ${marker}. ` +
+          "You are a terse assistant embedded in a long-lived cached system prompt. ".repeat(880);
+        const userText = "Reply with exactly: OK";
+
+        const marker = crypto.randomUUID();
+        const body = (maxTokens: number) => ({
+          model: ctx.model,
+          max_tokens: maxTokens,
+          system: cachePrompt(marker),
+          messages: [{ role: "user", content: userText }],
+        });
+        const callJson = async (label: string, maxTokens: number) => {
+          const res = await call(ctx, "/v1/messages", { body: body(maxTokens) });
+          const { json, error } = jsonOf(res);
+          if (res.status !== 200 || error || !json) {
+            throw new Error(`${label}请求 HTTP ${res.status}；${error ?? truncate(res.text)}`);
+          }
+          return json;
+        };
+
+        let first: any;
+        let second: any;
+        let attempts = 0;
+        try {
+          attempts = 1;
+          first = await callJson("第一次", 32);
+          for (let retry = 0; retry < 2; retry++) {
+            attempts += 1;
+            second = await callJson("第二次", 32);
+            if ((second?.usage?.cache_read_input_tokens ?? 0) > 0) break;
+          }
+        } catch (err) {
+          return fail(err instanceof Error ? err.message : String(err));
+        }
+
+        const firstUsage = first?.usage ?? {};
+        const secondUsage = second?.usage ?? {};
+        const firstRead = firstUsage.cache_read_input_tokens ?? 0;
+        const secondRead = secondUsage.cache_read_input_tokens ?? 0;
+        const firstInput = firstUsage.input_tokens;
+        const secondInput = secondUsage.input_tokens;
+
+        if (firstRead !== 0) return fail(`第一次 cache_read_input_tokens 应为 0（实际 ${firstRead}）`);
+        if (secondRead <= 0) {
+          return fail(`尝试 ${attempts} 次后第二次仍无缓存命中（cache_read_input_tokens=${secondRead}）`);
+        }
+        if (!(typeof firstInput === "number" && typeof secondInput === "number")) {
+          return fail(`usage.input_tokens 非数字（first=${firstInput}，second=${secondInput}）`);
+        }
+        if (!(secondInput < firstInput)) {
+          return fail(
+            `第二次 input_tokens 应小于第一次（first=${firstInput}，second=${secondInput}）`,
+          );
+        }
+        return pass(
+          `第一次未命中（input=${firstInput}, read=0）；第二次命中（input=${secondInput}, read=${secondRead}）`,
+        );
+      },
+    },
+    {
       id: "messages.negative.unknown_model",
       endpoint: "/v1/messages",
       feature: "未知模型 + 错误信封归一",
