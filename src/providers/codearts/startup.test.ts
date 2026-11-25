@@ -1,10 +1,48 @@
 import { test, expect, describe } from "bun:test";
 import { planStartupCredentials } from "./index";
+import { toCredentials, type SecretAuth } from "./refresher";
 import type { Credentials } from "./signer";
 
 const base: Credentials = { ak: "a", sk: "s", securityToken: "t" };
 const past = new Date(Date.now() - 3_600_000).toISOString();
 const future = new Date(Date.now() + 3_600_000).toISOString();
+
+const secretAuth: SecretAuth = {
+  account: { id: "u1", label: "wayne" },
+  scopes: [],
+  accessToken: "access-token",
+  accessKey: "ak",
+  secretKey: "sk",
+  securitytoken: "sts",
+  expires_at: future,
+  domainId: "domain-1",
+  safelyRenewTokenInterval: 0,
+  loginContext: {
+    pkcePair: { codeVerifier: "v", codeChallenge: "c", codeChallengeMethod: "S256" },
+    dpopKeyPair: { privateKeyJwk: {}, publicKeyJwk: {} },
+  },
+  refresh_token: "refresh-1",
+};
+
+describe("SecretStorage → Credentials mapping", () => {
+  test("toCredentials carries the refresh lineage (root cause of the always-true guard)", () => {
+    expect(toCredentials(secretAuth)).toEqual({
+      ak: "ak",
+      sk: "sk",
+      securityToken: "sts",
+      origin: undefined,
+      domainId: "domain-1",
+      expiresAt: future,
+      refreshToken: "refresh-1",
+    });
+  });
+
+  test("credentials derived from a secret session can actually trigger the startup refresh", () => {
+    // 回归护栏：若 toCredentials 丢掉 refreshToken，守卫重新恒真，这里会抛「无刷新凭据」
+    const expired = toCredentials({ ...secretAuth, expires_at: past });
+    expect(planStartupCredentials(null, expired)).toEqual({ creds: expired, refresh: true });
+  });
+});
 
 describe("codearts startup credential plan", () => {
   test("env static credentials (no expiry) are used as-is", () => {

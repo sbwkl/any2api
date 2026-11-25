@@ -30,7 +30,7 @@ const SECRET_KEY_EXPR =
   `secret://${JSON.stringify({ extensionId: "huaweicloud.authentication", key: "HuaweiCloudSession" })}`;
 const STATE_DB_PATH = `${homedir()}/Library/Application Support/CodeArts Agent/User/globalStorage/state.vscdb`;
 
-interface SecretAuth {
+export interface SecretAuth {
   account: { id: string; label: string };
   scopes: string[];
   accessToken: string;
@@ -113,7 +113,7 @@ function writeSecretSession(auth: SecretAuth): void {
   }
 }
 
-function toCredentials(auth: SecretAuth): Credentials {
+export function toCredentials(auth: SecretAuth): Credentials {
   return {
     ak: auth.accessKey,
     sk: auth.secretKey,

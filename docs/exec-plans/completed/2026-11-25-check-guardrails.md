@@ -1,7 +1,7 @@
 # 门禁补强：类型检查与文档链接检查
 
 类型：工程化（check 门禁 + 存量类型修正）
-状态：已验证（单测 325 pass / 0 fail + `tsc --noEmit` exit 0 + 链接检查 0 死链；未合并 main、未部署）
+状态：已验证（单测 327 pass / 0 fail + `tsc --noEmit` exit 0 + 链接检查 0 死链；未合并 main、未部署）
 Owner：wayne
 所属模块/入口：`package.json`（`bun run check`）、`tsconfig.json`、`scripts/check-docs-links.ts`、`.github/workflows/ci.yml`
 关联：retro 候选 1（类型/lint 护栏）与候选 2（文档链接检查）；对应跟踪 issue [#28](https://github.com/sbwkl/any2api/issues/28)（check 缺类型检查）
@@ -65,11 +65,12 @@ Owner：wayne
 
 ## 4. 验证
 
-- `bun test` → **325 pass / 0 fail**（新增 3 条链接检查用例 + 8 条启动凭证决策用例）。
+- `bun test` → **327 pass / 0 fail**（新增 3 条链接检查 + 8 条启动决策 + 2 条 SecretStorage→Credentials 映射用例）。
 - `bun build src/index.ts --target=bun` → exit 0。
 - `tsc --noEmit` → exit 0（首次为 48 条错误，全部归零）。
 - `bun scripts/check-docs-links.ts` → 0 死链（修复前 2 条）。
 - 启动守卫：过期 + lineage → `refresh: true`；env 静态凭证 → `refresh: false`；过期无 lineage → 抛「无刷新凭据」。
+- 根因护栏：`toCredentials()` 的 `refreshToken` 透传有直接断言；删掉该行后「过期+lineage 触发刷新」用例立即失败（变异验证）。
 - `bun run check` → exit 0。
 
 ## 5. 回滚
@@ -92,4 +93,4 @@ Owner：wayne
 |---|---|---|
 | 开发中 | wayne | 2026-11-25 创建；来源为当日 retro 候选 1、2 |
 | 已验证 | wayne | 2026-11-25 接入 `tsc --noEmit` 与链接检查，清理 48 条存量类型错误；`bun run check` exit 0 |
-| 已验证（复审修复） | wayne | 2026-11-25 修复启动凭证守卫恒真（refreshToken 回填 + `planStartupCredentials`）；`bun test` 325 pass / 0 fail |
+| 已验证（复审修复） | wayne | 2026-11-25 修复启动凭证守卫恒真（refreshToken 回填 + `planStartupCredentials`），并为映射补根因护栏；`bun test` 327 pass / 0 fail |
