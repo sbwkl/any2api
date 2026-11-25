@@ -1,8 +1,14 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dumpUpstream, startTraceCapture } from "./trace";
+import {
+  dumpUpstream,
+  markAbort,
+  startRequestTrace,
+  startTraceCapture,
+  traceUpstream,
+} from "./trace";
 
 let dir: string;
 
@@ -10,21 +16,47 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "any2api-trace-"));
   delete process.env.TRACE_CAPTURE_DIR;
   delete process.env.UPSTREAM_DUMP_DIR;
+  delete process.env.TRACE_CAPTURE_MAX_BYTES;
 });
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
   delete process.env.TRACE_CAPTURE_DIR;
   delete process.env.UPSTREAM_DUMP_DIR;
+  delete process.env.TRACE_CAPTURE_MAX_BYTES;
 });
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function readRecords(file: string): any[] {
+function capturePath(baseDir: string): string {
+  return join(baseDir, `capture-${today()}.jsonl`);
+}
+
+function readRecords(baseDir = dir): any[] {
+  const file = capturePath(baseDir);
+  if (!existsSync(file)) return [];
   return readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 }
+
+function inbound(path: string, init: RequestInit = {}): Request {
+  return new Request(`http://localhost${path}`, init);
+}
+
+function jsonRequest(path = "/codearts/v1/chat/completions"): Request {
+  return inbound(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: "m", messages: [{ role: "user", content: "hi" }] }),
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const encoder = new TextEncoder();
 
 describe("upstream dump", () => {
   test("is a no-op without UPSTREAM_DUMP_DIR", () => {
@@ -37,7 +69,7 @@ describe("upstream dump", () => {
     dumpUpstream("codearts", "http://upstream/v2/chat", { model: "m1", temperature: 0.2 });
     dumpUpstream("codebuddy", "http://upstream/v2/chat/completions", { model: "m2" });
 
-    const records = readRecords(join(dir, "upstream.jsonl"));
+    const records = readFileSync(join(dir, "upstream.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
     expect(records).toHaveLength(2);
     expect(records[0].provider).toBe("codearts");
     expect(records[0].url).toContain("/v2/chat");
@@ -59,80 +91,269 @@ describe("upstream dump", () => {
   });
 });
 
-describe("trace capture", () => {
-  test("is disabled without TRACE_CAPTURE_DIR", () => {
-    const capture = startTraceCapture(new Request("http://localhost/codearts/v1/chat/completions", { method: "POST" }));
-    expect(capture).toBeNull();
+describe("request record (schema 2)", () => {
+  test("is disabled without TRACE_CAPTURE_DIR and leaves outbound calls untouched", async () => {
+    expect(startRequestTrace(jsonRequest())).toBeNull();
+
+    const fake = async () => Response.json({ ok: true });
+    const res = await traceUpstream(
+      { method: "POST", url: "https://upstream/v1/chat", headers: { authorization: "Bearer x" }, body: "{}" },
+      { fetch: fake },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(existsSync(capturePath(dir))).toBe(false);
   });
 
-  test("captures request/response and redacts credentials", async () => {
-    const req = new Request("http://localhost/codearts/v1/chat/completions", {
+  test("writes one schema 2 record with L1 headers, parsed request and L4 response", async () => {
+    const sensitive = {
+      authorization: "Bearer super-secret",
+      "x-api-key": "key-secret",
+      "x-auth-token": "auth-secret",
+      "x-refresh-token": "refresh-secret",
+      "x-security-token": "security-secret",
+      "x-device-token": "device-secret",
+      "x-user-id": "user-secret",
+      cookie: "session-secret",
+      "set-cookie": "server-secret",
+    };
+    const req = inbound("/codearts/v1/chat/completions", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: "Bearer super-secret-token",
-        "x-api-key": "sk-super-secret",
-        "x-security-token": "sts-secret",
+        "x-envelope-signature": "keep-me",
+        ...sensitive,
       },
       body: JSON.stringify({ model: "m", messages: [{ role: "user", content: "hi" }] }),
     });
 
-    const capture = startTraceCapture(req, { dir, maxBodyBytes: 64 * 1024 })!;
-    expect(capture).not.toBeNull();
-    const res = Response.json({ ok: true }, { headers: { "content-type": "application/json", "x-upstream-secret": "nope" } });
-    await capture.finish(res, 12);
+    const trace = startRequestTrace(req, { dir })!;
+    const res = Response.json({ ok: true }, { headers: { "content-type": "application/json", "x-upstream-only": "visible" } });
+    await trace.finish(res);
 
-    const records = readRecords(join(dir, `capture-${today()}.jsonl`));
+    const records = readRecords();
     expect(records).toHaveLength(1);
     const rec = records[0];
+    expect(rec.schema).toBe(2);
+    expect(typeof rec.ts).toBe("string");
+    expect(rec.provider).toBe("codearts");
     expect(rec.method).toBe("POST");
     expect(rec.path).toBe("/codearts/v1/chat/completions");
-    expect(rec.provider).toBe("codearts");
-    expect(rec.status).toBe(200);
-    expect(rec.duration_ms).toBe(12);
-    expect(rec.request.headers["content-type"]).toContain("application/json");
-    expect(rec.request.headers.authorization).toBe("<redacted>");
-    expect(rec.request.headers["x-api-key"]).toBe("<redacted>");
-    expect(rec.request.headers["x-security-token"]).toBe("<redacted>");
-    expect(rec.request.body).toContain('"model":"m"');
-    expect(rec.response.body).toContain('"ok":true');
+    expect(rec.headers["content-type"]).toContain("application/json");
+    expect(rec.headers["x-envelope-signature"]).toBe("keep-me");
+    for (const name of Object.keys(sensitive)) expect(rec.headers[name]).toBe("<redacted>");
+    expect(rec.request).toEqual({ model: "m", messages: [{ role: "user", content: "hi" }] });
+    expect(rec.raw_request).toBeUndefined();
+    expect(rec.upstream).toEqual([]);
+    expect(rec.response.status).toBe(200);
+    expect(rec.response.headers["x-upstream-only"]).toBe("visible");
     expect(rec.response.content_type).toContain("application/json");
+    expect(rec.response.body).toContain('"ok":true');
+    expect(typeof rec.response.first_byte_ms).toBe("number");
+    expect(rec.response.duration_ms).toBeGreaterThanOrEqual(0);
+    expect(rec.response.complete).toBe(true);
+    expect(rec.response.abort_reason).toBeNull();
     expect(JSON.stringify(rec)).not.toContain("super-secret");
-    expect(JSON.stringify(rec)).not.toContain("sts-secret");
-    expect(JSON.stringify(rec)).not.toContain("upstream-secret");
+    expect(JSON.stringify(rec)).not.toContain("user-secret");
   });
 
-  test("truncates large request and response bodies", async () => {
-    const big = "x".repeat(100);
-    const req = new Request("http://localhost/codebuddy/v1/chat/completions", { method: "POST", body: big });
-    const capture = startTraceCapture(req, { dir, maxBodyBytes: 8 })!;
-    await capture.finish(new Response(big), 1);
+  test("keeps the raw request text when the body is not JSON", async () => {
+    const trace = startRequestTrace(inbound("/v1/messages", { method: "POST", body: "not-json{" }), { dir })!;
+    await trace.finish(new Response("boom", { status: 500 }));
 
-    const rec = readRecords(join(dir, `capture-${today()}.jsonl`))[0];
-    expect(rec.request.body_truncated).toBe(true);
-    expect(rec.request.body.length).toBe(8);
-    expect(rec.response.body_truncated).toBe(true);
-    expect(rec.response.body.length).toBe(8);
-    expect(rec.provider).toBe("codebuddy");
+    const rec = readRecords()[0];
+    expect(rec.request).toBeUndefined();
+    expect(rec.raw_request).toBe("not-json{");
+    expect(rec.provider).toBe("default");
+    expect(rec.response.status).toBe(500);
   });
 
-  test("captures a streamed SSE response body in full when under cap", async () => {
-    const encoder = new TextEncoder();
+  test("records an empty request object for a bodyless request", async () => {
+    const trace = startRequestTrace(inbound("/v1/models"), { dir })!;
+    await trace.finish(Response.json({ data: [] }));
+
+    const rec = readRecords()[0];
+    expect(rec.request).toEqual({});
+    expect(rec.raw_request).toBeUndefined();
+  });
+
+  test("records bodies in full regardless of the legacy size variable", async () => {
+    process.env.TRACE_CAPTURE_MAX_BYTES = "8";
+    const big = "x".repeat(100_000);
+    const trace = startRequestTrace(inbound("/v1/messages", { method: "POST", body: JSON.stringify({ text: big }) }), { dir })!;
+    await trace.finish(new Response(big));
+
+    const rec = readRecords()[0];
+    expect(rec.request.text).toBe(big);
+    expect(rec.response.body).toBe(big);
+  });
+
+  test("creates the capture file owner-read-write only", async () => {
+    const trace = startRequestTrace(jsonRequest(), { dir })!;
+    await trace.finish(Response.json({ ok: true }));
+
+    const mode = statSync(capturePath(dir)).mode & 0o777;
+    expect(mode).toBe(0o600);
+  });
+
+  test("write failures stay silent", async () => {
+    const blocked = join(dir, "blocked");
+    writeFileSync(blocked, "not a directory");
+    const trace = startRequestTrace(jsonRequest(), { dir: blocked })!;
+    await expect(trace.finish(Response.json({ ok: true }))).resolves.toBeUndefined();
+  });
+
+  test("marks aborted requests with the recorded reason", async () => {
+    const reasons = ["client_disconnect", "upstream_error", "timeout", "proxy_error"] as const;
+    for (const [i, reason] of reasons.entries()) {
+      const trace = startRequestTrace(jsonRequest(), { dir })!;
+      if (i % 2 === 0) trace.abort(reason);
+      else markAbort(reason);
+      await trace.finish(new Response("", { status: 502 }));
+    }
+    markAbort("timeout"); // 无上下文时为 no-op，不抛错
+
+    const records = readRecords();
+    expect(records).toHaveLength(4);
+    expect(records.map((r) => r.response.abort_reason)).toEqual([...reasons]);
+    expect(records.every((r) => r.response.complete === false)).toBe(true);
+  });
+});
+
+describe("streamed outbound response (L4)", () => {
+  test("keeps the recombined SSE body and separates first byte from total duration", async () => {
     const stream = new ReadableStream({
-      start(controller) {
+      async start(controller) {
         controller.enqueue(encoder.encode('data: {"a":1}\n\n'));
+        await sleep(30);
         controller.enqueue(encoder.encode('data: {"b":2}\n\n'));
         controller.close();
       },
     });
-    const req = new Request("http://localhost/v1/messages", { method: "POST", body: "{}" });
-    const capture = startTraceCapture(req, { dir })!;
-    await capture.finish(new Response(stream, { headers: { "content-type": "text/event-stream" } }), 3);
 
-    const rec = readRecords(join(dir, `capture-${today()}.jsonl`))[0];
-    expect(rec.provider).toBe("default");
-    expect(rec.response.body).toContain('data: {"a":1}');
-    expect(rec.response.body).toContain('data: {"b":2}');
-    expect(rec.response.body_truncated).toBe(false);
+    const trace = startRequestTrace(jsonRequest(), { dir })!;
+    await trace.finish(new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8" } }));
+
+    const rec = readRecords()[0];
+    expect(rec.response.content_type).toBe("text/event-stream; charset=utf-8");
+    expect(rec.response.body).toBe('data: {"a":1}\n\ndata: {"b":2}\n\n');
+    expect(rec.response.first_byte_ms).toBeGreaterThanOrEqual(0);
+    // 旧缺陷：duration_ms 被记成首字节耗时。现在必须覆盖完整流时长。
+    expect(rec.response.duration_ms - (rec.response.first_byte_ms ?? 0)).toBeGreaterThanOrEqual(20);
+    expect(rec.response.complete).toBe(true);
+  });
+});
+
+describe("upstream attempts (L2 + L3)", () => {
+  test("appends every attempt in order with redacted headers and plaintext bodies", async () => {
+    const trace = startRequestTrace(jsonRequest(), { dir })!;
+    const calls: string[] = [];
+    let call = 0;
+    const fake = async (url: any) => {
+      calls.push(String(url));
+      call++;
+      if (call === 1) {
+        return new Response("first-response", { headers: { "content-type": "text/plain", "set-cookie": "secret-cookie" } });
+      }
+      if (call === 2) throw new Error("upstream down");
+      return Response.json({ ok: 3 });
+    };
+
+    const first = await traceUpstream(
+      {
+        method: "POST",
+        url: "https://upstream/v2/chat",
+        headers: { authorization: "Bearer secret", "x-device-token": "device-secret", "x-request-id": "r1" },
+        body: new Uint8Array([1, 2, 3]),
+        recordBody: { model: "m1" },
+      },
+      { fetch: fake },
+    );
+    expect(await first.text()).toBe("first-response"); // 原响应仍可正常消费
+
+    await expect(
+      traceUpstream({ method: "GET", url: "https://upstream/queue", headers: {}, body: null }, { fetch: fake }),
+    ).rejects.toThrow("upstream down");
+
+    await traceUpstream(
+      { method: "POST", url: "https://upstream/retry", headers: {}, body: JSON.stringify({ retried: true }) },
+      { fetch: fake },
+    );
+
+    await trace.finish(Response.json({ ok: true }));
+    expect(calls).toEqual(["https://upstream/v2/chat", "https://upstream/queue", "https://upstream/retry"]);
+
+    const upstream = readRecords()[0].upstream;
+    expect(upstream).toHaveLength(3);
+    expect(upstream.map((u: any) => u.url)).toEqual([
+      "https://upstream/v2/chat",
+      "https://upstream/queue",
+      "https://upstream/retry",
+    ]);
+    expect(upstream[0].method).toBe("POST");
+    expect(upstream[0].headers.authorization).toBe("<redacted>");
+    expect(upstream[0].headers["x-device-token"]).toBe("<redacted>");
+    expect(upstream[0].headers["x-request-id"]).toBe("r1");
+    expect(upstream[0].body).toEqual({ model: "m1" });
+    expect(upstream[0].response.status).toBe(200);
+    expect(upstream[0].response.headers["set-cookie"]).toBe("<redacted>");
+    expect(upstream[0].response.body).toBe("first-response");
+    expect(upstream[0].response.complete).toBe(true);
+    expect(upstream[1].response.status).toBe(0);
+    expect(upstream[1].response.body).toBe("");
+    expect(upstream[1].response.complete).toBe(false);
+    expect(upstream[2].body).toEqual({ retried: true });
+    expect(upstream[2].response.body).toBe('{"ok":3}');
+    expect(upstream[0].t_ms).toBeLessThanOrEqual(upstream[1].t_ms);
+    expect(upstream[1].t_ms).toBeLessThanOrEqual(upstream[2].t_ms);
+  });
+
+  test("times network chunks from the inbound request start", async () => {
+    const fake = async () =>
+      new Response(
+        new ReadableStream({
+          async start(controller) {
+            controller.enqueue(encoder.encode("aa"));
+            await sleep(15);
+            controller.enqueue(encoder.encode("bbb"));
+            await sleep(10);
+            controller.enqueue(encoder.encode("c"));
+            controller.close();
+          },
+        }),
+      );
+    const trace = startRequestTrace(jsonRequest(), { dir })!;
+
+    await sleep(20); // 请求开始 20ms 后才发起上游调用
+    await traceUpstream({ method: "POST", url: "https://upstream/sse", headers: {}, body: "{}" }, { fetch: fake });
+    await trace.finish(Response.json({ ok: true }));
+
+    const attempt = readRecords()[0].upstream[0];
+    expect(attempt.t_ms).toBeGreaterThanOrEqual(10);
+    expect(attempt.response.chunks.map((c: any) => c.bytes)).toEqual([2, 3, 1]);
+    const [a, b, c] = attempt.response.chunks;
+    // chunk 与尝试共用入站请求的时间基，而不是各自从 0 开始
+    expect(a.t_ms).toBeGreaterThanOrEqual(attempt.t_ms);
+    expect(b.t_ms).toBeGreaterThan(a.t_ms);
+    expect(c.t_ms).toBeGreaterThanOrEqual(b.t_ms);
+    expect(attempt.response.body).toBe("aabbbc");
+    expect(attempt.response.complete).toBe(true);
+  });
+});
+
+describe("legacy wrapper", () => {
+  test("startTraceCapture delegates to the schema 2 recorder", async () => {
+    expect(startTraceCapture(jsonRequest())).toBeNull();
+
+    const capture = startTraceCapture(jsonRequest(), { dir })!;
+    expect(capture).not.toBeNull();
+    await capture.finish(Response.json({ ok: true }), 12);
+
+    const rec = readRecords()[0];
+    expect(rec.schema).toBe(2);
+    expect(rec.path).toBe("/codearts/v1/chat/completions");
+    expect(rec.provider).toBe("codearts");
+    expect(rec.response.status).toBe(200);
+    expect(rec.response.duration_ms).toBe(12);
   });
 });
