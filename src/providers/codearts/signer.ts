@@ -184,7 +184,7 @@ export function signSl(req: SlRequest, creds: Credentials): Record<string, strin
 
 // ---- Sh()（auth-util）语义：AKSK 时 X-Security-token（小写 t）；signBody=false → UNSIGNED-PAYLOAD ----
 export function signSh(
-  req: { method: string; endpoint: string; data?: any; headers: Record<string, string> },
+  req: { method: string; endpoint: string; data?: any; headers: Record<string, string>; queryParams?: Record<string, string | string[]> },
   creds: Credentials, opts?: { signBody?: boolean },
 ): Record<string, string> {
   const headers: Record<string, string> = { ...req.headers };
