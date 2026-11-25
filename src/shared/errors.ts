@@ -30,7 +30,7 @@ export function anthropicErrorTypeForStatus(status: number): string {
 // `ModelArts.81101.429:`）。只认独立的 4xx/5xx 三段码，避免把 request-id/计数误判。
 const EMBEDDED_STATUS = /(?:^|[^0-9])([45][0-9]{2})(?=$|[^0-9])/;
 
-export function classifyUpstreamStatus(message: string, fallback = 502): number {
+export function classifyUpstreamStatus(message: string): number {
   const m = EMBEDDED_STATUS.exec(message ?? "");
   if (m) return Number(m[1]);
   if (/rate limit|too many requests/i.test(message ?? "")) return 429;
@@ -38,7 +38,20 @@ export function classifyUpstreamStatus(message: string, fallback = 502): number 
   if (/ECONNRESET|socket connection was closed|ECONNREFUSED|EPIPE|network/i.test(message ?? "")) return 502;
   if (/unsupported media type/i.test(message ?? "")) return 415;
   if (/request param is invalid|参数校验失败|invalid request/i.test(message ?? "")) return 400;
-  return fallback;
+  return 502;
+}
+
+// Responses 的 error.code 词汇与 HTTP 状态不同：429 用 rate_limit_exceeded，
+// 其余 4xx 归 invalid_request_error，5xx/连接失败归 server_error。
+export function responsesErrorCodeForStatus(status: number): string {
+  if (status === 429) return "rate_limit_exceeded";
+  if (status >= 500) return "server_error";
+  return "invalid_request_error";
+}
+
+/** 分类为 5xx 的上游错误视为瞬时故障：调用方尚未向客户端发送字节时可安全重试一次。 */
+export function isTransientUpstreamMessage(message: string): boolean {
+  return classifyUpstreamStatus(message) >= 500;
 }
 
 /** 从上游错误响应体（JSON 或纯文本）中提取可读 message；空体返回 null。 */

@@ -2,7 +2,7 @@
 // 依赖 ChatBackend.respond；能力差异用 ProtocolCapabilities 表达，不感知 provider 名称。
 import type { ChatBackend, ProtocolCapabilities } from "./types";
 import { pruneDanglingToolChoice, safeRespond } from "./util";
-import { classifyUpstreamStatus, errorTypeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
+import { classifyUpstreamStatus, errorTypeForStatus, responsesErrorCodeForStatus, PROXY_ERROR_HEADER } from "../shared/errors";
 import { sseData, upstreamErrorFromChunk, NO_CHOICES } from "../shared/sse";
 
 // ---- namespace 工具展开 ----
@@ -285,6 +285,21 @@ async function relayErrorIfNeeded(resp: Response, caps: ProtocolCapabilities): P
   return Response.json({ error: { message, type: errorTypeForStatus(resp.status), code, param: null } }, { status: resp.status });
 }
 
+function resolveToolRef(toolMap: ResponsesToolMap | undefined, upstreamName: string): ResponsesToolRef {
+  return toolMap?.resolve(upstreamName) ?? { name: upstreamName };
+}
+
+/** 输出形状统一在这里生成：非流式 tool_call、流式 output_item.added/done 共用一个还原路径。 */
+function functionCallItem(
+  ref: ResponsesToolRef, callId: string, args: string, status: "in_progress" | "completed", id = `fc_${rid()}`,
+): any {
+  return {
+    type: "function_call", id, call_id: callId, name: ref.name,
+    ...(ref.namespace ? { namespace: ref.namespace } : {}),
+    arguments: args, status,
+  };
+}
+
 function completionToResponse(c: any, model?: string, toolMap?: ResponsesToolMap): any {
   const msg = c?.choices?.[0]?.message ?? {};
   const output: any[] = [];
@@ -294,12 +309,7 @@ function completionToResponse(c: any, model?: string, toolMap?: ResponsesToolMap
     content: [{ type: "output_text", text: msg.content, annotations: [] }],
   });
   for (const tc of msg.tool_calls ?? []) {
-    const ref = toolMap?.resolve(tc.function?.name ?? "") ?? { name: tc.function?.name };
-    output.push({
-      type: "function_call", id: `fc_${rid()}`, call_id: tc.id, name: ref.name,
-      ...(ref.namespace ? { namespace: ref.namespace } : {}),
-      arguments: tc.function?.arguments ?? "{}", status: "completed",
-    });
+    output.push(functionCallItem(resolveToolRef(toolMap, tc.function?.name ?? ""), tc.id, tc.function?.arguments ?? "{}", "completed"));
   }
   const usage = c?.usage ?? {};
   return {
@@ -409,43 +419,61 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
             const key = `call:${tc.index ?? 0}`;
             let slot = outputItems.find((i) => i._key === key);
             if (!slot) {
-              const ref = toolMap?.resolve(tc.function?.name ?? "") ?? { name: tc.function?.name ?? "" };
+              const ref = resolveToolRef(toolMap, tc.function?.name ?? "");
               slot = {
                 type: "function_call", id: `fc_${rid()}`, call_id: tc.id ?? `call_${tc.index ?? 0}`,
-                name: ref.name, namespace: ref.namespace, arguments: "", status: "in_progress", _key: key,
+                name: ref.name, namespace: ref.namespace, arguments: "", status: "in_progress", _key: key, _added: false,
               };
               outputItems.push(slot);
-              const oi = outputItems.indexOf(slot);
-              ev(ctrl, "response.output_item.added", {
-                type: "response.output_item.added", output_index: oi,
-                item: {
-                  type: "function_call", id: slot.id, call_id: slot.call_id, name: slot.name,
-                  ...(slot.namespace ? { namespace: slot.namespace } : {}),
-                  arguments: "", status: "in_progress",
-                },
-              });
             }
             if (tc.function?.name && !slot.name) {
-              const ref = toolMap?.resolve(tc.function.name) ?? { name: tc.function.name };
+              const ref = resolveToolRef(toolMap, tc.function.name);
               slot.name = ref.name;
               slot.namespace = ref.namespace;
             }
+            // added 只能发一次：名称未到就发会留下空 name 且永不更正，客户端无法路由。
+            if (!slot._added && slot.name) {
+              slot._added = true;
+              const oi = outputItems.indexOf(slot);
+              ev(ctrl, "response.output_item.added", {
+                type: "response.output_item.added", output_index: oi,
+                item: functionCallItem(slot, slot.call_id, "", "in_progress", slot.id),
+              });
+              // 名称到达前缓冲的参数一次补发，保持 added 在 delta 之前
+              if (slot.arguments)
+                ev(ctrl, "response.function_call_arguments.delta", { type: "response.function_call_arguments.delta", item_id: slot.id, output_index: oi, delta: slot.arguments });
+            }
             if (typeof tc.function?.arguments === "string" && tc.function.arguments) {
               slot.arguments += tc.function.arguments;
-              const oi = outputItems.indexOf(slot);
-              ev(ctrl, "response.function_call_arguments.delta", { type: "response.function_call_arguments.delta", item_id: slot.id, output_index: oi, delta: tc.function.arguments });
+              if (slot._added) {
+                const oi = outputItems.indexOf(slot);
+                ev(ctrl, "response.function_call_arguments.delta", { type: "response.function_call_arguments.delta", item_id: slot.id, output_index: oi, delta: tc.function.arguments });
+              }
             }
           }
           if (choice?.finish_reason) finish = choice.finish_reason;
         }
         if (!sawChoice) throw new Error(NO_CHOICES);
 
+        // 名称始终未到的工具调用也补发 added，保证 added/done 成对
+        for (const item of outputItems) {
+          if (item.type !== "function_call" || item._added) continue;
+          item._added = true;
+          const oi = outputItems.indexOf(item);
+          ev(ctrl, "response.output_item.added", {
+            type: "response.output_item.added", output_index: oi,
+            item: functionCallItem(item, item.call_id, "", "in_progress", item.id),
+          });
+          if (item.arguments)
+            ev(ctrl, "response.function_call_arguments.delta", { type: "response.function_call_arguments.delta", item_id: item.id, output_index: oi, delta: item.arguments });
+        }
+
         const finalItems = outputItems.map((item: any) => {
           if (item.type === "reasoning")
             return { type: "reasoning", id: item.id, summary: item._text ? [{ type: "summary_text", text: item._text }] : [] };
           if (item.type === "message")
             return { type: "message", id: item.id, role: "assistant", status: "completed", content: [{ type: "output_text", text: item._text ?? "", annotations: [] }] };
-          return { type: "function_call", id: item.id, call_id: item.call_id, name: item.name, ...(item.namespace ? { namespace: item.namespace } : {}), arguments: item.arguments, status: "completed" };
+          return functionCallItem(item, item.call_id, item.arguments, "completed", item.id);
         });
         outputItems.forEach((item: any, oi: number) => {
           if (item.type === "message") {
@@ -463,10 +491,9 @@ async function responsesSse(upstream: ReadableStream<Uint8Array>, model?: string
         });
       } catch (e: any) {
         const message = e?.message ?? String(e);
-        // Responses 的 error.code 词汇与 HTTP 状态不同：429 用 rate_limit_exceeded，
-        // 其余 4xx 归 invalid_request_error，5xx/连接失败归 server_error。
+        // Responses 的 error.code 词汇与 HTTP 状态不同；分类见共享错误模块。
         const status = classifyUpstreamStatus(message);
-        const code = status === 429 ? "rate_limit_exceeded" : status >= 500 ? "server_error" : "invalid_request_error";
+        const code = responsesErrorCodeForStatus(status);
         ev(ctrl, "error", { type: "error", code, message, param: null, sequence_number: seq++ });
       } finally {
         ctrl.close();

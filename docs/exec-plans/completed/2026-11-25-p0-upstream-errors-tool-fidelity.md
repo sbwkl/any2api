@@ -1,7 +1,7 @@
 # P0 日志审计修复：上游错误语义、故障恢复、namespace 工具保真
 
 类型：修复（codearts 传输/错误映射 + Responses 工具翻译）
-状态：已验证（未合并，待评审）
+状态：已验证（单测 309 pass / 0 fail + build exit 0；未合并 main、未部署）
 Owner：wayne
 所属模块/入口：`src/shared/errors.ts`、`src/providers/codearts/`、`src/protocols/anthropic.ts`、`src/protocols/responses.ts`
 关联：本文件 §2 的审计快照；[#22](https://github.com/sbwkl/any2api/issues/22)（服务端工具产品评估，不在本次范围）、[#24](https://github.com/sbwkl/any2api/issues/24)（namespace 工具静默丢弃）
@@ -80,19 +80,20 @@ Owner：wayne
 - `src/protocols/anthropic.ts`（Anthropic 错误类型）
 - `src/protocols/util.ts`（`safeRespond` 类型）
 - `src/protocols/responses.ts`（namespace 展开/还原）
-- 测试：`src/shared/errors.test.ts`（新增）、`src/providers/codearts/openai.test.ts`、`src/providers/codearts/snap.test.ts`、`src/protocols/protocols.test.ts`、`src/providers/codebuddy/openai.test.ts`
+- `src/providers/codearts/protocol-capabilities.ts`（`normalizeErrors` 注释：代理信封仍归一）
+- 测试：`src/shared/errors.test.ts`（新增）、`src/protocols/responses-tools.test.ts`（新增）、`src/providers/codearts/openai.test.ts`、`src/providers/codearts/snap.test.ts`、`src/protocols/protocols.test.ts`、`src/providers/codebuddy/openai.test.ts`
 - 文档：`README.md`（已知限制）、`src/providers/codearts/protocol-spec.md`（§3.3/§7.3 偏差说明）
 
 ## 5. 验证与观测
 
-- **单测**：`bun test` → **309 pass / 0 fail**（1265 断言，36 文件）。新增覆盖：
+- **单测**：`bun test` → **312 pass / 0 fail**（1280 断言，36 文件）。新增覆盖：
   - 错误分类表（内嵌 400/429/415、ECONNRESET、timeout、空流回退 502）；
   - OpenAI `server_error` / Anthropic `api_error` 等协议合法类型；
   - 200 SSE 内嵌 429 → 429 `rate_limit_error`；内嵌 400 不重试；
   - 非 2xx 504 → 代理错误信封（`x-any2api-error-source: proxy`）保留上游 message；
-  - 非流式聚合遇 ECONNRESET → 重试一次后成功；
-  - SnapClient：瞬时 5xx 加密重试一次、网络错误加密重试一次、key-exchange 失败直接抛错、读空闲超时；
-  - Responses：namespace 展开（含 64 字符截断/同名冲突）、输入 `function_call.namespace` 映射、`tool_choice` 重写、非流式/流式输出还原 `name`+`namespace`；
+  - 非流式聚合遇 ECONNRESET → 重试一次后成功；真空流只发一次上游请求（不重试）；
+  - SnapClient：瞬时 5xx 加密重试一次、网络错误加密重试一次、key-exchange 失败直接抛错、读空闲超时、`CODEARTS_FORCE_PLAINTEXT=1` 明文调试路径；
+  - Responses（全部经共享路由 S1）：namespace 展开（含 64 字符截断/同名冲突/与顶层函数撞名去重）、输入 `function_call.namespace` 映射、`tool_choice` 重写、非流式/流式输出还原 `name`+`namespace`、函数名晚到仍先发正确 `output_item.added`；
   - Responses 流错误帧与空流 → 分类错误事件。
 - **构建**：`bun build src/index.ts --target=bun` → exit 0。
 - **定点实弹（未执行）**：用 Codex 发一轮带 namespace 工具的请求，确认 L2 工具数恢复、L4 回出 `namespace`；需用户同意消耗真实 token 后执行。
@@ -121,3 +122,4 @@ Owner：wayne
 |---|---|---|
 | 开发中 | wayne | 2026-11-25 创建；审计快照与决策见 §2/§3 |
 | 已验证 | wayne | 2026-11-25 实现 P0-1/P0-2/P0-3；`bun test` 309 pass / 0 fail，`bun build` exit 0；非本轮问题登记为 #30–#35（needs-triage） |
+| 已验证（评审修复） | wayne | 2026-11-25 两轴评审后修复：真空流不重试、函数名晚到仍先发 `output_item.added`、测试全部经 S1 共享路由 + 撞名/明文开关覆盖、能力位注释与 §7.3 事实分离、错误映射去重；`bun test` 312 pass / 0 fail，`bun build` exit 0；PR #37 |

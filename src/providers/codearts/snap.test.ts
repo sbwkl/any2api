@@ -323,6 +323,24 @@ describe("snap.chat request-scoped attempts", () => {
     expect(String(error?.message)).toContain("upstream idle timeout");
   });
 
+  test("CODEARTS_FORCE_PLAINTEXT=1 sends the debug plaintext request without key exchange", async () => {
+    process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+    const bodyObj = chatBody();
+    const { fetch: fake, calls } = recordingFetch(
+      () => new Response('data: {"ok":1}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const res = await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-plain" }, bodyObj);
+
+    expect(res.status).toBe(200);
+    // 只发明文：没有 key-exchange，也没有加密重试
+    expect(calls.map((c) => c.url)).toEqual([CHAT_URL]);
+    expect(String(calls[0].init.body)).toBe(JSON.stringify(bodyObj));
+    expect(headerValue(calls[0], "X-Encrypt-Algo")).toBeNull();
+    expect(headerValue(calls[0], "Content-Type")).not.toBe("application/octet-stream");
+  });
+
   test("KEY_EXPIRED re-negotiates the key and records the retry attempts", async () => {
     const servers = [createECDH("prime256v1"), createECDH("prime256v1")];
     let exchange = 0;

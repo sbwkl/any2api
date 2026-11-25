@@ -41,14 +41,19 @@ function resetStream(): Response {
   }), { status: 200, headers: { "Content-Type": "text/event-stream" } });
 }
 
-test("empty SSE on a non-stream request becomes 502", async () => {
-  const facade = makeFacade(async () =>
-    new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+test("empty SSE on a non-stream request becomes 502 without a retry", async () => {
+  let calls = 0;
+  const facade = makeFacade(async () => {
+    calls++;
+    return new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  });
   const resp = await facade.respond(body, false, "session");
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
   expect(j.error.message).toContain("no choices");
   expect(j.error.type).toBe("server_error");
+  // 真空流不是瞬时网络故障：只发一次上游请求
+  expect(calls).toBe(1);
 });
 
 test("error-only SSE on a non-stream request becomes 502", async () => {

@@ -9,7 +9,7 @@ import { refreshNow } from "./refresher";
 import type { GatewayConfig, ModelInfo, Credentials } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
 import { aggregateSseToCompletion, normalizeChatSseUsage, NO_CHOICES } from "../../shared/sse";
-import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, PROXY_ERROR_HEADER } from "../../shared/errors";
+import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, isTransientUpstreamMessage, PROXY_ERROR_HEADER } from "../../shared/errors";
 import { dumpUpstream, type FetchLike } from "../../shared/trace";
 
 const CLIENT_TYPE = "IDE";
@@ -40,12 +40,10 @@ function secIsoZ(d = new Date()): string {
 
 interface SessionState { id: string; firstRequestDone: boolean; lastActivity: number }
 
-/** 上游错误消息是否值得重试：连接类/超时类/空流。参数错、限流、鉴权不重试。 */
+/** 上游错误消息是否值得重试：由共享分类决定（5xx/连接类/超时）。参数错、限流、鉴权不重试。 */
 function isTransientFailure(message: string): boolean {
-  if (/ECONNRESET|socket connection was closed|ECONNREFUSED|EPIPE|network|timeout|timed out|ETIMEDOUT/i.test(message))
-    return true;
-  // 空流没有上游错误细节：可能是一次即时抖动，重试一次安全。
-  return message === NO_CHOICES;
+  // 真空流不是网络故障：重试只会把一次失败变成两次上游调用。
+  return message !== NO_CHOICES && isTransientUpstreamMessage(message);
 }
 
 export class OpenAIFacade {
