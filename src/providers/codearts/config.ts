@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { signSl, signSh, type Credentials } from "./signer";
 import { uuid32 } from "../../shared/ids";
 import { traceUpstream, type FetchLike } from "../../shared/trace";
+import { serviceLogger } from "../../shared/log";
 
 export interface ModelInfo { modelId: string; modelName: string; endpoint: string; inputLength?: number }
 export interface GatewayConfig { endpoint: string; models: ModelInfo[] }
@@ -51,7 +52,7 @@ function fromVscodeStateDb(): Credentials | null {
     if (!u?.accessKey || !u?.secretKey) return null;
     const expiresAt = u.expiresAt ? new Date(u.expiresAt).toISOString() : undefined;
     const exp = expiresAt ? Date.parse(expiresAt) : Infinity;
-    console.log(`[codearts] snap 键 STS 有效期至 ${expiresAt ?? "(未知)"}${exp < Date.now() ? "（已过期，等待刷新链续期）" : ""}`);
+    serviceLogger.log(`[codearts] snap 键 STS 有效期至 ${expiresAt ?? "(未知)"}${exp < Date.now() ? "（已过期，等待刷新链续期）" : ""}`);
     return {
       ak: u.accessKey,
       sk: u.secretKey,
@@ -113,7 +114,7 @@ export async function discoverModels(creds: Credentials, fetchImpl: FetchLike = 
     const models = await fetchPolicyModels(creds, fetchImpl);
     return { endpoint: "", models };
   } catch (e: any) {
-    console.warn(`[codearts] policy/bundle 不可用（${e?.message ?? e}），使用观测模型池`);
+    serviceLogger.warn(`[codearts] policy/bundle 不可用（${e?.message ?? e}），使用观测模型池`);
     return {
       endpoint: "",
       models: [
@@ -140,7 +141,7 @@ export async function fetchGatewayConfig(creds: Credentials, fetchImpl: FetchLik
   if (body?.error_code !== "0000" || !body?.result) {
     // 福利模型端点需要渠道上下文（无福利订阅时报 invalid channel, group not found）。
     // 真实客户端此时也拿不到该池，回退到内核观测到的默认模型。
-    console.warn(`[codearts] gateway/config 不可用（${body?.error_msg ?? resp.status}），使用观测模型池`);
+    serviceLogger.warn(`[codearts] gateway/config 不可用（${body?.error_msg ?? resp.status}），使用观测模型池`);
     return {
       endpoint: "",
       models: [
@@ -158,7 +159,7 @@ export async function fetchGatewayConfig(creds: Credentials, fetchImpl: FetchLik
     }
   }
   if (!models.length) {
-    console.warn("[codearts] gateway/config 未返回模型池，使用观测模型池");
+    serviceLogger.warn("[codearts] gateway/config 未返回模型池，使用观测模型池");
     return {
       endpoint,
       models: [

@@ -9,6 +9,7 @@ import { homedir } from "os";
 import type { Credentials } from "./signer";
 import { setCredentials } from "./config";
 import { traceUpstream, type FetchLike } from "../../shared/trace";
+import { serviceLogger } from "../../shared/log";
 
 // 内核常量（逐字对照 authentication 扩展）
 const IAM_TOKEN_API = "/v1/oauth2/tokens";
@@ -90,7 +91,7 @@ export function readSecretSession(): SecretAuth | null {
     if (!auth?.refresh_token || !auth?.loginContext?.dpopKeyPair) return null;
     return auth;
   } catch (e: any) {
-    console.warn(`[refresher] 读取 HuaweiCloudSession 失败: ${e?.message ?? e}`);
+    serviceLogger.warn(`[refresher] 读取 HuaweiCloudSession 失败: ${e?.message ?? e}`);
     return null;
   }
 }
@@ -231,7 +232,7 @@ export async function refreshNow(fetchImpl: FetchLike = fetch): Promise<Credenti
     lastRenewError = null;
     const creds = toCredentials(newAuth);
     setCredentials(creds);
-    console.log(`[refresher] STS 已刷新，有效期至 ${newAuth.expires_at}（refresh_token 已轮换并回写）`);
+    serviceLogger.log(`[refresher] STS 已刷新，有效期至 ${newAuth.expires_at}（refresh_token 已轮换并回写）`);
     return creds;
   } catch (e: any) {
     const kind = classifyRefreshError(e.iamBody);
@@ -244,7 +245,7 @@ export async function refreshNow(fetchImpl: FetchLike = fetch): Promise<Credenti
         lastRenewError = null;
         const creds = toCredentials(fresh);
         setCredentials(creds);
-        console.log("[refresher] refresh_token 已被 app 窗口轮换，采纳共享存储新凭证");
+        serviceLogger.log("[refresher] refresh_token 已被 app 窗口轮换，采纳共享存储新凭证");
         return creds;
       }
       throw new Error("refresh_token 已被消费但共享存储未更新：可能是另一次失败的刷新（调用成功但回写前崩溃）或多窗口竞争，请在 app 内重新登录");
@@ -268,7 +269,7 @@ export async function maintainCredentials(fetchImpl: FetchLike = fetch): Promise
     lastSeenRefreshToken = auth.refresh_token;
     const creds = toCredentials(auth);
     setCredentials(creds);
-    console.log(`[refresher] 采纳 app 续期的 STS（有效期至 ${auth.expires_at}）`);
+    serviceLogger.log(`[refresher] 采纳 app 续期的 STS（有效期至 ${auth.expires_at}）`);
     return;
   }
   if (!lastSeenRefreshToken) lastSeenRefreshToken = auth.refresh_token;
@@ -277,7 +278,7 @@ export async function maintainCredentials(fetchImpl: FetchLike = fetch): Promise
   try {
     await refreshNow(fetchImpl);
   } catch (e: any) {
-    console.warn(`[refresher] 主动续期失败: ${e?.message ?? e}`);
+    serviceLogger.warn(`[refresher] 主动续期失败: ${e?.message ?? e}`);
   }
 }
 

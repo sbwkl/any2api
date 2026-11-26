@@ -57,7 +57,7 @@ src/
 launchctl kickstart -k gui/$(id -u)/cn.wayne.any2api   # 重启（改代码后）
 launchctl bootout gui/$(id -u)/cn.wayne.any2api        # 停止
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/cn.wayne.any2api.plist  # 再启动
-tail -f logs/any2api.log                                # 看日志
+tail -f logs/any2api.log                                # 看日志（每行以 ISO UTC 时间戳开头）
 ```
 
 配置文件：`~/Library/LaunchAgents/cn.wayne.any2api.plist`。

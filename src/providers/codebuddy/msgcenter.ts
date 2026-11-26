@@ -2,6 +2,7 @@
 // 真实 IDE 每 30s GET /v2/msg-center/message/summary；默认关闭，CODEBUDDY_MSG_CENTER=1 开启。
 import { traceUpstream } from "../../shared/trace";
 import type { Credentials, ProductConfig } from "./types";
+import { serviceLogger } from "../../shared/log";
 
 export interface MsgCenterOptions {
   config: ProductConfig;
@@ -54,7 +55,7 @@ export class MsgCenterPoller {
     const json: any = await resp.json().catch(() => null);
     // 静默：只维护“在线”信号，不输出轮询日志；需要观测时用 CODEBUDDY_DEBUG=1。
     if (process.env.CODEBUDDY_DEBUG === "1") {
-      console.log(`[codebuddy] msg-center summary total=${json?.data?.total ?? "?"}`);
+      serviceLogger.log(`[codebuddy] msg-center summary total=${json?.data?.total ?? "?"}`);
     }
   }
 }
