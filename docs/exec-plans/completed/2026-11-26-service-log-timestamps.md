@@ -32,7 +32,7 @@ Owner：wayne
 ## 5. 验证与观测
 
 - 自动化测试：`src/shared/log.test.ts` 断言三种级别均带 ISO UTC 前缀，并断言多行字符串参数的每个物理行都带同一时间戳。
-- 全量门禁（2026-11-26，worktree `any2api-integration-service-log-timestamps`，head `197b29f`）：`bun test` → 332 pass / 0 fail / 1341 expect；`bun build src/index.ts --target=bun` 退出码 0；`tsc --noEmit` 退出码 0；`bun scripts/check-docs-links.ts` → 全部本地链接有效。
+- 全量门禁（2026-11-26，worktree `any2api-integration-service-log-timestamps`，证据提交 `9331ccd`）：`bun test` → 332 pass / 0 fail / 1341 expect；`bun build src/index.ts --target=bun` 退出码 0；`tsc --noEmit` 退出码 0；`bun scripts/check-docs-links.ts` → 全部本地链接有效。
 - 手工验证：`PORT=18787 bun src/index.ts`，stdout 首行为 `2026-11-26T08:20:13.360Z [codearts] ...`，stderr 为空。
 - 未验证：launchd 生产服务尚未重启加载本变更（待部署）。
 
@@ -55,4 +55,4 @@ Owner：wayne
 | 状态 | 操作人 | 证据/链接 |
 |---|---|---|
 | 开发中 | wayne | 2026-11-26 grilling 锁定：服务日志加 ISO UTC 时间戳，不加其它关联字段 |
-| 已验证 | wayne | head `197b29f` 单测 332 pass / 0 fail；build、tsc、docs-links 通过；真实进程冒烟通过；生产未部署 |
+| 已验证 | wayne | 证据提交 `9331ccd` 单测 332 pass / 0 fail；build、tsc、docs-links 通过；真实进程冒烟通过；生产未部署 |
