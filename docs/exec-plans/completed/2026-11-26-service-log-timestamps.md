@@ -4,7 +4,7 @@
 状态：已验证
 Owner：wayne
 所属模块/入口：`src/shared/log.ts`、各 provider 与注册表的生产日志调用点
-关联：本轮 trace 日志分析；[GLOSSARY](../../../GLOSSARY.md)
+关联：本轮服务日志与请求记录时间对齐分析；[GLOSSARY](../../../GLOSSARY.md)
 
 ## 1. 摘要
 
@@ -47,7 +47,7 @@ Owner：wayne
 ## 8. 关联与证据
 
 - 日志分析结论：37 条上游读取中断，时间 2026-11-26T02:30:08.481Z–05:42:19.887Z。
-- 无 issue/PR。
+- 规格：[#33](https://github.com/sbwkl/any2api/issues/33)。
 
 ## 9. 变更记录
 

@@ -14,6 +14,7 @@ src/
 ├── registry.ts               # ProviderModule 注册表、前缀路由、404/405/503、聚合 health
 ├── shared/
 │   ├── ids.ts                # 通用 ID 生成（跨 provider 复用）
+│   ├── log.ts                # 服务日志：强制 ISO UTC 时间戳前缀
 │   ├── sse.ts                # 通用 SSE 解析 + chat.completion 聚合
 │   └── trace.ts              # 四层请求记录（schema 3）+ 上游请求转储（opt-in）
 ├── protocols/                # 共享协议层（只依赖 ChatBackend，不感知 provider 名称）
