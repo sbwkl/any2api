@@ -16,6 +16,25 @@ describe("serviceLogger", () => {
     expect(calls[0].slice(1)).toEqual(["[demo] ready"]);
   });
 
+  test("prefixes every physical line of a multi-line string argument with the same timestamp", () => {
+    const calls: unknown[][] = [];
+    const logMock = spyOn(console, "log").mockImplementation((...args) => { calls.push(args); });
+    try {
+      serviceLogger.log("[demo] headers:", "{\n  \"a\": \"b\"\n}\r\ntrailing");
+    } finally {
+      logMock.mockRestore();
+    }
+
+    expect(calls).toHaveLength(4);
+    const stamps = calls.map((call) => call[0]);
+    expect(stamps[0]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(new Set(stamps).size).toBe(1);
+    expect(calls[0].slice(1)).toEqual(["[demo] headers:", "{"]);
+    expect(calls[1].slice(1)).toEqual(['  "a": "b"']);
+    expect(calls[2].slice(1)).toEqual(["}"]);
+    expect(calls[3].slice(1)).toEqual(["trailing"]);
+  });
+
   test("prefixes warn and error with the same ISO UTC shape", () => {
     const warnCalls: unknown[][] = [];
     const errorCalls: unknown[][] = [];

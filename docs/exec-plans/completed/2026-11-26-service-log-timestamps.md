@@ -19,6 +19,7 @@ Owner：wayne
 ## 3. 行为 / AC delta
 
 - 服务日志的每条 `log` / `warn` / `error` 输出以 `YYYY-MM-DDTHH:mm:ss.sssZ` 开头，随后一个空格和原消息。
+- 字符串参数内含 `\r\n`、`\n` 或 `\r` 时按物理行拆分；每行使用同一 ISO UTC 时间戳，非字符串参数保留在其所在物理行。
 - 请求记录（四层观测）格式不变。
 - 本次不新增 PID、request id 或其它关联字段。
 
@@ -30,7 +31,7 @@ Owner：wayne
 
 ## 5. 验证与观测
 
-- 自动化测试：`src/shared/log.test.ts` 断言三种级别均带 ISO UTC 前缀。
+- 自动化测试：`src/shared/log.test.ts` 断言三种级别均带 ISO UTC 前缀，并断言多行字符串参数的每个物理行都带同一时间戳。
 - 全量门禁（2026-11-26，worktree `any2api-log-timestamps`）：`bun test` → 331 pass / 0 fail / 1334 expect；`bun build src/index.ts --target=bun` 退出码 0；`tsc --noEmit` 退出码 0；`bun scripts/check-docs-links.ts` → 全部本地链接有效。
 - 手工验证：`PORT=18787 bun src/index.ts`，stdout 首行为 `2026-11-26T08:20:13.360Z [codearts] ...`，stderr 为空。
 - 未验证：launchd 生产服务尚未重启加载本变更（待部署）。
