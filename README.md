@@ -14,6 +14,7 @@ src/
 ├── registry.ts               # ProviderModule 注册表、前缀路由、404/405/503、聚合 health
 ├── shared/
 │   ├── ids.ts                # 通用 ID 生成（跨 provider 复用）
+│   ├── log.ts                # 服务日志：强制 ISO UTC 时间戳前缀
 │   ├── sse.ts                # 通用 SSE 解析 + chat.completion 聚合
 │   └── trace.ts              # 四层请求记录（schema 3）+ 上游请求转储（opt-in）
 ├── protocols/                # 共享协议层（只依赖 ChatBackend，不感知 provider 名称）
@@ -57,7 +58,7 @@ src/
 launchctl kickstart -k gui/$(id -u)/cn.wayne.any2api   # 重启（改代码后）
 launchctl bootout gui/$(id -u)/cn.wayne.any2api        # 停止
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/cn.wayne.any2api.plist  # 再启动
-tail -f logs/any2api.log                                # 看日志
+tail -f logs/any2api.log                                # 看日志（每行以 ISO UTC 时间戳开头）
 ```
 
 配置文件：`~/Library/LaunchAgents/cn.wayne.any2api.plist`。

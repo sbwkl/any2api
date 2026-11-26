@@ -11,6 +11,7 @@ import type { TelemetrySimulator } from "./telemetry";
 import { aggregateSseToCompletion, normalizeChatSseUsage, NO_CHOICES } from "../../shared/sse";
 import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, isTransientUpstreamMessage, PROXY_ERROR_HEADER } from "../../shared/errors";
 import { dumpUpstream, type FetchLike } from "../../shared/trace";
+import { serviceLogger } from "../../shared/log";
 
 const CLIENT_TYPE = "IDE";
 const CLIENT_VERSION = "26.11.200";
@@ -232,7 +233,7 @@ export class OpenAIFacade {
           const reason = extractUpstreamErrorMessage(errText) ?? `upstream 401, refresh failed: ${e?.message ?? e}`;
           return jsonError(401, reason);
         }
-        console.log("[openai] 401 → STS 已刷新，重试一次");
+        serviceLogger.log("[openai] 401 → STS 已刷新，重试一次");
         try {
           resp = await this.chatUpstream(signedHeaders(), mapped);
         } catch (e: any) {

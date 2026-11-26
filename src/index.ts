@@ -3,6 +3,7 @@
 import { mountProviders } from "./registry";
 import { codeartsProvider } from "./providers/codearts";
 import { codebuddyProvider } from "./providers/codebuddy";
+import { serviceLogger } from "./shared/log";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -15,10 +16,10 @@ async function main(): Promise<void> {
     idleTimeout: 255,
     fetch: handler,
   });
-  console.log(`[any2api] 路由: /codearts/v1/* → codearts; /codebuddy/v1/* → codebuddy; http://${HOST}:${server.port}`);
+  serviceLogger.log(`[any2api] 路由: /codearts/v1/* → codearts; /codebuddy/v1/* → codebuddy; http://${HOST}:${server.port}`);
 }
 
 main().catch((e) => {
-  console.error(`[any2api] 启动失败: ${e?.message ?? e}`);
+  serviceLogger.error(`[any2api] 启动失败: ${e?.message ?? e}`);
   process.exit(1);
 });
