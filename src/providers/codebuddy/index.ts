@@ -6,6 +6,7 @@ import { loadCredentials, loadProductConfig } from "./config";
 import { CodeBuddyFacade } from "./openai";
 import { MsgCenterPoller } from "./msgcenter";
 import type { Profile } from "./types";
+import { serviceLogger } from "../../shared/log";
 
 export const codebuddyProvider: ProviderModule = {
   name: "codebuddy",
@@ -18,14 +19,14 @@ export const codebuddyProvider: ProviderModule = {
       deviceToken: process.env.CODEBUDDY_DEVICE_TOKEN || undefined,
     });
 
-    console.log(`[codebuddy] 凭证就绪 uid=${credentials.uid.slice(0, 8)}... 来源=${credentials.source}`);
-    console.log(`[codebuddy] 模型池: ${config.models.map((m) => m.id).join(", ")}`);
-    console.log(`[codebuddy] 提示词: ${config.prompts.length} 个，agent: ${config.agents.map((a) => a.name).join(", ") || "(无)"}`);
+    serviceLogger.log(`[codebuddy] 凭证就绪 uid=${credentials.uid.slice(0, 8)}... 来源=${credentials.source}`);
+    serviceLogger.log(`[codebuddy] 模型池: ${config.models.map((m) => m.id).join(", ")}`);
+    serviceLogger.log(`[codebuddy] 提示词: ${config.prompts.length} 个，agent: ${config.agents.map((a) => a.name).join(", ") || "(无)"}`);
 
     if (process.env.CODEBUDDY_MSG_CENTER === "1") {
       const poller = new MsgCenterPoller({ config, getCredentials: () => facade.getCredentials() });
       poller.start();
-      console.log("[codebuddy] msg-center 轮询已开启（30s）");
+      serviceLogger.log("[codebuddy] msg-center 轮询已开启（30s）");
     }
 
     const backend: ChatBackend = {

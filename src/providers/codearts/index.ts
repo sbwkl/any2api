@@ -15,6 +15,7 @@ import { createProtocolRoutes, type ChatBackend } from "../../protocols";
 import { CODEARTS_PROTOCOL_CAPABILITIES } from "./protocol-capabilities";
 import { mountProviders, type ProviderModule, type ProviderInstance } from "../../registry";
 import { traceUpstream } from "../../shared/trace";
+import { serviceLogger } from "../../shared/log";
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -49,26 +50,26 @@ async function resolveInitialCredentials() {
   try {
     bootstrap = loadCredentials();
   } catch (e: any) {
-    console.warn(`[codearts] snap 键凭证不可用：${e?.message ?? e}`);
+    serviceLogger.warn(`[codearts] snap 键凭证不可用：${e?.message ?? e}`);
   }
   const secretCreds = credentialsFromSecretSession();
   const plan = planStartupCredentials(bootstrap, secretCreds);
   setCredentials(plan.creds);
   if (!plan.refresh) return plan.creds;
-  console.log("[codearts] STS 已过期，尝试自动刷新…");
+  serviceLogger.log("[codearts] STS 已过期，尝试自动刷新…");
   return await refreshNow();
 }
 
 // 装配 codearts provider；路由路径相对挂载点，由注册表负责前缀分发。
 export async function createProvider(): Promise<ProviderInstance> {
   const creds = await resolveInitialCredentials();
-  console.log(`[codearts] 凭证就绪 ak=${creds.ak.slice(0, 8)}... 有效期至 ${creds.expiresAt ?? "(env 静态凭证)"}`);
+  serviceLogger.log(`[codearts] 凭证就绪 ak=${creds.ak.slice(0, 8)}... 有效期至 ${creds.expiresAt ?? "(env 静态凭证)"}`);
 
   startCredentialMaintainer(); // 每 60s：采纳 app 续期 / 余量 <30min 时自动续期
 
   // 模型发现（§7.4 步骤 2）：policy/bundle 动态下发，失败回退观测池
   const gw = await discoverModels(creds);
-  console.log(`[codearts] 模型池: ${gw.models.map((m) => m.modelId).join(", ")} endpoint=${gw.endpoint}`);
+  serviceLogger.log(`[codearts] 模型池: ${gw.models.map((m) => m.modelId).join(", ")} endpoint=${gw.endpoint}`);
 
   const snapOrigin = creds.origin ?? process.env.SNAP_ORIGIN ?? "https://snap-access.cn-north-4.myhuaweicloud.com";
   const snap = new SnapClient(snapOrigin);
@@ -84,7 +85,7 @@ export async function createProvider(): Promise<ProviderInstance> {
       { method: "GET", endpoint: statisticsUrl, headers: { "Content-Type": "application/json" } },
       creds,
     ),
-  }).then((r) => console.log(`[codearts] statistics/plugin -> ${r.status}`)).catch(() => {});
+  }).then((r) => serviceLogger.log(`[codearts] statistics/plugin -> ${r.status}`)).catch(() => {});
 
   const facade = new OpenAIFacade(snap, gw, telemetry);
 
@@ -116,6 +117,6 @@ export async function start(): Promise<void> {
     idleTimeout: 255,
     fetch: handler,
   });
-  console.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/codearts/v1 (POST /codearts/v1/chat/completions, GET /codearts/v1/models)`);
-  console.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/codearts/v1  api-key=任意非空串`);
+  serviceLogger.log(`[codearts] OpenAI 兼容端点: http://127.0.0.1:${server.port}/codearts/v1 (POST /codearts/v1/chat/completions, GET /codearts/v1/models)`);
+  serviceLogger.log(`[codearts] 提示: OpenAI SDK baseUrl=http://127.0.0.1:${server.port}/codearts/v1  api-key=任意非空串`);
 }

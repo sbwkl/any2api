@@ -4,6 +4,7 @@ import { SM4GCM } from "./sm4";
 import { signSimple, signSh } from "./signer";
 import { getCredentials } from "./config";
 import { traceUpstream, UpstreamDecodeError, type FetchLike } from "../../shared/trace";
+import { serviceLogger } from "../../shared/log";
 
 const SM4_GCM_ALGO = "sm4-gcm";
 const ENCRYPT_PATHS = ["/api/v2/chat/completions"];
@@ -109,7 +110,7 @@ function decryptTrackedChunk(
   try {
     return decryptChunk(cipher, key, keyId, frame, index);
   } catch (e: any) {
-    if (logPrefix) console.error(`${logPrefix} chunk=${index}: ${e?.message ?? e} frame=${frame.slice(0, 120)}`);
+    if (logPrefix) serviceLogger.error(`${logPrefix} chunk=${index}: ${e?.message ?? e} frame=${frame.slice(0, 120)}`);
     throw new UpstreamDecodeError("frame_decrypt", index, e?.message ?? String(e));
   }
 }
@@ -175,7 +176,7 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
           }
         }
       } catch (e) {
-        console.error("[snap] 解密流终止:", (e as any)?.message ?? e);
+        serviceLogger.error("[snap] 解密流终止:", (e as any)?.message ?? e);
         try { await reader.cancel(); } catch { /* reader 已释放 */ }
         controller.error(e);
       }
@@ -195,7 +196,7 @@ function decryptingFetch(fetchImpl: FetchLike, key: NegotiatedKey): FetchLike {
     const resp = await fetchImpl(input, init);
     const algo = resp.headers.get("X-Encrypt-Algo");
     if (!resp.ok || algo !== SM4_GCM_ALGO) return resp;
-    console.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);
+    serviceLogger.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);
     return decryptStream(key.sessionKey, key.keyId, resp);
   };
 }
@@ -262,7 +263,7 @@ export class SnapClient {
       if (process.env.CODEARTS_DEBUG_HEADERS === "1") {
         const dump: Record<string, string> = {};
         h.forEach((v, k) => (dump[k] = k === "Authorization" ? `${v.slice(0, 60)}...` : v.length > 80 ? `${v.slice(0, 80)}...` : v));
-        console.log("[snap] 最终上线头集:", JSON.stringify(dump, null, 1));
+        serviceLogger.log("[snap] 最终上线头集:", JSON.stringify(dump, null, 1));
       }
       // L2 记录加密前明文（recordBody）；线上 body 为 base64 密文；线上头含 X-Encrypt-* 与重签名
       resp = await traceUpstream(
@@ -271,20 +272,20 @@ export class SnapClient {
       );
     } catch (e: any) {
       if (!isRetry) {
-        console.warn(`[snap] 加密请求网络错误，同 key 重试一次: ${e?.message ?? e}`);
+        serviceLogger.warn(`[snap] 加密请求网络错误，同 key 重试一次: ${e?.message ?? e}`);
         return this.chat(url, headers, bodyObj, true);
       }
       throw new Error(`upstream network error: ${e?.message ?? e}`);
     }
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
-      console.warn(`[snap] 加密请求非2xx: status=${resp.status} body=${text.slice(0, 300)}`);
+      serviceLogger.warn(`[snap] 加密请求非2xx: status=${resp.status} body=${text.slice(0, 300)}`);
       if (text.includes("ENCRYPT_KEY_EXPIRED") && !isRetry) {
         this.keys.clearKey();
         return this.chat(url, headers, bodyObj, true);
       }
       if (TRANSIENT_STATUS.has(resp.status) && !isRetry) {
-        console.warn(`[snap] 上游 ${resp.status}，加密重试一次`);
+        serviceLogger.warn(`[snap] 上游 ${resp.status}，加密重试一次`);
         return this.chat(url, headers, bodyObj, true);
       }
       // 明文回退是死路径（实测 415），不再重发；把上游状态/原文交回 provider 归一。
@@ -378,12 +379,12 @@ export class HeartbeatManager {
     try {
       resp = await send();
     } catch (e) {
-      console.error(`[snap] 心跳网络错误 session=${sessionId} status=${status}: ${(e as any)?.message ?? e}`);
+      serviceLogger.error(`[snap] 心跳网络错误 session=${sessionId} status=${status}: ${(e as any)?.message ?? e}`);
       return;
     }
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
-      console.warn(`[snap] 心跳非2xx session=${sessionId} status=${status} http=${resp.status} body=${text.slice(0, 300)}`);
+      serviceLogger.warn(`[snap] 心跳非2xx session=${sessionId} status=${status} http=${resp.status} body=${text.slice(0, 300)}`);
     }
   }
 

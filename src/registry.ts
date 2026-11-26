@@ -1,6 +1,7 @@
 // Provider 注册表与路由分发 — 对应 RFC-0001 的 provider 边界重构
 // 路由层只回答：哪个前缀、交给谁、失败怎么退化；provider 不再知道自己的公开前缀。
 import { abortReasonForError, markAbort, runWithRequestTrace } from "./shared/trace";
+import { serviceLogger } from "./shared/log";
 
 export interface Route {
   method: string;
@@ -101,11 +102,11 @@ export async function mountProviders(modules: ProviderModule[]): Promise<(req: R
     try {
       const instance = await module.create();
       mounted.push({ module, instance });
-      console.log(`[any2api] provider ${module.name} ready (prefix='${module.prefix || "/"}', routes=${instance.routes.length})`);
+      serviceLogger.log(`[any2api] provider ${module.name} ready (prefix='${module.prefix || "/"}', routes=${instance.routes.length})`);
     } catch (e: any) {
       const message = e?.message ?? String(e);
       if (module.required) throw e;
-      console.error(`[any2api] provider ${module.name} unavailable: ${message}`);
+      serviceLogger.error(`[any2api] provider ${module.name} unavailable: ${message}`);
       mounted.push({ module, error: message });
     }
   }
