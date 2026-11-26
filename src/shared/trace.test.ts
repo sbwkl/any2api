@@ -90,7 +90,7 @@ describe("upstream dump", () => {
   });
 });
 
-describe("request record (schema 2)", () => {
+describe("request record (schema 3)", () => {
   test("is disabled without TRACE_CAPTURE_DIR and leaves outbound calls untouched", async () => {
     expect(startRequestTrace(jsonRequest())).toBeNull();
 
@@ -104,7 +104,7 @@ describe("request record (schema 2)", () => {
     expect(existsSync(capturePath(dir))).toBe(false);
   });
 
-  test("writes one schema 2 record with L1 headers, parsed request and L4 response", async () => {
+  test("writes one schema 3 record with L1 headers, parsed request and L4 response", async () => {
     const sensitive = {
       authorization: "Bearer super-secret",
       "x-api-key": "key-secret",
@@ -133,7 +133,7 @@ describe("request record (schema 2)", () => {
     const records = readRecords();
     expect(records).toHaveLength(1);
     const rec = records[0];
-    expect(rec.schema).toBe(2);
+    expect(rec.schema).toBe(3);
     expect(typeof rec.ts).toBe("string");
     expect(rec.provider).toBe("codearts");
     expect(rec.method).toBe("POST");

@@ -1,8 +1,8 @@
-// 可观测性：四层请求记录（schema 2）与上游请求转储（UPSTREAM_DUMP_DIR）。
+// 可观测性：四层请求记录（schema 3）与上游请求转储（UPSTREAM_DUMP_DIR）。
 // 两者均为 opt-in、默认关闭，且不得影响请求主路径。
 //
 // 一次入站请求对应一条 JSONL 记录：L1 入站请求、upstream[] 为请求上下文内
-// 每次上游尝试的 L2 请求 + L3 原始响应、L4 出站响应。请求结束时一次性追加。
+// 每次上游尝试的 L2 请求 + L3 上游可读响应、L4 出站响应。请求结束时一次性追加。
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -21,8 +21,23 @@ const SENSITIVE_HEADERS = new Set([
   "set-cookie",
 ]);
 
-/** 请求中断原因（schema 2 允许的取值） */
+/** 请求中断原因（schema 3 允许的取值） */
 export type AbortReason = "client_disconnect" | "upstream_error" | "timeout" | "proxy_error";
+
+/**
+ * provider 解码失败的最小共享载体：仅由 provider 抛出、trace 写入该次上游 L3。
+ * stage 不设枚举，由各 provider 自行定义阶段名。
+ */
+export class UpstreamDecodeError extends Error {
+  constructor(
+    readonly stage: string,
+    readonly chunk_index: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "UpstreamDecodeError";
+  }
+}
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -66,6 +81,7 @@ interface UpstreamAttemptRecord {
     body: string;
     chunks: Array<{ t_ms: number; bytes: number }>;
     complete: boolean;
+    decode_error?: { stage: string; chunk_index: number; message: string };
   };
 }
 
@@ -267,7 +283,7 @@ function requestInit(request: UpstreamRequest): RequestInit {
 /**
  * 出站记录入口：包裹一次上游调用（一个尝试）。
  * 无请求上下文时完全 no-op，直接透传 fetch；有上下文时旁路读取响应，
- * 记录 L2 请求与 L3 原始响应，原 Response 立即返回给调用方。
+ * 记录 L2 请求与 L3 上游可读响应，原 Response 立即返回给调用方。
  */
 export function traceUpstream(request: UpstreamRequest, opts: TraceUpstreamOptions = {}): Promise<Response> {
   const fetchImpl = opts.fetch ?? fetch;
@@ -342,6 +358,13 @@ async function drainUpstream(state: TraceState, attempt: UpstreamAttemptRecord, 
   } catch (error) {
     attempt.response.body = body;
     attempt.response.complete = false;
+    if (error instanceof UpstreamDecodeError) {
+      attempt.response.decode_error = {
+        stage: error.stage,
+        chunk_index: error.chunk_index,
+        message: error.message,
+      };
+    }
     throw error;
   }
 }
@@ -396,7 +419,7 @@ async function finishTrace(state: TraceState, response: Response, durationMsOver
     const abortReason = state.abortReason;
     if (abortReason) complete = false;
     const record = {
-      schema: 2 as const,
+      schema: 3 as const,
       ts: new Date().toISOString(),
       provider: state.provider,
       method: state.method,

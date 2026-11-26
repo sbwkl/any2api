@@ -105,6 +105,35 @@ describe("snap.chat request-scoped attempts", () => {
     expect(readRecords()).toHaveLength(0);
   });
 
+  test("non-encrypted CodeArts responses keep the upstream-readable L3 JSONL record unchanged", async () => {
+    // force-plaintext 走 sendPlaintext，是 chat 唯一不协商密钥、不解密的上游路径。
+    process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+    const plainBody = 'data: {"ok":1}\n\n';
+    const { fetch: fake, calls } = recordingFetch(
+      () => new Response(plainBody, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+
+    const trace = startRequestTrace(inbound(), { dir })!;
+    const snap = new SnapClient("https://snap.test", fake);
+    const res = await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-plain-l3" }, chatBody());
+    expect(await res.text()).toBe(plainBody);
+    await trace.finish(Response.json({ ok: true }));
+
+    const record = readRecords()[0];
+    expect(record.schema).toBe(3);
+    expect(record.upstream).toHaveLength(1);
+    const chatAttempt = record.upstream[0];
+    expect(calls.map((c) => c.url)).toEqual([CHAT_URL]);
+    expect(chatAttempt.url).toBe(CHAT_URL);
+    expect(chatAttempt.response.status).toBe(200);
+    expect(chatAttempt.response.body).toBe(plainBody);
+    expect(recordedHeader(chatAttempt.response.headers, "content-type")).toBe("text/event-stream");
+    expect(recordedHeader(chatAttempt.response.headers, "x-encrypt-algo")).toBeNull();
+    expect(chatAttempt.response.decode_error).toBeUndefined();
+    expect(chatAttempt.response.complete).toBe(true);
+    expect(JSON.stringify(record)).not.toContain("x-encrypt-algo");
+  });
+
   test("records key-exchange and one encrypted retry for a transient 5xx", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
@@ -177,7 +206,7 @@ describe("snap.chat request-scoped attempts", () => {
     expect(JSON.stringify(upstream)).not.toContain("business-secret");
   });
 
-  test("L3 keeps the raw ciphertext frames while the caller receives decrypted SSE", async () => {
+  test("L3 records decrypted plaintext SSE with schema 3 while the caller receives the same plaintext", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
     const cipher = new SM4GCM();
@@ -228,20 +257,90 @@ describe("snap.chat request-scoped attempts", () => {
     expect(plaintext).toBe(plainFrames.map((frame) => frame + "\n\n").join(""));
     expect(Buffer.from(plaintext).includes(encoder.encode("data:"))).toBe(true);
 
-    const upstream = readRecords()[0].upstream;
+    const record = readRecords()[0];
+    expect(record.schema).toBe(3);
+    const upstream = record.upstream;
     expect(upstream).toHaveLength(2);
-    const encryptedAttempt = upstream[1];
-    // 响应头在 decryptStream 删除加密头之前快照
-    expect(recordedHeader(encryptedAttempt.response.headers, "x-encrypt-algo")).toBe("sm4-gcm");
-    expect(recordedHeader(encryptedAttempt.response.headers, "x-encrypt-key-id")).toBe(keyId);
-    // L3 记录上游原始密文文本（g4 帧），不是解密后的明文
-    expect(encryptedAttempt.response.body).toBe(rawBody());
-    expect(encryptedAttempt.response.body).not.toContain("data:");
-    expect(encryptedAttempt.response.chunks.length).toBeGreaterThanOrEqual(1);
-    expect(encryptedAttempt.response.chunks.reduce((n: number, c: any) => n + c.bytes, 0)).toBe(
-      encoder.encode(rawBody()).byteLength,
+    const chatAttempt = upstream[1];
+    // L3 是 provider 解码后的可读响应：无加密头，content-type 为解码后的类型
+    expect(recordedHeader(chatAttempt.response.headers, "x-encrypt-algo")).toBeNull();
+    expect(recordedHeader(chatAttempt.response.headers, "x-encrypt-key-id")).toBeNull();
+    expect(recordedHeader(chatAttempt.response.headers, "content-type")).toBe("text/event-stream");
+    // L3 正文为明文 SSE，与调用方收到的内容一致，且不含密文帧形态
+    const expectedPlaintext = plainFrames.map((frame) => frame + "\n\n").join("");
+    expect(chatAttempt.response.body).toBe(expectedPlaintext);
+    expect(chatAttempt.response.body).toBe(plaintext);
+    expect(chatAttempt.response.body).toContain("data:");
+    expect(chatAttempt.response.body).not.toContain(`${keyId}|`);
+    for (const frame of rawFrames) expect(chatAttempt.response.body).not.toContain(frame);
+    expect(chatAttempt.response.chunks.length).toBeGreaterThanOrEqual(1);
+    expect(chatAttempt.response.chunks.reduce((n: number, c: any) => n + c.bytes, 0)).toBe(
+      encoder.encode(expectedPlaintext).byteLength,
     );
-    expect(encryptedAttempt.response.complete).toBe(true);
+    expect(chatAttempt.response.complete).toBe(true);
+  });
+
+  test("a corrupt encrypted frame keeps the decrypted prefix in L3 with a structured decode_error and no retry", async () => {
+    const server = createECDH("prime256v1");
+    const serverPublicKey = server.generateKeys().toString("base64");
+    const cipher = new SM4GCM();
+    const keyId = "kid-10";
+    let sessionKey: Uint8Array | null = null;
+    const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
+    const firstPlain = 'data: {"a":1}\n\n';
+
+    const { fetch: fake, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        const reqBody = JSON.parse(String(call.init.body));
+        const shared = server.computeSecret(Buffer.from(reqBody.clientPublicKey, "base64"));
+        sessionKey = new Uint8Array(createHash("sha256").update(shared).digest().subarray(0, 16));
+        return Response.json({ serverPublicKey, keyId, expiresIn: 3600 });
+      }
+      const { ciphertext, iv, authTag } = cipher.encrypt(sessionKey!, encoder.encode(firstPlain), `${keyId}|0`);
+      const badTag = authTag.slice();
+      badTag[0] ^= 1;
+      const corrupt = `${b64(iv)}:${b64(badTag)}:${b64(ciphertext)}`;
+      return new Response(`${b64(iv)}:${b64(authTag)}:${b64(ciphertext)}\n\n${corrupt}\n\n`, {
+        status: 200,
+        headers: {
+          "X-Encrypt-Algo": "sm4-gcm",
+          "X-Encrypt-Key-Id": keyId,
+          "Content-Type": "application/x-encrypted-sse",
+        },
+      });
+    });
+
+    const trace = startRequestTrace(inbound(), { dir })!;
+    const snap = new SnapClient("https://snap.test", fake);
+    let callerError: unknown;
+    try {
+      const res = await snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-4" }, chatBody());
+      try {
+        await res.text();
+      } catch (e) {
+        callerError = e;
+      }
+    } finally {
+      await trace.finish(Response.json({ ok: true }));
+    }
+
+    // 调用方流拒绝，且没有因解密失败新增重试/预读
+    expect(callerError).toBeDefined();
+    expect(calls.filter((c) => c.url === CHAT_URL)).toHaveLength(1);
+
+    const record = readRecords()[0];
+    expect(record.upstream).toHaveLength(2);
+    const chatAttempt = record.upstream[1];
+    // L3 保留失败前已解密的明文前缀，并明确标记不完整
+    expect(chatAttempt.response.body).toBe(firstPlain + "\n\n");
+    expect(chatAttempt.response.complete).toBe(false);
+    expect(chatAttempt.response.decode_error).toEqual({
+      stage: "frame_decrypt",
+      chunk_index: 1,
+      message: "authentication tag mismatch",
+    });
+    // 请求级中断原因与未发生解密失败时一致（不引入新的中断原因）
+    expect(record.response.abort_reason).toBeNull();
   });
 
   test("key-exchange failure rejects instead of sending a useless plaintext chat", async () => {

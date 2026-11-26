@@ -12,6 +12,7 @@
 
 ## 变更追溯
 
+- 进行中（已实现，待合并 main）：[`2026-11-25-codearts-l3-decrypted-plaintext.md`](../exec-plans/active/2026-11-25-codearts-l3-decrypted-plaintext.md)（CodeArts L3 默认记录解密明文，schema 3）
 - 进行中（已验证，待合并）：[`2026-11-24-e2e-conformance-suite.md`](../exec-plans/active/2026-11-24-e2e-conformance-suite.md)（实弹 e2e 相似度矩阵与基线）
 - 进行中（开发中）：[`2026-11-25-codearts-usage-semantics.md`](../exec-plans/active/2026-11-25-codearts-usage-semantics.md)（CodeArts Anthropic usage 未缓存输入语义修复，R37）
 - 已完成：[`docs/exec-plans/completed/`](../exec-plans/completed)

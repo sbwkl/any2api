@@ -1,10 +1,12 @@
 # 四层请求记录：trace 扩展（L1–L4）
 
 类型：可观测性 / 测试基础设施
-状态：已验证（本地回归通过；未合并 main、未部署）
+状态：已验证（schema 2 历史时点；当前 schema 3 见下方当前事实源）
 Owner：wayne
 所属模块/入口：`src/shared/trace.ts`、`src/registry.ts`、两 provider 出站调用点
 关联：spec [sbwkl/any2api#6](https://github.com/sbwkl/any2api/issues/6)、[GLOSSARY](../../../GLOSSARY.md)、[e2e 一致性测试](../active/2026-11-24-e2e-conformance-suite.md)
+
+> 当前事实源：本文件保留 schema 2 变更的历史事实与证据，不回溯改写；当前记录格式为 schema 3（CodeArts L3 默认解密明文），见 [ADR](../../design-docs/adr/codearts-l3-decrypted-plaintext.md) 与 [已实现变更](../active/2026-11-25-codearts-l3-decrypted-plaintext.md)。
 
 ## 1. 摘要
 
@@ -37,7 +39,7 @@ Owner：wayne
 | D11 | 配置 | 仅环境变量；废弃单条正文上限变量 |
 | D12 | e2e | 上游请求转储与报告不动；语料评估不适配新格式 |
 
-实现复核（2026-11-25）：D1–D12 与最终实现一致，无行为偏差。实现层限制仅一处——L1 头经 Fetch `Headers` 记录，同名头会被合并、名称顺序按规范归一，无法还原线上原始重复头与顺序（L2 为构造对象，保留插入顺序）；见 §5。
+实现复核（2026-11-25，schema 2 历史时点）：D1–D12 与该时点的实现一致，无行为偏差。实现层限制仅一处——L1 头经 Fetch `Headers` 记录，同名头会被合并、名称顺序按规范归一，无法还原线上原始重复头与顺序（L2 为构造对象，保留插入顺序）；见 §5。此后 CodeArts L3 改为记录解密明文并将记录 schema 升至 3，D1 的 L3 口径与 schema 编号不再描述当前实现；见 [ADR](../../design-docs/adr/codearts-l3-decrypted-plaintext.md) 与 [已实现变更](../active/2026-11-25-codearts-l3-decrypted-plaintext.md)。
 
 ## 4. 影响范围与非目标
 

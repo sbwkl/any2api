@@ -3,7 +3,7 @@ import { createECDH, createHash, randomBytes } from "crypto";
 import { SM4GCM } from "./sm4";
 import { signSimple, signSh } from "./signer";
 import { getCredentials } from "./config";
-import { traceUpstream, type FetchLike } from "../../shared/trace";
+import { traceUpstream, UpstreamDecodeError, type FetchLike } from "../../shared/trace";
 
 const SM4_GCM_ALGO = "sm4-gcm";
 const ENCRYPT_PATHS = ["/api/v2/chat/completions"];
@@ -97,6 +97,23 @@ function decryptChunk(cipher: SM4GCM, key: Uint8Array, keyId: string, frame: str
   return toUtf8(cipher.decrypt(key, iv, tag, ct, `${keyId}|${index}`));
 }
 
+/** 统一把帧解密失败包装为 trace 可识别的最小载体；index 由调用方在解密前确定。 */
+function decryptTrackedChunk(
+  cipher: SM4GCM,
+  key: Uint8Array,
+  keyId: string,
+  frame: string,
+  index: number,
+  logPrefix?: string,
+): string {
+  try {
+    return decryptChunk(cipher, key, keyId, frame, index);
+  } catch (e: any) {
+    if (logPrefix) console.error(`${logPrefix} chunk=${index}: ${e?.message ?? e} frame=${frame.slice(0, 120)}`);
+    throw new UpstreamDecodeError("frame_decrypt", index, e?.message ?? String(e));
+  }
+}
+
 function readWithIdleTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   ms: number,
@@ -129,7 +146,7 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
             if (buf.length > 0) {
               const frame = buf.trim();
               if (frame) {
-                const plain = decryptChunk(cipher, key, keyId, frame, chunkIndex);
+                const plain = decryptTrackedChunk(cipher, key, keyId, frame, chunkIndex);
                 controller.enqueue(encoder.encode(plain + FRAME_SEP));
                 chunkIndex++;
               }
@@ -144,13 +161,14 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
             buf = buf.slice(idx + FRAME_SEP.length);
             const trimmed = frame.trim();
             if (!trimmed) continue;
-            let plain: string;
-            try {
-              plain = decryptChunk(cipher, key, keyId, trimmed, chunkIndex);
-            } catch (e: any) {
-              console.error(`[snap] SSE 帧解密失败 chunk=${chunkIndex}: ${e?.message ?? e} frame=${trimmed.slice(0, 120)}`);
-              throw e;
-            }
+            const plain = decryptTrackedChunk(
+              cipher,
+              key,
+              keyId,
+              trimmed,
+              chunkIndex,
+              "[snap] SSE 帧解密失败",
+            );
             chunkIndex++;
             controller.enqueue(encoder.encode(plain + FRAME_SEP));
             if (chunkIndex % 50 === 0) await new Promise((r) => setImmediate(r));
@@ -168,6 +186,18 @@ function decryptStream(key: Uint8Array, keyId: string, resp: Response): Response
   headers.delete("X-Encrypt-Key-Id");
   headers.set("Content-Type", "text/event-stream");
   return new Response(stream, { status: resp.status, statusText: resp.statusText, headers });
+}
+
+// ---- 请求记录专用：在 traceUpstream 读取响应之前完成 provider 解码 ----
+// 仅 CodeArts chat 的成功加密响应走这里；trace 与调用方拿到同一个明文 Response。
+function decryptingFetch(fetchImpl: FetchLike, key: NegotiatedKey): FetchLike {
+  return async (input, init) => {
+    const resp = await fetchImpl(input, init);
+    const algo = resp.headers.get("X-Encrypt-Algo");
+    if (!resp.ok || algo !== SM4_GCM_ALGO) return resp;
+    console.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);
+    return decryptStream(key.sessionKey, key.keyId, resp);
+  };
 }
 
 // ---- bz：加密 chat 客户端 ----
@@ -237,7 +267,7 @@ export class SnapClient {
       // L2 记录加密前明文（recordBody）；线上 body 为 base64 密文；线上头含 X-Encrypt-* 与重签名
       resp = await traceUpstream(
         { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj },
-        { fetch: this.fetchImpl },
+        { fetch: decryptingFetch(this.fetchImpl, key) },
       );
     } catch (e: any) {
       if (!isRetry) {
@@ -263,9 +293,6 @@ export class SnapClient {
       if (contentType) headersOut.set("Content-Type", contentType);
       return new Response(text, { status: resp.status, statusText: resp.statusText, headers: headersOut });
     }
-    const algo = resp.headers.get("X-Encrypt-Algo");
-    console.log(`[snap] chat 2xx: status=${resp.status} algo=${algo} ct=${resp.headers.get("Content-Type")} len=${resp.headers.get("Content-Length") ?? "?"}`);
-    if (algo === SM4_GCM_ALGO) return decryptStream(key.sessionKey, key.keyId, resp);
     return resp;
   }
 }

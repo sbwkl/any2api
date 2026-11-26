@@ -7,6 +7,8 @@ Owner：wayne
 关联：本文件 §2 的审计快照；[#22](https://github.com/sbwkl/any2api/issues/22)（服务端工具产品评估，不在本次范围）、[#24](https://github.com/sbwkl/any2api/issues/24)（namespace 工具静默丢弃）
 验证命令：测试 `bun test`；编译/构建 `bun build src/index.ts --target=bun`；文档结构与本地链接检查：未配置；待补。
 
+> 当前事实源：本文件保留本次修复的历史事实与证据，不回溯改写；当前 CodeArts L3 默认记录解密后的明文（记录 schema 3），见 [ADR](../../design-docs/adr/codearts-l3-decrypted-plaintext.md) 与 [已实现变更](../active/2026-11-25-codearts-l3-decrypted-plaintext.md)。
+
 ## 1. 摘要
 
 对 2026-11-25 四层请求记录（快照 1149 条 / 962MB，截至 `08:36:25Z`）做审计，确认当前进程健康（修复后窗口 389 条请求仅 4 次 429），但暴露三类 P0 问题：
@@ -29,7 +31,7 @@ Owner：wayne
 
 修复后窗口（`05:55Z` 起）389 条请求中真实错误仅上述 4 次 429；心跳在进程重启后均为 `?status=` 200。
 
-**审计限制**：CodeArts 成功的上游响应在 L3 是 SM4 密文（1043/1043），四层观测对主 provider 实际只有 L1/L2/L4 可读。已另开 issue。
+**审计限制（历史时点）**：在上述 2026-11-25T08:36:25Z 历史快照中，CodeArts 成功的上游响应在 L3 是 SM4 密文（历史快照 1043/1043），四层观测对主 provider 实际只有 L1/L2/L4 可读。该结论仅描述历史快照，不代表当前实现；当前 L3 默认记录解密后的明文，见 [ADR](../../design-docs/adr/codearts-l3-decrypted-plaintext.md)。
 
 ## 3. 决策与行为 delta
 
