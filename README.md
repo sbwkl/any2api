@@ -158,6 +158,7 @@ resp = client.chat.completions.create(
 
 - 凭证来自 macOS Keychain `CodeBuddy CN Safe Storage` + `state.vscdb` 的 `planning-genie.new.accessTokencn`（v10 safeStorage 解密）。
 - token 过期：401 时调用 `/v2/plugin/auth/token/refresh` 刷新并重试一次；失败提示重新登录。
+- 掉线重登后免重启自愈：进程启动时无凭证也正常挂载（healthz 报 `credentialsReady:false` 降级字段，不视为服务故障）；未就绪时 chat 返回 401「请登录 CodeBuddy CN」；请求前无凭证会先按需回源重读凭证源；401 且内置刷新失败时同样按需回源，读到新凭证（accessToken 或 uid 与本次所用不同）则重试上游一次，重登后下一个请求即恢复。
 - 无需 IDE 在线；Keychain 授权只需一次。
 
 ## 请求采集（opt-in）
