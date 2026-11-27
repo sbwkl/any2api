@@ -259,12 +259,12 @@ export async function handleResponses(
   const openaiBody = responsesToOpenAi(body, caps, toolMap);
 
   if (body.stream !== true) {
-    const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile });
+    const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile, signal: req.signal });
     if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
     return Response.json(completionToResponse(await resp.json(), body.model, toolMap));
   }
 
-  const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
+  const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile, signal: req.signal });
   if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
   const sse = await responsesSse(resp.body, body.model, toolMap);
   return new Response(sse, {

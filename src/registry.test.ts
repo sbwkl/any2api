@@ -1,9 +1,13 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
+import { createECDH } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mountProviders, type ProviderModule } from "./registry";
 import { flushRequestTraces, traceUpstream } from "./shared/trace";
+import { createProtocolRoutes, type ChatBackend } from "./protocols";
+import { OpenAIFacade } from "./providers/codearts/openai";
+import { SnapClient } from "./providers/codearts/snap";
 
 const encoder = new TextEncoder();
 
@@ -502,5 +506,193 @@ describe("four-layer request record wiring", () => {
       }
       expect(rec.response.body).toBe(`sse-${label}-1`);
     }
+  });
+});
+
+describe("codearts client cancellation (registry integration)", () => {
+  const savedEnv = { ...process.env };
+  let dir: string | null = null;
+
+  beforeEach(() => {
+    process.env.CODEARTS_CLI_AK = "test-ak";
+    process.env.CODEARTS_CLI_SK = "test-sk";
+    process.env.SNAP_ORIGIN = "https://snap.test";
+    delete process.env.TRACE_CAPTURE_DIR;
+    delete process.env.UPSTREAM_DUMP_DIR;
+    delete process.env.CODEARTS_FORCE_PLAINTEXT;
+  });
+
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = null;
+  });
+
+  type FakeFetch = (input: any, init?: RequestInit) => Promise<Response>;
+  interface RecordedUpstream { url: string; init: RequestInit }
+
+  async function mountCodearts(fakeFetch: FakeFetch, retry: { sleep: (ms: number, signal?: AbortSignal) => Promise<void>; now?: () => number; random?: () => number } = { sleep: async () => {} }) {
+    const snap = new SnapClient("https://snap.test", fakeFetch, retry);
+    const gw = { models: [{ modelId: "m", modelName: "M" }] } as any;
+    const facade = new OpenAIFacade(snap, gw, { recordChat() {} } as any, fakeFetch, { retry });
+    // 心跳不是本测试的对象：替换为 no-op，避免额外上游请求混入断言
+    (facade as any).heartbeats = { startBusy() {}, stopBusy() {} };
+    const backend: ChatBackend = {
+      models: () => facade.modelsPayload().data,
+      health: () => ({ ok: true }),
+      handleChat: (req) => facade.handleChat(req),
+      respond: (body, opts) => facade.respond(body, opts),
+    };
+    const provider: ProviderModule = {
+      name: "codearts",
+      prefix: "/codearts",
+      required: true,
+      create: async () => ({
+        routes: createProtocolRoutes(backend, { toolChoice: "full", normalizeErrors: false }),
+        health: () => ({ ok: true }),
+      }),
+    };
+    return mountProviders([provider]);
+  }
+
+  /** 密钥协商立即成功；加密 chat 返回一帧后挂起，直到收到 abort 才失败。 */
+  function abortableUpstream(calls: RecordedUpstream[]): FakeFetch {
+    const serverPublicKey = createECDH("prime256v1").generateKeys().toString("base64");
+    const enc = new TextEncoder();
+    return async (input, init = {}) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (new URL(url).pathname.startsWith("/api/v1/security/key-exchange"))
+        return Response.json({ serverPublicKey, keyId: "kid-1", expiresIn: 3600 });
+      return new Response(new ReadableStream<Uint8Array>({
+        start(ctrl) {
+          ctrl.enqueue(enc.encode('data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"content":"par"}}]}\n\n'));
+          const fail = () => ctrl.error(new DOMException("aborted", "AbortError"));
+          const signal = init.signal;
+          if (!signal) return; // 没有 signal 会挂住，超时即回归
+          if (signal.aborted) fail();
+          else signal.addEventListener("abort", fail);
+        },
+      }), { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+  }
+
+  function chatCalls(calls: RecordedUpstream[]): RecordedUpstream[] {
+    return calls.filter((c) => new URL(c.url).pathname.startsWith("/api/v2/chat/completions"));
+  }
+
+  test("client disconnect aborts the upstream chat and records client_disconnect with L3 incomplete", async () => {
+    dir = mkdtempSync(join(tmpdir(), "any2api-codearts-cancel-"));
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const calls: RecordedUpstream[] = [];
+    const handler = await mountCodearts(abortableUpstream(calls));
+
+    const controller = new AbortController();
+    const resp = await handler(postReq("/codearts/v1/chat/completions", {
+      model: "m", messages: [{ role: "user", content: "hi" }], stream: true,
+    }, { signal: controller.signal }));
+    expect(resp.status).toBe(200);
+
+    const reader = resp.body!.getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+    controller.abort();
+    await expect(reader.read()).rejects.toBeDefined();
+    await flushRequestTraces();
+
+    // 取消后不再发新请求：上游只收到一次 chat
+    expect(chatCalls(calls)).toHaveLength(1);
+    expect(chatCalls(calls)[0].init.signal?.aborted).toBe(true);
+
+    const rec = captureRecords(dir)[0];
+    expect(rec.provider).toBe("codearts");
+    expect(rec.path).toBe("/codearts/v1/chat/completions");
+    // 四层观测：客户端断开是第一原因，上游可读响应与出站响应都未完成
+    expect(rec.response.abort_reason).toBe("client_disconnect");
+    expect(rec.response.complete).toBe(false);
+    const chat = rec.upstream.find((u: any) => new URL(u.url).pathname.startsWith("/api/v2/chat/completions"));
+    expect(chat).toBeDefined();
+    expect(chat.response.complete).toBe(false);
+    // 密钥协商属于全局缓存，不跟随取消
+    const kx = rec.upstream.find((u: any) => new URL(u.url).pathname.startsWith("/api/v1/security/key-exchange"));
+    expect(kx).toBeDefined();
+    expect(kx.response.complete).toBe(true);
+  });
+
+  test("cancellation still aborts the upstream fetch when observability is off", async () => {
+    const calls: RecordedUpstream[] = [];
+    const handler = await mountCodearts(abortableUpstream(calls));
+
+    const controller = new AbortController();
+    const resp = await handler(postReq("/codearts/v1/chat/completions", {
+      model: "m", messages: [{ role: "user", content: "hi" }], stream: true,
+    }, { signal: controller.signal }));
+    expect(resp.status).toBe(200);
+
+    const reader = resp.body!.getReader();
+    expect((await reader.read()).done).toBe(false);
+    controller.abort();
+    await expect(reader.read()).rejects.toBeDefined();
+
+    expect(chatCalls(calls)).toHaveLength(1);
+    expect(chatCalls(calls)[0].init.signal?.aborted).toBe(true);
+  });
+
+  /** 密钥协商成功；第一次 chat 返回 429，第二次返回 200 SSE。 */
+  function rateLimitedThenOk(calls: RecordedUpstream[]): FakeFetch {
+    const serverPublicKey = createECDH("prime256v1").generateKeys().toString("base64");
+    let chatAttempts = 0;
+    return async (input, init = {}) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (new URL(url).pathname.startsWith("/api/v1/security/key-exchange"))
+        return Response.json({ serverPublicKey, keyId: "kid-1", expiresIn: 3600 });
+      chatAttempts++;
+      if (chatAttempts === 1)
+        return new Response('{"error_msg":"Too many requests","error_code":"APIG.0308"}', {
+          status: 429,
+          headers: { "content-type": "application/json" },
+        });
+      return new Response(
+        'data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    };
+  }
+
+  test("a 429 before the first byte is retried and the record shows both upstream attempts", async () => {
+    dir = mkdtempSync(join(tmpdir(), "any2api-codearts-retry-"));
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const calls: RecordedUpstream[] = [];
+    const sleeps: number[] = [];
+    const handler = await mountCodearts(rateLimitedThenOk(calls), {
+      sleep: async (ms) => { sleeps.push(ms); },
+      now: () => 0,
+      random: () => 0,
+    });
+
+    const resp = await handler(postReq("/codearts/v1/chat/completions", {
+      model: "m", messages: [{ role: "user", content: "hi" }], stream: true,
+    }));
+    expect(resp.status).toBe(200);
+    expect(await resp.text()).toContain('"content":"ok"');
+
+    // 退避使用注入的假 sleep：一次 500ms，无真实等待
+    expect(sleeps).toEqual([500]);
+    // 上游调用序列：1 次 chat (429) → 1 次 chat (200)；不重复协商密钥
+    expect(calls.filter((c) => new URL(c.url).pathname.startsWith("/api/v2/chat/completions"))).toHaveLength(2);
+    expect(calls.filter((c) => new URL(c.url).pathname.startsWith("/api/v1/security/key-exchange"))).toHaveLength(1);
+
+    await flushRequestTraces();
+    const rec = captureRecords(dir)[0];
+    expect(rec.response.status).toBe(200);
+    expect(rec.response.complete).toBe(true);
+    expect(rec.response.body).toContain('"content":"ok"');
+    // 记录里能看出重试次数：两条 chat 尝试按序记为 429 → 200
+    const chatAttempts = rec.upstream.filter((u: any) =>
+      new URL(u.url).pathname.startsWith("/api/v2/chat/completions"));
+    expect(chatAttempts.map((u: any) => u.response.status)).toEqual([429, 200]);
+    expect(chatAttempts[0].response.complete).toBe(true);
+    expect(chatAttempts[1].response.complete).toBe(true);
   });
 });

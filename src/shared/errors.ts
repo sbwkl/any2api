@@ -50,11 +50,6 @@ export function responsesErrorCodeForStatus(status: number): string {
   return "invalid_request_error";
 }
 
-/** 分类为 5xx 的上游错误视为瞬时故障：调用方尚未向客户端发送字节时可安全重试一次。 */
-export function isTransientUpstreamMessage(message: string): boolean {
-  return classifyUpstreamStatus(message) >= 500;
-}
-
 /** 从上游错误响应体（JSON 或纯文本）中提取可读 message；空体返回 null。 */
 export function extractUpstreamErrorMessage(text: string): string | null {
   const raw = (text ?? "").trim();

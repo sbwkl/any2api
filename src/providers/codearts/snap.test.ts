@@ -3,7 +3,8 @@ import { createECDH, createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startRequestTrace, type FetchLike } from "../../shared/trace";
+import { flushRequestTraces, runWithRequestTrace, startRequestTrace, type FetchLike } from "../../shared/trace";
+import { createRetryBudget } from "./retry";
 import { HeartbeatManager, SnapClient } from "./snap";
 import { SM4GCM } from "./sm4";
 
@@ -134,7 +135,7 @@ describe("snap.chat request-scoped attempts", () => {
     expect(JSON.stringify(record)).not.toContain("x-encrypt-algo");
   });
 
-  test("records key-exchange and one encrypted retry for a transient 5xx", async () => {
+  test("records key-exchange and the graded 5xx retries", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
     const bodyObj = chatBody();
@@ -151,7 +152,8 @@ describe("snap.chat request-scoped attempts", () => {
     });
 
     const trace = startRequestTrace(inbound(), { dir })!;
-    const snap = new SnapClient("https://snap.test", fake);
+    // 500 属短阶梯（总尝试 3 次）；注入假 sleep 避免真实等待。
+    const snap = new SnapClient("https://snap.test", fake, { sleep: async () => {} });
     let resText = "";
     let resStatus = 0;
     try {
@@ -162,13 +164,13 @@ describe("snap.chat request-scoped attempts", () => {
       await trace.finish(Response.json({ ok: true }));
     }
 
-    // 瞬时 5xx 只重试一次加密请求；明文回退已移除
+    // 500 按短阶梯重试到第 3 次总尝试后返回上游错误；明文回退已移除
     expect(resStatus).toBe(500);
     expect(resText).toBe("ENCRYPTED_STAGE_FAILED");
-    expect(calls.map((c) => c.url)).toEqual([KEY_EXCHANGE_URL, CHAT_URL, CHAT_URL]);
+    expect(calls.map((c) => c.url)).toEqual([KEY_EXCHANGE_URL, CHAT_URL, CHAT_URL, CHAT_URL]);
 
     const upstream = readRecords()[0].upstream;
-    expect(upstream).toHaveLength(3);
+    expect(upstream).toHaveLength(4);
 
     // L2 + L3：key-exchange
     expect(upstream[0].method).toBe("POST");
@@ -199,9 +201,15 @@ describe("snap.chat request-scoped attempts", () => {
     expect(recordedHeader(upstream[2].headers, "x-ot-trace-id")).toBe("trace-1");
     expect(upstream[2].response.status).toBe(500);
 
+    // 第三次（短阶梯最后一跳）仍是加密尝试，而不是不可用的明文
+    expect(upstream[3].url).toBe(CHAT_URL);
+    expect(recordedHeader(upstream[3].headers, "x-encrypt-algo")).toBe("sm4-gcm");
+    expect(upstream[3].response.status).toBe(500);
+
     // 尝试按发生顺序
     expect(upstream[0].t_ms).toBeLessThanOrEqual(upstream[1].t_ms);
     expect(upstream[1].t_ms).toBeLessThanOrEqual(upstream[2].t_ms);
+    expect(upstream[2].t_ms).toBeLessThanOrEqual(upstream[3].t_ms);
     // 敏感值不落盘
     expect(JSON.stringify(upstream)).not.toContain("business-secret");
   });
@@ -367,7 +375,7 @@ describe("snap.chat request-scoped attempts", () => {
     expect(upstream[0].response.body).toBe("KX_DOWN");
   });
 
-  test("an encrypted network error is retried once, then surfaced without plaintext chat", async () => {
+  test("a bare encrypted network error is surfaced without retrying or falling back to plaintext", async () => {
     const server = createECDH("prime256v1");
     const serverPublicKey = server.generateKeys().toString("base64");
     const { fetch: fake } = recordingFetch((call) => {
@@ -388,14 +396,11 @@ describe("snap.chat request-scoped attempts", () => {
 
     expect(String(error?.message)).toContain("upstream network error");
     const upstream = readRecords()[0].upstream;
-    // key-exchange + 两次加密尝试；没有明文尝试
-    expect(upstream).toHaveLength(3);
+    // key-exchange + 一次加密尝试；裸网络错误不重试，也没有明文尝试
+    expect(upstream).toHaveLength(2);
     expect(upstream[1].response.status).toBe(0);
     expect(upstream[1].response.complete).toBe(false);
     expect(recordedHeader(upstream[1].headers, "x-encrypt-algo")).toBe("sm4-gcm");
-    expect(upstream[2].response.status).toBe(0);
-    expect(upstream[2].response.complete).toBe(false);
-    expect(recordedHeader(upstream[2].headers, "x-encrypt-algo")).toBe("sm4-gcm");
   });
 
   test("a stalled upstream body fails with an idle timeout", async () => {
@@ -471,6 +476,442 @@ describe("snap.chat request-scoped attempts", () => {
     expect(recordedHeader(upstream[3].headers, "x-encrypt-key-id")).toBe("kid-2");
     expect(upstream[3].body).toEqual(chatBody());
     expect(upstream[3].response.status).toBe(200);
+  });
+});
+
+describe("client cancellation", () => {
+  function inboundWithSignal(signal: AbortSignal): Request {
+    return new Request("http://localhost/codearts/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "m", messages: [{ role: "user", content: "hi" }] }),
+      signal,
+    });
+  }
+
+  /** 加密 chat 的假 fetch：一直挂着，直到 init.signal 中止才 reject。 */
+  function hangingChatFetch(onChatStarted: () => void) {
+    return (call: RecordedCall): Response | Promise<Response> => {
+      if (call.url === KEY_EXCHANGE_URL)
+        return Response.json({ serverPublicKey: serverPublicKey(), keyId: "kid-1", expiresIn: 3600 });
+      onChatStarted();
+      return new Promise<Response>((_, reject) => {
+        const signal = call.init.signal;
+        const fail = () => reject(new DOMException("aborted", "AbortError"));
+        if (!signal) return; // 没有 signal 就永远挂着，超时会暴露回归
+        if (signal.aborted) fail();
+        else signal.addEventListener("abort", fail);
+      });
+    };
+  }
+
+  function serverPublicKey(): string {
+    return createECDH("prime256v1").generateKeys().toString("base64");
+  }
+
+  test("abort rejects the in-flight encrypted chat fetch without retrying and records L3 incomplete", async () => {
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const controller = new AbortController();
+    let chatStarted!: () => void;
+    const chatStartedP = new Promise<void>((r) => { chatStarted = r; });
+    const { fetch: fake, calls } = recordingFetch(hangingChatFetch(() => chatStarted()));
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const pending = runWithRequestTrace(inboundWithSignal(controller.signal), () =>
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel" }, chatBody(), { signal: controller.signal }));
+    await chatStartedP;
+    controller.abort();
+    await expect(pending).rejects.toBeDefined();
+    await flushRequestTraces();
+
+    // 上游 fetch 本身收到了 abort；取消后没有任何重试，也没有第二次 chat
+    const chatCalls = calls.filter((c) => c.url === CHAT_URL);
+    expect(chatCalls).toHaveLength(1);
+    expect(chatCalls[0].init.signal).toBeDefined();
+    expect(chatCalls[0].init.signal!.aborted).toBe(true);
+    // 密钥协商不跟随取消
+    const keyExchange = calls.find((c) => c.url === KEY_EXCHANGE_URL)!;
+    expect(keyExchange.init.signal).toBeUndefined();
+
+    const record = readRecords()[0];
+    // 观测：客户端断开是第一中断原因；上游可读响应未完成
+    expect(record.response.abort_reason).toBe("client_disconnect");
+    expect(record.response.complete).toBe(false);
+    const chatAttempt = record.upstream.find((u: any) => u.url === CHAT_URL);
+    expect(chatAttempt).toBeDefined();
+    expect(chatAttempt.response.complete).toBe(false);
+  });
+
+  test("abort during key exchange lets the exchange finish but never sends chat", async () => {
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const controller = new AbortController();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const { fetch: fake, calls } = recordingFetch(async (call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        await gate; // 模拟协商仍在进行时客户端断开
+        return Response.json({ serverPublicKey: serverPublicKey(), keyId: "kid-1", expiresIn: 3600 });
+      }
+      return new Response('data: {"ok":1}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } });
+    });
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const pending = runWithRequestTrace(inboundWithSignal(controller.signal), () =>
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-kx" }, chatBody(), { signal: controller.signal }));
+    await waitFor(() => calls.length === 1);
+    controller.abort();
+    release();
+    await expect(pending).rejects.toBeDefined();
+    await flushRequestTraces();
+
+    // 协商不被取消、也不抛出；但协商完成后不再发 chat
+    expect(calls.map((c) => c.url)).toEqual([KEY_EXCHANGE_URL]);
+    expect(calls[0].init.signal).toBeUndefined();
+    const record = readRecords()[0];
+    expect(record.response.abort_reason).toBe("client_disconnect");
+    expect(record.upstream.map((u: any) => u.url)).toEqual([KEY_EXCHANGE_URL]);
+  });
+
+  test("cancellation aborts the upstream fetch even when observability is off", async () => {
+    // beforeEach 已删除 TRACE_CAPTURE_DIR：观测关闭
+    const controller = new AbortController();
+    let chatStarted!: () => void;
+    const chatStartedP = new Promise<void>((r) => { chatStarted = r; });
+    const { fetch: fake, calls } = recordingFetch(hangingChatFetch(() => chatStarted()));
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const pending = snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-off" }, chatBody(), { signal: controller.signal });
+    await chatStartedP;
+    controller.abort();
+    await expect(pending).rejects.toBeDefined();
+
+    const chatCalls = calls.filter((c) => c.url === CHAT_URL);
+    expect(chatCalls).toHaveLength(1);
+    expect(chatCalls[0].init.signal!.aborted).toBe(true);
+  });
+
+  test("an already-aborted signal performs no key exchange and no chat", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { fetch: fake, calls } = recordingFetch(() => Response.json({ ok: true }));
+    const snap = new SnapClient("https://snap.test", fake);
+
+    await expect(
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-entry" }, chatBody(), { signal: controller.signal }),
+    ).rejects.toBeDefined();
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a 5xx received after abort is not retried", async () => {
+    const controller = new AbortController();
+    const { fetch: fake, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL)
+        return Response.json({ serverPublicKey: serverPublicKey(), keyId: "kid-1", expiresIn: 3600 });
+      controller.abort(); // 上游 5xx 与客户端断开同时发生：取消优先
+      return new Response("ENCRYPTED_STAGE_FAILED", { status: 500 });
+    });
+
+    const snap = new SnapClient("https://snap.test", fake);
+    await expect(
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-5xx" }, chatBody(), { signal: controller.signal }),
+    ).rejects.toBeDefined();
+    expect(calls.filter((c) => c.url === CHAT_URL)).toHaveLength(1);
+  });
+
+  test("abort after encrypted headers terminates the decryption stream without a new request", async () => {
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const controller = new AbortController();
+    const server = createECDH("prime256v1");
+    const serverPublicKey = server.generateKeys().toString("base64");
+    const cipher = new SM4GCM();
+    const keyId = "kid-11";
+    const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
+    let sessionKey: Uint8Array | null = null;
+    const plain = 'data: {"ok":1}\n\n';
+
+    const { fetch: fake, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        const reqBody = JSON.parse(String(call.init.body));
+        const shared = server.computeSecret(Buffer.from(reqBody.clientPublicKey, "base64"));
+        sessionKey = new Uint8Array(createHash("sha256").update(shared).digest().subarray(0, 16));
+        return Response.json({ serverPublicKey, keyId, expiresIn: 3600 });
+      }
+      return new Response(new ReadableStream<Uint8Array>({
+        start(ctrl) {
+          // 先给一帧可解密内容，之后挂起直到客户端取消（模拟真实 fetch 的 body 中止）
+          const { ciphertext, iv, authTag } = cipher.encrypt(sessionKey!, encoder.encode(plain), `${keyId}|0`);
+          ctrl.enqueue(encoder.encode(`${b64(iv)}:${b64(authTag)}:${b64(ciphertext)}\n\n`));
+          const fail = () => ctrl.error(new DOMException("aborted", "AbortError"));
+          const signal = call.init.signal;
+          if (!signal) return;
+          if (signal.aborted) fail();
+          else signal.addEventListener("abort", fail);
+        },
+      }), {
+        status: 200,
+        headers: { "X-Encrypt-Algo": "sm4-gcm", "X-Encrypt-Key-Id": keyId, "Content-Type": "text/event-stream" },
+      });
+    });
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const resp = await runWithRequestTrace(inboundWithSignal(controller.signal), () =>
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-mid" }, chatBody(), { signal: controller.signal }));
+
+    const reader = resp.body!.getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+    expect(Buffer.from(first.value!).toString("utf8")).toContain('data: {"ok":1}');
+    controller.abort();
+    await expect(reader.read()).rejects.toBeDefined();
+    await flushRequestTraces();
+
+    // 解密流已开始后取消：同样不重试、不再发第二次 chat
+    expect(calls.filter((c) => c.url === CHAT_URL)).toHaveLength(1);
+    const record = readRecords()[0];
+    expect(record.response.abort_reason).toBe("client_disconnect");
+    const chatAttempt = record.upstream.find((u: any) => u.url === CHAT_URL);
+    expect(chatAttempt.response.complete).toBe(false);
+  });
+});
+
+describe("state-level retry and the shared budget", () => {
+  type Step = { status: number; body?: string; headers?: Record<string, string> } | { networkError: string };
+
+  function serverPublicKey(): string {
+    return createECDH("prime256v1").generateKeys().toString("base64");
+  }
+
+  /** 脚本化上游：key-exchange 固定成功，chat 按顺序吐出 step；sleep 只记录不等待。 */
+  function scriptedSnap(script: Step[], opts: { keyExchanges?: number } = {}) {
+    const exchangeCount = opts.keyExchanges ?? 1;
+    const servers = Array.from({ length: exchangeCount }, () => createECDH("prime256v1"));
+    let exchange = 0;
+    let chatIndex = 0;
+    const delays: number[] = [];
+    const { fetch, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        const server = servers[Math.min(exchange, servers.length - 1)];
+        exchange++;
+        return Response.json({
+          serverPublicKey: server.generateKeys().toString("base64"),
+          keyId: `kid-${exchange}`,
+          expiresIn: 3600,
+        });
+      }
+      const step = script[chatIndex++];
+      if (!step) throw new Error("unscripted chat attempt");
+      if ("networkError" in step) throw new Error(step.networkError);
+      return new Response(step.body ?? "", { status: step.status, headers: step.headers });
+    });
+    const snap = new SnapClient("https://snap.test", fetch, {
+      sleep: async (ms) => { delays.push(ms); },
+      now: () => 0,
+      random: () => 0,
+    });
+    return { snap, calls, delays, chatCalls: () => calls.filter((c) => c.url === CHAT_URL) };
+  }
+
+  test("503 uses the short ladder: three total attempts, then the upstream error is surfaced", async () => {
+    const { snap, delays, chatCalls } = scriptedSnap([
+      { status: 503, body: "APIG.0613" },
+      { status: 503, body: "APIG.0613" },
+      { status: 503, body: "APIG.0613" },
+    ]);
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(503);
+    expect(await resp.text()).toBe("APIG.0613");
+    expect(chatCalls()).toHaveLength(3);
+    expect(delays).toEqual([500, 1000]);
+    expect(budget.attempts).toBe(3);
+  });
+
+  test("429 uses the long ladder: ten total attempts and nine backoff waits", async () => {
+    const { snap, delays, chatCalls } = scriptedSnap(
+      Array.from({ length: 10 }, () => ({ status: 429, body: "APIG.0308" })),
+    );
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(429);
+    expect(chatCalls()).toHaveLength(10);
+    // 500, 1000, 2000, 4000，其后封顶 5s；jitter 由 random=()=>0 固定。
+    expect(delays).toEqual([500, 1000, 2000, 4000, 5000, 5000, 5000, 5000, 5000]);
+    expect(budget.attempts).toBe(10);
+  });
+
+  test.each([429, 406, 502])("%i is retried once and recovers on the second attempt", async (status) => {
+    const { snap, delays, chatCalls } = scriptedSnap([{ status }, { status: 200, body: "ok" }]);
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(200);
+    expect(await resp.text()).toBe("ok");
+    expect(chatCalls()).toHaveLength(2);
+    expect(delays).toEqual([500]);
+    expect(budget.attempts).toBe(2);
+  });
+
+  test.each([500, 503, 504, 407])("%i is retried once and recovers on the second attempt", async (status) => {
+    const { snap, delays, chatCalls } = scriptedSnap([{ status }, { status: 200, body: "ok" }]);
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(200);
+    expect(chatCalls()).toHaveLength(2);
+    expect(delays).toEqual([500]);
+  });
+
+  test.each([400, 401, 404, 405, 505])("other status %i is not retried", async (status) => {
+    const { snap, delays, chatCalls } = scriptedSnap([{ status, body: "nope" }]);
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(status);
+    expect(await resp.text()).toBe("nope");
+    expect(chatCalls()).toHaveLength(1);
+    expect(delays).toEqual([]);
+    expect(budget.attempts).toBe(1);
+  });
+
+  test("a bare network error is not retried", async () => {
+    const { snap, delays, chatCalls } = scriptedSnap([{ networkError: "socket connection was closed" }]);
+    const budget = createRetryBudget();
+
+    await expect(snap.chat(CHAT_URL, {}, chatBody(), { budget })).rejects.toThrow("upstream network error");
+
+    expect(chatCalls()).toHaveLength(1);
+    expect(delays).toEqual([]);
+    expect(budget.attempts).toBe(1);
+  });
+
+  test("an upstream retry-after hint overrides the computed backoff", async () => {
+    const { snap, delays } = scriptedSnap([
+      { status: 429, headers: { "retry-after": "2" } },
+      { status: 200, body: "ok" },
+    ]);
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget: createRetryBudget() });
+
+    expect(resp.status).toBe(200);
+    expect(delays).toEqual([2000]);
+  });
+
+  test("a key-expired resend keeps working but debits the shared budget", async () => {
+    const { snap, chatCalls } = scriptedSnap(
+      [
+        { status: 400, body: "ENCRYPT_KEY_EXPIRED" },
+        { status: 200, body: "ok" },
+      ],
+      { keyExchanges: 2 },
+    );
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(200);
+    expect(chatCalls()).toHaveLength(2);
+    // 首次 chat + 换 key 重发，各扣一次预算
+    expect(budget.attempts).toBe(2);
+  });
+
+  test("a shared budget continues across chat calls of the same inbound request", async () => {
+    // 前序尝试已用掉 8 次预算：本次 429 只允许再试一次（第 9、10 次）后收手。
+    const budget = createRetryBudget();
+    budget.attempts = 8;
+    const { snap, delays, chatCalls } = scriptedSnap([{ status: 429 }, { status: 491, body: "unexpected" }]);
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(491);
+    expect(chatCalls()).toHaveLength(2);
+    // 第 9 次尝试后的退避已到达 5s 封顶
+    expect(delays).toEqual([5000]);
+    expect(budget.attempts).toBe(10);
+  });
+
+  test("cancel during a backoff wait ends the retry loop without spending more budget", async () => {
+    const controller = new AbortController();
+    const delays: number[] = [];
+    let chatIndex = 0;
+    const { fetch, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        return Response.json({ serverPublicKey: serverPublicKey(), keyId: "kid-1", expiresIn: 3600 });
+      }
+      chatIndex++;
+      return new Response("APIG.0308", { status: 429 });
+    });
+    const snap = new SnapClient("https://snap.test", fetch, {
+      sleep: async (ms) => {
+        delays.push(ms);
+        controller.abort();
+        const err = new Error("client disconnected");
+        err.name = "AbortError";
+        throw err;
+      },
+      now: () => 0,
+      random: () => 0,
+    });
+    const budget = createRetryBudget();
+
+    await expect(
+      snap.chat(CHAT_URL, {}, chatBody(), { budget, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(calls.filter((c) => c.url === CHAT_URL)).toHaveLength(1);
+    expect(delays).toEqual([500]);
+    // 取消不消耗预算：只记已经发出的那一次尝试
+    expect(budget.attempts).toBe(1);
+    expect(chatIndex).toBe(1);
+  });
+});
+
+describe("shared budget on non-encrypted send paths", () => {
+  function plainSnap() {
+    const { fetch, calls } = recordingFetch(
+      () => new Response('data: {"ok":1}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    return { snap: new SnapClient("https://snap.test", fetch), calls };
+  }
+
+  test("CODEARTS_FORCE_PLAINTEXT=1 charges one attempt to the shared budget", async () => {
+    process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+    const { snap, calls } = plainSnap();
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(200);
+    expect(calls.map((c) => c.url)).toEqual([CHAT_URL]);
+    expect(budget.attempts).toBe(1);
+  });
+
+  test("a plaintext send marked chargeBudget:false (post-401 resend) stays free", async () => {
+    process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+    const { snap } = plainSnap();
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget, chargeBudget: false });
+
+    expect(resp.status).toBe(200);
+    expect(budget.attempts).toBe(0);
+  });
+
+  test("a non-encrypted endpoint path also charges one attempt", async () => {
+    const { snap, calls } = plainSnap();
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat("https://snap.test/api/v1/other", {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(200);
+    expect(calls.map((c) => c.url)).toEqual(["https://snap.test/api/v1/other"]);
+    expect(budget.attempts).toBe(1);
   });
 });
 

@@ -284,12 +284,12 @@ export async function handleAnthropicMessages(
   const model = body.model ?? undefined;
 
   if (body.stream !== true) {
-    const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile });
+    const resp = await safeRespond(backend, openaiBody, { stream: false, sessionKey, profile, signal: req.signal });
     if (!resp.ok) return await relayErrorIfNeeded(resp, caps);
     return Response.json(completionToAnthropic(await resp.json(), model, thinking, caps.promptTokensIncludeCache === true));
   }
 
-  const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile });
+  const resp = await safeRespond(backend, { ...openaiBody, stream: true }, { stream: true, sessionKey, profile, signal: req.signal });
   if (!resp.ok || !resp.body) return await relayErrorIfNeeded(resp, caps);
   const sse = await anthropicSse(resp.body, thinking, model, caps.promptTokensIncludeCache === true);
   return new Response(sse, {
