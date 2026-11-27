@@ -91,6 +91,156 @@ describe("codebuddy provider with injected deps", () => {
   });
 });
 
+describe("codebuddy 401 self-heal (T3)", () => {
+  // 假上游：/auth/token/refresh 恒非 ok（内置 refreshToken 刷新失败），chat 按脚本应答
+  function refreshDenied(): Response {
+    return new Response("denied", { status: 401 });
+  }
+
+  test("401 with failed built-in refresh reloads a different token and retries once", async () => {
+    const newCreds: Credentials = { accessToken: "new", refreshToken: "ref2", uid: "u1", source: "env" };
+    let chatCalls = 0;
+    const bearerSeen: string[] = [];
+    let reloadCalls = 0;
+    let current: Credentials = credentials;
+    const source: CredentialSource = {
+      get: () => current,
+      reload: async () => {
+        reloadCalls++;
+        current = newCreds;
+        return newCreds;
+      },
+      adopt: (next) => { current = next; },
+    };
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes("/auth/token/refresh")) return refreshDenied();
+      chatCalls++;
+      bearerSeen.push(new Headers(init?.headers).get("authorization") ?? "");
+      if (chatCalls === 1) return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: source, fetchImpl }),
+    ]);
+    const resp = await handler(chatRequest());
+
+    expect(resp.status).toBe(200);
+    expect(chatCalls).toBe(2);
+    expect(bearerSeen).toEqual(["Bearer tok", "Bearer new"]);
+    expect(reloadCalls).toBe(1);
+  });
+
+  test("401 with reload returning the same token returns 401 asking to log in", async () => {
+    let chatCalls = 0;
+    let reloadCalls = 0;
+    const source: CredentialSource = {
+      get: () => credentials,
+      reload: async () => {
+        reloadCalls++;
+        return credentials;
+      },
+      adopt: () => {},
+    };
+    const fetchImpl = (async (url: string | URL | Request) => {
+      if (String(url).includes("/auth/token/refresh")) return refreshDenied();
+      chatCalls++;
+      return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: source, fetchImpl }),
+    ]);
+    const resp = await handler(chatRequest());
+
+    expect(resp.status).toBe(401);
+    const json: any = await resp.json();
+    expect(json.error.message).toBe("请登录 CodeBuddy CN");
+    expect(json.error.type).toBe("authentication_error");
+    expect(json.error.code).toBe("credentials_not_ready");
+    expect(chatCalls).toBe(1);
+    expect(reloadCalls).toBe(1);
+  });
+
+  test("concurrent 401s reload the credential source only once (single-flight)", async () => {
+    const newCreds: Credentials = { accessToken: "new", refreshToken: "ref2", uid: "u1", source: "env" };
+    // 门闩：reload 卡住直到宏任务放行——微任务排空保证三个请求链都先抵达回源点
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let reloadCalls = 0;
+    let current: Credentials = credentials;
+    const source: CredentialSource = {
+      get: () => current,
+      reload: async () => {
+        reloadCalls++;
+        await gate;
+        current = newCreds;
+        return newCreds;
+      },
+      adopt: (next) => { current = next; },
+    };
+    const bearerSeen: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes("/auth/token/refresh")) return refreshDenied();
+      const auth = new Headers(init?.headers).get("authorization") ?? "";
+      bearerSeen.push(auth);
+      if (auth === "Bearer tok") return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: source, fetchImpl }),
+    ]);
+
+    const pending = [
+      handler(chatRequest()),
+      handler(chatRequest()),
+      handler(chatRequest()),
+    ];
+    // 宏任务放行：三个请求链（纯微任务驱动）先全部卡在门闩上，reload 因此只发起一次
+    setTimeout(release, 10);
+    const responses = await Promise.all(pending);
+
+    expect(reloadCalls).toBe(1);
+    expect(responses.map((r) => r.status)).toEqual([200, 200, 200]);
+    expect(bearerSeen.filter((b) => b === "Bearer tok")).toHaveLength(3);
+    expect(bearerSeen.filter((b) => b === "Bearer new")).toHaveLength(3);
+  });
+
+  test("adopts reloaded credentials when only the uid changed", async () => {
+    const sameTokNewUid: Credentials = { accessToken: "tok", refreshToken: "ref", uid: "u2", source: "env" };
+    let chatCalls = 0;
+    const headersSeen: Array<{ authorization: string; userId: string }> = [];
+    let current: Credentials = credentials;
+    const source: CredentialSource = {
+      get: () => current,
+      reload: async () => {
+        current = sameTokNewUid;
+        return sameTokNewUid;
+      },
+      adopt: (next) => { current = next; },
+    };
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes("/auth/token/refresh")) return refreshDenied();
+      chatCalls++;
+      if (chatCalls === 1) return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+      const h = new Headers(init?.headers);
+      headersSeen.push({ authorization: h.get("authorization") ?? "", userId: h.get("x-user-id") ?? "" });
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: source, fetchImpl }),
+    ]);
+    const resp = await handler(chatRequest());
+
+    // accessToken 未变但 uid 变了也算新凭证：采纳并重试，第二次用新 uid
+    expect(resp.status).toBe(200);
+    expect(chatCalls).toBe(2);
+    expect(headersSeen).toEqual([{ authorization: "Bearer tok", userId: "u2" }]);
+  });
+});
+
 describe("codebuddy credentials-not-ready state", () => {
   // 凭证未就绪的空源：get/reload 均无凭证（模拟「进程先启动、还没登录」）
   const emptySource: CredentialSource = {
