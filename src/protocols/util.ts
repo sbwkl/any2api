@@ -5,7 +5,7 @@ import { PROXY_ERROR_HEADER } from "../shared/errors";
 export async function safeRespond(
   backend: ChatBackend,
   body: any,
-  opts: { stream: boolean; sessionKey: string; profile?: string },
+  opts: { stream: boolean; sessionKey: string; profile?: string; signal?: AbortSignal },
 ): Promise<Response> {
   try {
     return await backend.respond(body, opts);

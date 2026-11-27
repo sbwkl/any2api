@@ -181,6 +181,7 @@ function classifyRefreshError(body: any): "AlreadyUsed" | "Expired" | "InvalidSy
 async function callRefresh(
   auth: SecretAuth,
   fetchImpl: FetchLike = fetch,
+  signal?: AbortSignal,
 ): Promise<{ credentials: { access_key_id: string; secret_access_key: string; security_token: string; expiration: string }; refresh_token: string }> {
   const url = `${STS_ENDPOINT}${IAM_TOKEN_API}`;
   const dpop = await generateDpop(auth.loginContext, "POST", url);
@@ -197,6 +198,7 @@ async function callRefresh(
       url,
       headers: { DPoP: dpop, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body,
+      signal,
     },
     { fetch: fetchImpl },
   );
@@ -220,12 +222,13 @@ function buildRenewedAuth(old: SecretAuth, renewed: Awaited<ReturnType<typeof ca
   };
 }
 
-/** 单次刷新：读 SecretStorage → 刷新 → 回写轮换后的 refresh_token → 采纳新 STS */
-export async function refreshNow(fetchImpl: FetchLike = fetch): Promise<Credentials> {
+/** 单次刷新：读 SecretStorage → 刷新 → 回写轮换后的 refresh_token → 采纳新 STS。
+ *  signal 仅由请求链内的 401 修复传入；保活/启动刷新不传，保持后台行为不变。 */
+export async function refreshNow(fetchImpl: FetchLike = fetch, signal?: AbortSignal): Promise<Credentials> {
   const auth = readSecretSession();
   if (!auth) throw new Error("SecretStorage 中无 HuaweiCloudSession（请先在 app 内登录）");
   try {
-    const renewed = await callRefresh(auth, fetchImpl);
+    const renewed = await callRefresh(auth, fetchImpl, signal);
     const newAuth = buildRenewedAuth(auth, renewed);
     writeSecretSession(newAuth);
     lastSeenRefreshToken = newAuth.refresh_token;
@@ -235,6 +238,8 @@ export async function refreshNow(fetchImpl: FetchLike = fetch): Promise<Credenti
     serviceLogger.log(`[refresher] STS 已刷新，有效期至 ${newAuth.expires_at}（refresh_token 已轮换并回写）`);
     return creds;
   } catch (e: any) {
+    // 客户端取消打断了刷新：原样上抛，不把中止误记为一次凭证刷新失败。
+    if (signal?.aborted) throw e;
     const kind = classifyRefreshError(e.iamBody);
     lastRenewError = kind;
     if (kind === "AlreadyUsed") {

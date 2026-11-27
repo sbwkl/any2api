@@ -93,7 +93,7 @@ export async function createProvider(): Promise<ProviderInstance> {
     models: () => facade.modelsPayload().data,
     health: () => ({ ok: true }),
     handleChat: (req) => facade.handleChat(req),
-    respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey),
+    respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey, opts.signal),
   };
   // codearts：full tool_choice（支持 required/forced function），错误透传上游响应，
   // prompt_tokens 含缓存分量（input_tokens 需扣除缓存）。能力声明见 protocol-capabilities.ts。
