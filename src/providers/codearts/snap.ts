@@ -5,13 +5,18 @@ import { signSimple, signSh } from "./signer";
 import { getCredentials } from "./config";
 import { traceUpstream, UpstreamDecodeError, type FetchLike } from "../../shared/trace";
 import { serviceLogger } from "../../shared/log";
+import {
+  createRetryBudget,
+  createRetryRuntime,
+  planRetry,
+  type RetryBudget,
+  type RetryRuntime,
+} from "./retry";
 
 const SM4_GCM_ALGO = "sm4-gcm";
 const ENCRYPT_PATHS = ["/api/v2/chat/completions"];
 const KEY_EXCHANGE_PATH = "/api/v1/security/key-exchange";
 const REUSE_MARGIN_MS = 300000; // 提前 5 分钟换新
-// 加密请求的瞬时故障重试：网关级 5xx 与连接类错误只重试一次；参数错/限流/鉴权不重试。
-const TRANSIENT_STATUS = new Set([500, 502, 503, 504]);
 const DEFAULT_IDLE_TIMEOUT_MS = 180000;
 
 function idleTimeoutMs(): number {
@@ -210,17 +215,25 @@ function decryptingFetch(fetchImpl: FetchLike, key: NegotiatedKey): FetchLike {
 
 // ---- bz：加密 chat 客户端 ----
 // 与内核逐字行为的有意偏差：内核在协商失败/网络错误/非 2xx 时改发明文，但明文 chat 实测
-// 100% 被上游拒绝（内嵌 415），只会掩盖真实故障。这里改为「同 key 重试一次 → 返回错误」；
-// 保留 KEY_EXPIRED 换 key 重试与 CODEARTS_FORCE_PLAINTEXT=1 调试开关。
+// 100% 被上游拒绝（内嵌 415），只会掩盖真实故障。这里按状态级重试表恢复（见 retry.ts）：
+// 429/406/502 总尝试 ≤10，500/503/504/407 总尝试 ≤3，其它 4xx/5xx 与裸网络错误不重试；
+// ENCRYPT_KEY_EXPIRED 换 key 重发保留但不计为独立上限，同样扣共享预算。
+// CODEARTS_FORCE_PLAINTEXT=1 仅作调试开关。
 export class SnapClient {
   public keys: SessionKeyManager;
   private cipher = new SM4GCM();
+  private retry: RetryRuntime;
 
-  constructor(public chatOrigin: string, private fetchImpl: FetchLike = fetch) {
+  constructor(
+    public chatOrigin: string,
+    private fetchImpl: FetchLike = fetch,
+    retry: Partial<RetryRuntime> = {},
+  ) {
     this.keys = new SessionKeyManager(3600, true, this.fetchImpl);
+    this.retry = createRetryRuntime(retry);
   }
 
-  // 明文发送：每次尝试独立记录（无请求上下文时入口自然透传）
+  // 明文发送：每次尝试独立记录（无请求上下文时入口自然透传）；明文路径不重试。
   private sendPlaintext(
     url: string,
     headers: Record<string, string>,
@@ -235,13 +248,15 @@ export class SnapClient {
 
   // headers：provider 层业务头（x-ot-* 等）；bodyJson：OpenAI 格式请求体对象
   // opts.signal：入站请求的取消信号；中止时上游 fetch 同一条链一起中止，且不重试。
+  // opts.budget：整次入站请求共享的总尝试预算；缺省时本次调用自建一份。
   async chat(
     url: string,
     headers: Record<string, string>,
     bodyObj: any,
-    opts: { isRetry?: boolean; signal?: AbortSignal } = {},
+    opts: { signal?: AbortSignal; budget?: RetryBudget } = {},
   ): Promise<Response> {
-    const { isRetry = false, signal } = opts;
+    const { signal } = opts;
+    const budget = opts.budget ?? createRetryBudget();
     if (signal?.aborted) throw clientAbortError();
     // UXe 判定：仅 /api/v2/chat/completions 加密
     const pathname = new URL(url).pathname;
@@ -262,65 +277,95 @@ export class SnapClient {
     }
     // 检查点：协商期间客户端可能已断开；此时不得再发 chat。
     if (signal?.aborted) throw clientAbortError();
-    const plaintext = JSON.stringify(bodyObj);
-    const ts = Date.now();
-    const aad = `POST|${pathname}|${ts}`;
-    const { ciphertext, iv, authTag } = this.cipher.encrypt(key.sessionKey, utf8(plaintext), aad);
+    let keyExpiredResent = false;
 
-    const h = new Headers(headers);
-    h.set("X-Encrypt-Algo", SM4_GCM_ALGO);
-    h.set("X-Encrypt-Key-Id", key.keyId);
-    h.set("X-Encrypt-Iv", b64(iv));
-    h.set("X-Encrypt-Tag", b64(authTag));
-    h.set("X-Encrypt-Ts", String(ts));
-    h.set("Content-Type", "application/octet-stream");
-    // Ew signSimple re-sign（覆盖 Authorization/X-Sdk-Date；host 由 fetch 设置）
-    const signed = signSimple(getCredentials(), "POST", url, "application/octet-stream");
-    for (const [k, v] of Object.entries(signed)) {
-      if (k.toLowerCase() === "host") continue;
-      h.set(k, v);
-    }
-
-    let resp: Response;
-    try {
-      if (process.env.CODEARTS_DEBUG_HEADERS === "1") {
-        const dump: Record<string, string> = {};
-        h.forEach((v, k) => (dump[k] = k === "Authorization" ? `${v.slice(0, 60)}...` : v.length > 80 ? `${v.slice(0, 80)}...` : v));
-        serviceLogger.log("[snap] 最终上线头集:", JSON.stringify(dump, null, 1));
-      }
-      // L2 记录加密前明文（recordBody）；线上 body 为 base64 密文；线上头含 X-Encrypt-* 与重签名
-      resp = await traceUpstream(
-        { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj, signal },
-        { fetch: decryptingFetch(this.fetchImpl, key) },
-      );
-    } catch (e: any) {
-      // 取消导致的 fetch 中止不是网络故障：绝不重试。
+    for (;;) {
+      // 检查点：每次上游尝试前；取消优先于一切重试判断，且不消耗预算。
       if (signal?.aborted) throw clientAbortError();
-      if (!isRetry) {
-        serviceLogger.warn(`[snap] 加密请求网络错误，同 key 重试一次: ${e?.message ?? e}`);
-        return this.chat(url, headers, bodyObj, { isRetry: true, signal });
+      budget.attempts++;
+
+      const plaintext = JSON.stringify(bodyObj);
+      const ts = Date.now();
+      const aad = `POST|${pathname}|${ts}`;
+      const { ciphertext, iv, authTag } = this.cipher.encrypt(key.sessionKey, utf8(plaintext), aad);
+
+      const h = new Headers(headers);
+      h.set("X-Encrypt-Algo", SM4_GCM_ALGO);
+      h.set("X-Encrypt-Key-Id", key.keyId);
+      h.set("X-Encrypt-Iv", b64(iv));
+      h.set("X-Encrypt-Tag", b64(authTag));
+      h.set("X-Encrypt-Ts", String(ts));
+      h.set("Content-Type", "application/octet-stream");
+      // Ew signSimple re-sign（覆盖 Authorization/X-Sdk-Date；host 由 fetch 设置）
+      const signed = signSimple(getCredentials(), "POST", url, "application/octet-stream");
+      for (const [k, v] of Object.entries(signed)) {
+        if (k.toLowerCase() === "host") continue;
+        h.set(k, v);
       }
-      throw new Error(`upstream network error: ${e?.message ?? e}`);
-    }
-    if (!resp.ok) {
+
+      let resp: Response;
+      try {
+        if (process.env.CODEARTS_DEBUG_HEADERS === "1") {
+          const dump: Record<string, string> = {};
+          h.forEach((v, k) => (dump[k] = k === "Authorization" ? `${v.slice(0, 60)}...` : v.length > 80 ? `${v.slice(0, 80)}...` : v));
+          serviceLogger.log("[snap] 最终上线头集:", JSON.stringify(dump, null, 1));
+        }
+        // L2 记录加密前明文（recordBody）；线上 body 为 base64 密文；线上头含 X-Encrypt-* 与重签名
+        resp = await traceUpstream(
+          { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj, signal },
+          { fetch: decryptingFetch(this.fetchImpl, key) },
+        );
+      } catch (e: any) {
+        // 裸网络错误按官方语义不可重试；取消导致的 fetch 中止同理。
+        if (signal?.aborted) throw clientAbortError();
+        throw new Error(`upstream network error: ${e?.message ?? e}`);
+      }
+      if (resp.ok) return resp;
+
       const text = await resp.text().catch(() => "");
       if (signal?.aborted) throw clientAbortError();
       serviceLogger.warn(`[snap] 加密请求非2xx: status=${resp.status} body=${text.slice(0, 300)}`);
-      if (text.includes("ENCRYPT_KEY_EXPIRED") && !isRetry) {
+
+      // 换密钥重发：保留原行为，但每次重发照常扣一次预算；单次 chat 最多一次。
+      if (text.includes("ENCRYPT_KEY_EXPIRED") && !keyExpiredResent) {
+        keyExpiredResent = true;
+        serviceLogger.warn(
+          `[snap] 重试 class=key_expired attempt=${budget.attempts} max=- delay=0ms（换密钥重发）`,
+        );
         this.keys.clearKey();
-        return this.chat(url, headers, bodyObj, { isRetry: true, signal });
+        try {
+          key = await this.keys.getOrNegotiateKey(baseUrl);
+        } catch (e: any) {
+          throw new Error(`key exchange failed: ${e?.message ?? e}`);
+        }
+        if (signal?.aborted) throw clientAbortError();
+        continue;
       }
-      if (TRANSIENT_STATUS.has(resp.status) && !isRetry) {
-        serviceLogger.warn(`[snap] 上游 ${resp.status}，加密重试一次`);
-        return this.chat(url, headers, bodyObj, { isRetry: true, signal });
+
+      const plan = planRetry({
+        budget,
+        status: resp.status,
+        headers: resp.headers,
+        now: this.retry.now,
+        random: this.retry.random,
+      });
+      if (!plan) {
+        // 明文回退是死路径（实测 415），不再重发；把上游状态/原文交回 provider 归一。
+        const headersOut = new Headers();
+        const contentType = resp.headers.get("content-type");
+        if (contentType) headersOut.set("Content-Type", contentType);
+        return new Response(text, { status: resp.status, statusText: resp.statusText, headers: headersOut });
       }
-      // 明文回退是死路径（实测 415），不再重发；把上游状态/原文交回 provider 归一。
-      const headersOut = new Headers();
-      const contentType = resp.headers.get("content-type");
-      if (contentType) headersOut.set("Content-Type", contentType);
-      return new Response(text, { status: resp.status, statusText: resp.statusText, headers: headersOut });
+      serviceLogger.warn(
+        `[snap] 重试 class=${plan.cls} status=${resp.status} attempt=${plan.attempt}/${plan.max} delay=${plan.delayMs}ms`,
+      );
+      try {
+        await this.retry.sleep(plan.delayMs, signal);
+      } catch (e) {
+        if (signal?.aborted) throw clientAbortError();
+        throw e;
+      }
     }
-    return resp;
   }
 }
 
