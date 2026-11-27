@@ -6,7 +6,8 @@ import { serviceLogger } from "../../shared/log";
 
 export interface MsgCenterOptions {
   config: ProductConfig;
-  getCredentials: () => Credentials;
+  /** 凭证未就绪时返回 null；tick 跳过本轮轮询 */
+  getCredentials: () => Credentials | null;
   fetchImpl?: typeof fetch;
   intervalMs?: number;
 }
@@ -32,6 +33,8 @@ export class MsgCenterPoller {
 
   async tick(): Promise<void> {
     const creds = this.opts.getCredentials();
+    // 凭证未就绪：跳过本轮轮询，不触碰上游、不抛错（登录后自然恢复轮询）。
+    if (!creds) return;
     const version = this.opts.config.version || "3.10.0";
     const headers: Record<string, string> = {
       "Authorization": `Bearer ${creds.accessToken}`,
