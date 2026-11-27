@@ -2,6 +2,7 @@ import { test, expect, describe } from "bun:test";
 import { anthropicToOpenAi, handleAnthropicMessages } from "../../protocols/anthropic";
 import type { ChatBackend, ProtocolCapabilities } from "../../protocols/types";
 import { CodeBuddyFacade } from "./openai";
+import { staticSource } from "./credentials";
 import type { Credentials, ProductConfig } from "./types";
 
 const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", normalizeErrors: true, promptTokensIncludeCache: true };
@@ -51,7 +52,7 @@ const SSE_THINK = [
 
 function facadeWith(sse: string): CodeBuddyFacade {
   const fetchImpl = (async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } })) as unknown as typeof fetch;
-  return new CodeBuddyFacade(config, credentials, { fetchImpl });
+  return new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
 }
 
 function backendFor(facade: CodeBuddyFacade): ChatBackend {
@@ -271,7 +272,7 @@ describe("anthropic adapter", () => {
 
   test("upstream errors become Anthropic error envelopes", async () => {
     const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as unknown as typeof fetch;
-    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const backend = backendFor(new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl }));
     const resp = await handleAnthropicMessages(backend, anthroReq({
       model: "hy4flash-free",
       max_tokens: 64,
@@ -286,7 +287,7 @@ describe("anthropic adapter", () => {
 
   test("passthrough error shape returns the provider response unchanged", async () => {
     const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as unknown as typeof fetch;
-    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const backend = backendFor(new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl }));
     const resp = await handleAnthropicMessages(backend, anthroReq({
       model: "hy4flash-free",
       max_tokens: 64,

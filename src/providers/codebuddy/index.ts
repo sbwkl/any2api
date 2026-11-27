@@ -3,6 +3,7 @@
 import { mountProviders, type ProviderModule, type ProviderInstance } from "../../registry";
 import { createProtocolRoutes, type ChatBackend } from "../../protocols";
 import { loadCredentials, loadProductConfig } from "./config";
+import { staticSource } from "./credentials";
 import { CodeBuddyFacade } from "./openai";
 import { MsgCenterPoller } from "./msgcenter";
 import type { Profile } from "./types";
@@ -15,7 +16,7 @@ export const codebuddyProvider: ProviderModule = {
   create: async (): Promise<ProviderInstance> => {
     const credentials = loadCredentials();
     const config = loadProductConfig(credentials.uid);
-    const facade = new CodeBuddyFacade(config, credentials, {
+    const facade = new CodeBuddyFacade(config, staticSource(credentials), {
       deviceToken: process.env.CODEBUDDY_DEVICE_TOKEN || undefined,
     });
 
