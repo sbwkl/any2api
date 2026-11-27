@@ -97,6 +97,37 @@ export function planRetry(input: {
   };
 }
 
+// 帧内错误只认结构化的错误码：模型正文里出现「429」「Busy」不算限流，
+// 只有上游把错误塞进 HTTP 200 SSE 的错误帧（`error.code` / `error_code`）才进入判定。
+const FRAME_BUSY_CODE = /(?:^|\.)ModelArts\.81101(?:\.|$)/;
+const FRAME_RATE_LIMIT_CODE = /(?:^|\.)429(?:\.|$)/;
+
+/** 帧内错误的档位：Busy（`ModelArts.81101`）与 429 归限流档，其它错误一律不可重试。 */
+export function retryClassForFrameError(frame: { code?: string } | null | undefined): RetryClass | null {
+  const code = frame?.code;
+  if (typeof code !== "string" || code === "") return null;
+  return FRAME_BUSY_CODE.test(code) || FRAME_RATE_LIMIT_CODE.test(code) ? "rate_limit" : null;
+}
+
+/** 帧内错误的重试计划：与状态级重试共用同一份预算，但上游没有可靠的 retry-after。 */
+export function planFrameRetry(input: {
+  budget: RetryBudget;
+  frame: { code?: string } | null;
+  now?: () => number;
+  random?: () => number;
+}): RetryPlan | null {
+  const cls = retryClassForFrameError(input.frame);
+  if (!cls) return null;
+  const max = RETRY_LIMITS[cls];
+  if (input.budget.attempts >= max) return null;
+  return {
+    cls,
+    max,
+    attempt: input.budget.attempts,
+    delayMs: retryDelayMs(input.budget.attempts, undefined, { now: input.now, random: input.random }),
+  };
+}
+
 function abortError(): Error {
   const err = new Error("client disconnected");
   err.name = "AbortError";

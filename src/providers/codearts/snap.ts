@@ -249,11 +249,13 @@ export class SnapClient {
   // headers：provider 层业务头（x-ot-* 等）；bodyJson：OpenAI 格式请求体对象
   // opts.signal：入站请求的取消信号；中止时上游 fetch 同一条链一起中止，且不重试。
   // opts.budget：整次入站请求共享的总尝试预算；缺省时本次调用自建一份。
+  // opts.chargeBudget：false 表示本次调用的第一次发送是凭证修复动作（401 刷新后重发），
+  // 不占用瞬时重试预算；其后的状态级重试照常扣预算。
   async chat(
     url: string,
     headers: Record<string, string>,
     bodyObj: any,
-    opts: { signal?: AbortSignal; budget?: RetryBudget } = {},
+    opts: { signal?: AbortSignal; budget?: RetryBudget; chargeBudget?: boolean } = {},
   ): Promise<Response> {
     const { signal } = opts;
     const budget = opts.budget ?? createRetryBudget();
@@ -278,11 +280,14 @@ export class SnapClient {
     // 检查点：协商期间客户端可能已断开；此时不得再发 chat。
     if (signal?.aborted) throw clientAbortError();
     let keyExpiredResent = false;
+    // 豁免只覆盖本次调用的第一次发送；随后的状态级重试仍然扣共享预算。
+    let charge = opts.chargeBudget !== false;
 
     for (;;) {
       // 检查点：每次上游尝试前；取消优先于一切重试判断，且不消耗预算。
       if (signal?.aborted) throw clientAbortError();
-      budget.attempts++;
+      if (charge) budget.attempts++;
+      charge = true;
 
       const plaintext = JSON.stringify(bodyObj);
       const ts = Date.now();
