@@ -58,12 +58,12 @@ Owner：wayne
 - **检查点**：`respond` 入口、每次上游尝试前、退避 sleep 中、key 协商之后；`signal.aborted` 优先于一切重试判断。
 - **中止方式**：中止上游 fetch（非仅停止读取）；解密流 read 随 fetch 中止而 reject，协议包装器循环随之退出。
 - **不改流包装器**：`anthropicSse` / `normalizeChatSseUsage` / `sseData` 不加 `cancel()`。
-- **401 刷新**：保留「401 → `refreshNow` → 重试一次」，作为独立凭证修复动作，不占瞬时重试预算；`signal` 中止时同样放弃。
+- **401 刷新**：保留「401 → `refreshNow` → 重试一次」，作为独立凭证修复动作，不占瞬时重试预算。门面在刷新**前**检查 `signal.aborted`（已中止则不刷新、直接 499），在刷新**完成后**再检查（已中止则不重发、直接 499）；令牌交换本身不接收入站取消信号（`refreshNow` / `callRefresh` 无 `signal` 参数），让它自然完成并回写 SecretStorage。理由：中止刷新会让已轮换的 `refresh_token` 来不及回写，共享存储留下已消费的旧 token，下次刷新得到 `STS5.1806 AlreadyUsed`、可能要求重新登录；代价高于客户端取消后短暂留下的一个后台令牌交换请求。
 - **trace**：不改 schema 3；`abort_reason` 由既有 first-wins 保持 `client_disconnect`；L3 `complete:false` 自然产生；不新增 `aborted_by`。
 
 ### 3.2 重试分级（仅 codearts）
 
-- **单一预算**：一次入站请求一个总尝试计数器，`SnapClient` 与 provider 共用；阈值与**总尝试次数**比较（官方 `x-session-retry` 语义：先 429 重试 5 次后再遇 503，总 attempt=6 ≥ 3，503 不再重试）；换 key 重发扣一次。
+- **单一预算**：一次入站请求一个总尝试计数器，`SnapClient` 与 provider 共用；阈值与**总尝试次数**比较（官方 `x-session-retry` 语义：先 429 重试 5 次后再遇 503，总 attempt=6 ≥ 3，503 不再重试）；换 key 重发扣一次。明文与未加密端点路径同样各扣一次预算，`chargeBudget:false` 只豁免 401 刷新后的免费重发，因此帧内重试在所有发送路径上都有上界。
 - **档位**：
 
 | 类别 | 上限 |
@@ -113,11 +113,11 @@ Owner：wayne
 
 ## 5. 验证与观测
 
-全部门禁在 2026-11-27 本分支（`feat/codearts-cancel-retry-t53`，基于集成分支 tip `004ba6c`）实跑，输出如下：
+全部门禁在 2026-11-27 本分支（`feat/codearts-cancel-retry-review2`，基于集成分支 tip `a8dc4d2`）实跑，输出如下：
 
 | 门禁 | 命令 | 结果 |
 |---|---|---|
-| 测试 | `~/.bun/bin/bun test` | 393 pass / 0 fail / 1612 expect；40 个文件 |
+| 测试 | `~/.bun/bin/bun test` | 401 pass / 0 fail / 1639 expect；40 个文件 |
 | 构建 | `~/.bun/bin/bun build src/index.ts --target=bun` | 退出码 0 |
 | 类型 | `~/.bun/bin/bunx tsc --noEmit` | 退出码 0 |
 | 文档链接 | `~/.bun/bin/bun scripts/check-docs-links.ts` | 见 §5.3 |
@@ -160,7 +160,7 @@ Owner：wayne
 | 注入的退避等待 | `500ms`（1 次；无真实等待） |
 | L4 正文含成功 chunk | 是 |
 
-重试日志实跑输出：`[snap] 重试 class=rate_limit status=429 attempt=1/10 delay=500ms`。断言落在 `src/registry.test.ts` 的「a 429 before the first byte is retried…」：上游序列、最终 200、记录中两条 chat 尝试（429 → 200）与假 sleep 序列。
+重试日志实跑输出：`[codearts] 重试 class=rate_limit attempt=1/10 delay=500ms status=429`。断言落在 `src/registry.test.ts` 的「a 429 before the first byte is retried…」：上游序列、最终 200、记录中两条 chat 尝试（429 → 200）与假 sleep 序列。
 
 ### 5.3 文档链接检查
 
@@ -173,6 +173,7 @@ Owner：wayne
 - 180s 空闲超时未做真实定时器端到端联调：`SnapClient` 有 50ms 缩短超时的真实定时器用例，门面级仅有注入错误覆盖。
 - 流式 HTTP 200 SSE 内嵌 Busy/429 的识别未实现（见 §7）。
 - 帧内限流码 `APIG.0308` 的映射依据是 HTTP 429 的实测观测，尚无真实帧内 429 样本（待验证）；当前只有注入假帧的确定性单测。
+- 「令牌交换不挂入站取消信号」只有门面层断言（刷新注入实现不收到 `signal`、客户端在刷新期间取消后刷新仍完成、上游 chat 不重发）；refresher 层入口直接读写真实 SecretStorage / 钥匙串，仓库含真实凭证，本轮禁止触网与真实刷新，未加结构测试（review2）。
 
 ## 6. 回滚方案
 
@@ -199,4 +200,5 @@ Owner：wayne
 |---|---|---|
 | 已定案 | wayne | #49 spec 与 grilling 锁定行为边界；无代码改动 |
 | 开发中 | wayne | #50 `0a6bd0f`、#51 `ecc6864`、#52 `4f8101f` 分三刀合入集成分支 |
-| 已验证 | wayne | 2026-11-27，#53：`bun test` 393 pass / 0 fail / 1612 expect；build、tsc、docs-links 通过；取消与 429→200 各做一次临时记录目录复核（§5）；未触网、未真实等待 |
+| 已验证 | wayne | 2026-11-27，#53：`bun test` 401 pass / 0 fail / 1639 expect；build、tsc、docs-links 通过；取消与 429→200 各做一次临时记录目录复核（§5）；未触网、未真实等待 |
+| 已验证 | wayne | 2026-11-27，review2（PR #54）：401 刷新不再挂入站取消信号（避免中止丢失已轮换的 refresh_token）；明文 / 未加密端点路径扣共享预算（帧内重试有上界）；归档证据更新；`bun test` 401 pass / 0 fail / 1639 expect，build、tsc、docs-links 通过 |

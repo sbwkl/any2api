@@ -56,9 +56,10 @@ export interface RespondOptions {
   signal?: AbortSignal;
 }
 
-/** 门面的可注入依赖：401 刷新动作与帧内重试时序（单测注入假实现，不触网、不真实等待）。 */
+/** 门面的可注入依赖：401 刷新动作与帧内重试时序（单测注入假实现，不触网、不真实等待）。
+ *  刷新动作不接收入站信号：令牌交换必须完成并回写轮换后的 refresh_token，取消由调用点前后检查。 */
 export interface OpenAIFacadeDeps {
-  refresh?: (signal?: AbortSignal) => Promise<unknown>;
+  refresh?: () => Promise<unknown>;
   retry?: Partial<RetryRuntime>;
 }
 
@@ -66,7 +67,7 @@ export class OpenAIFacade {
   private sessions = new Map<string, SessionState>();
   private heartbeats: HeartbeatManager;
   private chatUrl: string;
-  private refreshImpl: (signal?: AbortSignal) => Promise<unknown>;
+  private refreshImpl: () => Promise<unknown>;
   private retry: RetryRuntime;
 
   constructor(
@@ -78,7 +79,7 @@ export class OpenAIFacade {
   ) {
     this.heartbeats = new HeartbeatManager(new URL(this.chatOrigin()).origin, { fetch: this.fetchImpl });
     this.chatUrl = `${this.chatOrigin()}/api/v2/chat/completions`;
-    this.refreshImpl = deps.refresh ?? ((signal) => refreshNow(this.fetchImpl, signal));
+    this.refreshImpl = deps.refresh ?? (() => refreshNow(this.fetchImpl));
     this.retry = createRetryRuntime(deps.retry);
     // 会话空闲清理：发 idle 心跳收尾
     setInterval(() => {
@@ -264,10 +265,12 @@ export class OpenAIFacade {
       if (!resp.ok && resp.status === 401) {
         // 客户端已取消：不刷新凭证、不重发（刷新属于请求链内的凭证修复动作）。
         if (signal?.aborted) throw clientAbortError();
-        // STS 过期/失效：尝试强制刷新后重试一次（请求链内刷新与重发均进入四层记录）
+        // STS 过期/失效：尝试强制刷新后重试一次（请求链内刷新与重发均进入四层记录）。
+        // 刷新不挂入站信号：令牌交换必须完成并回写轮换后的 refresh_token，否则共享存储
+        // 会留下已消费的旧 token（下次刷新 STS5.1806 AlreadyUsed）。取消只在前后检查点生效。
         const errText = await resp.text().catch(() => "");
         try {
-          await this.refreshImpl(signal);
+          await this.refreshImpl();
         } catch (e: any) {
           if (signal?.aborted) throw clientAbortError();
           const reason = extractUpstreamErrorMessage(errText) ?? `upstream 401, refresh failed: ${e?.message ?? e}`;

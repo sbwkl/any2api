@@ -181,7 +181,6 @@ function classifyRefreshError(body: any): "AlreadyUsed" | "Expired" | "InvalidSy
 async function callRefresh(
   auth: SecretAuth,
   fetchImpl: FetchLike = fetch,
-  signal?: AbortSignal,
 ): Promise<{ credentials: { access_key_id: string; secret_access_key: string; security_token: string; expiration: string }; refresh_token: string }> {
   const url = `${STS_ENDPOINT}${IAM_TOKEN_API}`;
   const dpop = await generateDpop(auth.loginContext, "POST", url);
@@ -191,14 +190,15 @@ async function callRefresh(
     grant_type: GRANT_REFRESH_TOKEN,
     refresh_token: auth.refresh_token,
   }).toString();
-  // 请求链内（401 重试）记录；保活定时器与启动刷新无请求上下文，入口自然 no-op
+  // 令牌交换不挂入站取消信号：客户端中止会让已轮换的 refresh_token 来不及回写，
+  // 共享存储留下已消费的旧 token，下一次刷新只能得到 STS5.1806 AlreadyUsed。
+  // 请求链内（401 重试）记录；保活定时器与启动刷新无请求上下文，入口自然 no-op。
   const resp = await traceUpstream(
     {
       method: "POST",
       url,
       headers: { DPoP: dpop, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body,
-      signal,
     },
     { fetch: fetchImpl },
   );
@@ -223,12 +223,13 @@ function buildRenewedAuth(old: SecretAuth, renewed: Awaited<ReturnType<typeof ca
 }
 
 /** 单次刷新：读 SecretStorage → 刷新 → 回写轮换后的 refresh_token → 采纳新 STS。
- *  signal 仅由请求链内的 401 修复传入；保活/启动刷新不传，保持后台行为不变。 */
-export async function refreshNow(fetchImpl: FetchLike = fetch, signal?: AbortSignal): Promise<Credentials> {
+ *  不接收取消信号：令牌交换必须自然完成并回写，避免丢掉已轮换的 refresh_token；
+ *  调用方（门面）在刷新前后各自检查入站信号，取消后不再重发 chat。 */
+export async function refreshNow(fetchImpl: FetchLike = fetch): Promise<Credentials> {
   const auth = readSecretSession();
   if (!auth) throw new Error("SecretStorage 中无 HuaweiCloudSession（请先在 app 内登录）");
   try {
-    const renewed = await callRefresh(auth, fetchImpl, signal);
+    const renewed = await callRefresh(auth, fetchImpl);
     const newAuth = buildRenewedAuth(auth, renewed);
     writeSecretSession(newAuth);
     lastSeenRefreshToken = newAuth.refresh_token;
@@ -238,8 +239,6 @@ export async function refreshNow(fetchImpl: FetchLike = fetch, signal?: AbortSig
     serviceLogger.log(`[refresher] STS 已刷新，有效期至 ${newAuth.expires_at}（refresh_token 已轮换并回写）`);
     return creds;
   } catch (e: any) {
-    // 客户端取消打断了刷新：原样上抛，不把中止误记为一次凭证刷新失败。
-    if (signal?.aborted) throw e;
     const kind = classifyRefreshError(e.iamBody);
     lastRenewError = kind;
     if (kind === "AlreadyUsed") {

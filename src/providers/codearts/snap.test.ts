@@ -872,6 +872,49 @@ describe("state-level retry and the shared budget", () => {
   });
 });
 
+describe("shared budget on non-encrypted send paths", () => {
+  function plainSnap() {
+    const { fetch, calls } = recordingFetch(
+      () => new Response('data: {"ok":1}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    return { snap: new SnapClient("https://snap.test", fetch), calls };
+  }
+
+  test("CODEARTS_FORCE_PLAINTEXT=1 charges one attempt to the shared budget", async () => {
+    process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+    const { snap, calls } = plainSnap();
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(200);
+    expect(calls.map((c) => c.url)).toEqual([CHAT_URL]);
+    expect(budget.attempts).toBe(1);
+  });
+
+  test("a plaintext send marked chargeBudget:false (post-401 resend) stays free", async () => {
+    process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+    const { snap } = plainSnap();
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat(CHAT_URL, {}, chatBody(), { budget, chargeBudget: false });
+
+    expect(resp.status).toBe(200);
+    expect(budget.attempts).toBe(0);
+  });
+
+  test("a non-encrypted endpoint path also charges one attempt", async () => {
+    const { snap, calls } = plainSnap();
+    const budget = createRetryBudget();
+
+    const resp = await snap.chat("https://snap.test/api/v1/other", {}, chatBody(), { budget });
+
+    expect(resp.status).toBe(200);
+    expect(calls.map((c) => c.url)).toEqual(["https://snap.test/api/v1/other"]);
+    expect(budget.attempts).toBe(1);
+  });
+});
+
 describe("heartbeat recording boundary", () => {
   test("records the first busy in the request chain but not timer ticks or idle", async () => {
     const { fetch: fake, calls } = recordingFetch(() => Response.json({ ok: true }));
