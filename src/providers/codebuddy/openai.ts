@@ -217,6 +217,9 @@ export class CodeBuddyFacade {
     const sent = creds;
     // 内置刷新失败后经回源判定仍无新凭证（含磁盘无凭证）→ 401 终态指向「请登录 CodeBuddy CN」
     let reauthStale = false;
+    // 回源候选只用于本次重试：磁盘可能比内存旧（内置刷新成功只进内存、不落盘），
+    // 「候选与本次发送不同」不代表候选更新——重试成功才采纳，失败保持 current 不变
+    let pendingAdopt: Credentials | null = null;
     const resp = await postChat({
       url,
       headers: makeHeaders(creds),
@@ -231,11 +234,15 @@ export class CodeBuddyFacade {
             fetchImpl: this.opts.fetchImpl,
           });
           if (!next) {
-            // 内置 refreshToken 刷新失败 → 按需回源：候选与本次发送所用凭证不同才算新凭证，
-            // 显式采纳（adopt 是唯一写回）后重试一次；候选缺失/相同则不改源状态，落 401「请登录」终态
+            // 并发兄弟请求可能已把刷新成功的新凭证 adopt 进内存：优先用内存现值重试（零磁盘成本，且必不比磁盘候选旧）
+            const current = this.currentCredentials();
+            if (current && (current.accessToken !== sent.accessToken || current.uid !== sent.uid)) {
+              return makeHeaders(current);
+            }
+            // 内存无新凭证 → 按需回源：候选的 accessToken 或 uid 与本次发送所用不同才重试，成功后再采纳
             const reloaded = await this.reloadOnce();
             if (reloaded && (reloaded.accessToken !== sent.accessToken || reloaded.uid !== sent.uid)) {
-              this.source.adopt(reloaded);
+              pendingAdopt = reloaded;
               return makeHeaders(reloaded);
             }
             reauthStale = true;
@@ -262,6 +269,12 @@ export class CodeBuddyFacade {
         return true;
       },
     });
+
+    // 候选重试成功才采纳：失败时 current 保持不变（可能是内存中较新的凭证，留给下一次刷新自愈）
+    if (resp.ok && pendingAdopt) {
+      this.source.adopt(pendingAdopt);
+      pendingAdopt = null;
+    }
 
     if (resp.ok && (resp.headers.get("content-type") ?? "").includes("application/json")) {
       const peek = await resp.clone().json().catch(() => null);

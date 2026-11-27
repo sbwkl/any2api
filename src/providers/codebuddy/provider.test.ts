@@ -273,17 +273,64 @@ describe("codebuddy 401 self-heal (T3)", () => {
     const resp = await handler(chatRequest());
 
     // 回源判定基线是本次发送所用凭证（旧 tok），而非 401 时刻的源现值：
-    // 回源读到的新 token 与本次所用旧 token 不同 → 重试一次成功
+    // 内存现值已被并发请求采纳为新 token（≠ 本次所用旧 token）→ 直接用它重试成功，全程不触磁盘
     expect(resp.status).toBe(200);
     expect(chatCalls).toBe(2);
     expect(bearerSeen).toEqual(["Bearer tok", "Bearer new"]);
-    expect(reloadCalls).toBe(1);
+    expect(reloadCalls).toBe(0);
   });
 
-  test("stale disk reload cannot downgrade adopted credentials (production source, interleaved)", async () => {
+  test("stale disk candidate is adopted only after its retry succeeds (no downgrade on failed retry)", async () => {
+    // R1 401→刷新成功 adopt T2（磁盘停留 T1）；R2 以 T2 401 且刷新瞬时失败 →
+    // 回源候选 T1 与本次发送（T2）不同，但候选只用于本次重试：重试失败不得采纳（current 保持 T2）；
+    // R3 仍用 T2，刷新恢复后自愈——若提前采纳了 T1，R3 起将持续 401 直到重新登录。
+    let disk = credentials;
+    const source = defaultCredentialSource({ load: () => disk });
+    let chatCalls = 0;
+    let refreshCalls = 0;
+    const bearerSeen: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes("/auth/token/refresh")) {
+        refreshCalls++;
+        // 刷新调用按序：①R1 用 T1 刷新成功（此后 T1 的 refreshToken 已轮换失效）
+        // ②R2 用 T2 刷新瞬时失败 ③R3 用 T2 刷新恢复成功
+        if (refreshCalls === 1) {
+          return Response.json({ data: { accessToken: "new", refreshToken: "ref2" } }, { status: 200 });
+        }
+        if (refreshCalls === 3) {
+          return Response.json({ data: { accessToken: "new2", refreshToken: "ref3" } }, { status: 200 });
+        }
+        return new Response("denied", { status: 401 });
+      }
+      chatCalls++;
+      bearerSeen.push(new Headers(init?.headers).get("authorization") ?? "");
+      if (chatCalls === 2 || chatCalls === 6) {
+        return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      }
+      return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: source, fetchImpl }),
+    ]);
+    const r1 = await handler(chatRequest());
+    expect(r1.status).toBe(200);
+    const r2 = await handler(chatRequest());
+    expect(r2.status).toBe(401);
+    expect(source.get()?.accessToken).toBe("new");
+    const r3 = await handler(chatRequest());
+    expect(r3.status).toBe(200);
+    expect(bearerSeen).toEqual([
+      "Bearer tok", "Bearer new", // R1：T1 401 → 刷新得 T2 → 重试成功
+      "Bearer new", "Bearer tok", // R2：T2 401 → 刷新失败 → 候选 T1 重试也失败（不采纳）
+      "Bearer new", "Bearer new2", // R3：仍用 T2 → 刷新恢复得 T3 → 重试成功
+    ]);
+  });
+
+  test("credentials adopted by a concurrent refresh are visible to a failed sibling request", async () => {
     // 磁盘停留在旧 token（内置刷新成功不落盘）：请求 B 以旧凭证在飞吃 401 的同时，
-    // 另一路径已刷新成功并把新凭证 adopt 进内存；B 回源读到磁盘旧值（与本次发送相同）→
-    // 不得降级 current；随后请求 C 必须用内存中的新凭证成功。
+    // 另一路径已刷新成功并把新凭证 adopt 进内存；B 刷新失败后应优先用内存现值重试，
+    // 对客户端透明成功（story 6），而非落 401「请登录」。
     const t2: Credentials = { accessToken: "new", refreshToken: "ref2", uid: "u1", source: "env" };
     let disk = credentials;
     const source = defaultCredentialSource({ load: () => disk });
@@ -304,13 +351,11 @@ describe("codebuddy 401 self-heal (T3)", () => {
       createCodebuddyProvider({ credentialSource: source, fetchImpl }),
     ]);
     const respB = await handler(chatRequest());
-    expect(respB.status).toBe(401);
-    const jsonB: any = await respB.json();
-    expect(jsonB.error.message).toBe("请登录 CodeBuddy CN");
+    expect(respB.status).toBe(200);
 
     const respC = await handler(chatRequest());
     expect(respC.status).toBe(200);
-    expect(bearerSeen).toEqual(["Bearer tok", "Bearer new"]);
+    expect(bearerSeen).toEqual(["Bearer tok", "Bearer new", "Bearer new"]);
   });
 });
 
