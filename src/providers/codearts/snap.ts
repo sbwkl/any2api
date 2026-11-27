@@ -6,9 +6,12 @@ import { getCredentials } from "./config";
 import { traceUpstream, UpstreamDecodeError, type FetchLike } from "../../shared/trace";
 import { serviceLogger } from "../../shared/log";
 import {
+  clientAbortError,
   createRetryBudget,
   createRetryRuntime,
+  logKeyExpiredResend,
   planRetry,
+  waitForRetry,
   type RetryBudget,
   type RetryRuntime,
 } from "./retry";
@@ -18,6 +21,9 @@ const ENCRYPT_PATHS = ["/api/v2/chat/completions"];
 const KEY_EXCHANGE_PATH = "/api/v1/security/key-exchange";
 const REUSE_MARGIN_MS = 300000; // 提前 5 分钟换新
 const DEFAULT_IDLE_TIMEOUT_MS = 180000;
+const NEED_SWITCH_MODEL_HEADER = "need-switch-model";
+const NEED_SWITCH_MODEL_MESSAGE =
+  "need-switch-model: upstream requires switching to another model; this proxy does not support automatic model switching";
 
 function idleTimeoutMs(): number {
   const n = Number(process.env.CODEARTS_UPSTREAM_IDLE_TIMEOUT_MS ?? DEFAULT_IDLE_TIMEOUT_MS);
@@ -29,11 +35,12 @@ const unb64 = (s: string) => new Uint8Array(Buffer.from(s, "base64"));
 const utf8 = (s: string) => new Uint8Array(Buffer.from(s, "utf-8"));
 const toUtf8 = (b: Uint8Array) => Buffer.from(b).toString("utf-8");
 
-/** 客户端取消是终止信号而不是网络故障：加密客户端不得把它当成可重试错误。 */
-function clientAbortError(): Error {
-  const err = new Error("client disconnected");
-  err.name = "AbortError";
-  return err;
+/** 上游要求切换模型：代理不自动切模型，映射为不可重试的明确错误。 */
+export function needSwitchModelResponse(): Response {
+  return new Response(JSON.stringify({ error: { code: "need-switch-model", message: NEED_SWITCH_MODEL_MESSAGE } }), {
+    status: 409,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 // ---- u$：ECDH P-256 密钥协商 ----
@@ -325,6 +332,8 @@ export class SnapClient {
         if (signal?.aborted) throw clientAbortError();
         throw new Error(`upstream network error: ${e?.message ?? e}`);
       }
+      // 上游要求切换模型：不自动切、也不进入 429/406 或其它状态档，立即返回明确错误。
+      if (resp.headers.has(NEED_SWITCH_MODEL_HEADER)) return needSwitchModelResponse();
       if (resp.ok) return resp;
 
       const text = await resp.text().catch(() => "");
@@ -334,9 +343,7 @@ export class SnapClient {
       // 换密钥重发：保留原行为，但每次重发照常扣一次预算；单次 chat 最多一次。
       if (text.includes("ENCRYPT_KEY_EXPIRED") && !keyExpiredResent) {
         keyExpiredResent = true;
-        serviceLogger.warn(
-          `[snap] 重试 class=key_expired attempt=${budget.attempts} max=- delay=0ms（换密钥重发）`,
-        );
+        logKeyExpiredResend(budget.attempts);
         this.keys.clearKey();
         try {
           key = await this.keys.getOrNegotiateKey(baseUrl);
@@ -361,11 +368,8 @@ export class SnapClient {
         if (contentType) headersOut.set("Content-Type", contentType);
         return new Response(text, { status: resp.status, statusText: resp.statusText, headers: headersOut });
       }
-      serviceLogger.warn(
-        `[snap] 重试 class=${plan.cls} status=${resp.status} attempt=${plan.attempt}/${plan.max} delay=${plan.delayMs}ms`,
-      );
       try {
-        await this.retry.sleep(plan.delayMs, signal);
+        await waitForRetry(plan, this.retry, signal, `status=${resp.status}`);
       } catch (e) {
         if (signal?.aborted) throw clientAbortError();
         throw e;
