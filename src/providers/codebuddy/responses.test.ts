@@ -2,6 +2,7 @@ import { test, expect, describe } from "bun:test";
 import { handleResponses, responsesToOpenAi } from "../../protocols/responses";
 import type { ChatBackend, ProtocolCapabilities } from "../../protocols/types";
 import { CodeBuddyFacade } from "./openai";
+import { staticSource } from "./credentials";
 import type { Credentials, ProductConfig } from "./types";
 
 const CAPS: ProtocolCapabilities = { toolChoice: "auto-only", normalizeErrors: true };
@@ -42,7 +43,7 @@ const SSE_TOOL = [
 
 function facadeWith(sse: string): CodeBuddyFacade {
   const fetchImpl = (async () => new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } })) as unknown as typeof fetch;
-  return new CodeBuddyFacade(config, credentials, { fetchImpl });
+  return new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
 }
 
 function backendFor(facade: CodeBuddyFacade): ChatBackend {
@@ -206,7 +207,7 @@ describe("responses adapter", () => {
 
   test("upstream errors become Responses error envelopes", async () => {
     const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as unknown as typeof fetch;
-    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const backend = backendFor(new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl }));
     const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), CAPS);
     expect(resp.status).toBe(400);
     const j: any = await resp.json();
@@ -215,7 +216,7 @@ describe("responses adapter", () => {
 
   test("passthrough error shape returns the provider response unchanged", async () => {
     const fetchImpl = (async () => Response.json({ code: 11101, msg: "No stream" }, { status: 400 })) as unknown as typeof fetch;
-    const backend = backendFor(new CodeBuddyFacade(config, credentials, { fetchImpl }));
+    const backend = backendFor(new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl }));
     const resp = await handleResponses(backend, respReq({ model: "hy4flash-free", input: "hi" }), { toolChoice: "auto-only", normalizeErrors: false });
     expect(resp.status).toBe(400);
     const j: any = await resp.json();

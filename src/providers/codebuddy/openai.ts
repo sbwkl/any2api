@@ -7,6 +7,7 @@ import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from 
 import { aggregateSseToCompletion, normalizeChatSseUsage } from "../../shared/sse";
 import { applyPromptCacheControl } from "../../shared/cache";
 import { errorTypeForStatus } from "../../shared/errors";
+import type { CredentialSource } from "./credentials";
 import type { Credentials, ProductConfig, Profile } from "./types";
 
 const PROFILES = new Set<Profile>(["chat", "ask", "craft"]);
@@ -20,14 +21,31 @@ function jsonError(status: number, message: string, code?: any): Response {
 
 export class CodeBuddyFacade {
   private sessions = new SessionRegistry();
-  private credentials: Credentials;
+  private source: CredentialSource;
+  // 回源单飞：进行中的 reload 由并发请求共享，settle 后清空以便下次按需重新回源
+  private reloadPromise: Promise<Credentials | null> | null = null;
 
   constructor(
     private config: ProductConfig,
-    credentials: Credentials,
+    source: CredentialSource,
     private opts: { deviceToken?: string; fetchImpl?: typeof fetch } = {},
   ) {
-    this.credentials = credentials;
+    this.source = source;
+  }
+
+  // 当前凭证：按请求从凭证源读取；凭证未就绪时为 null。
+  private currentCredentials(): Credentials | null {
+    return this.source.get();
+  }
+
+  // 按需回源（单飞合并）：并发请求同时触发时共享同一次 reload()
+  private reloadOnce(): Promise<Credentials | null> {
+    if (!this.reloadPromise) {
+      this.reloadPromise = this.source.reload().finally(() => {
+        this.reloadPromise = null;
+      });
+    }
+    return this.reloadPromise;
   }
 
   modelsPayload() {
@@ -44,17 +62,27 @@ export class CodeBuddyFacade {
   }
 
   healthPayload() {
+    const credentials = this.currentCredentials();
+    if (!credentials) {
+      // 凭证未就绪：降级态而非服务故障，healthz 不抛错。
+      return {
+        ok: false,
+        provider: "codebuddy",
+        credentialsReady: false,
+        models: this.config.models.length,
+      };
+    }
     return {
       ok: true,
       provider: "codebuddy",
       models: this.config.models.length,
-      credentialSource: this.credentials.source,
-      uid: `${this.credentials.uid.slice(0, 8)}...`,
+      credentialSource: credentials.source,
+      uid: `${credentials.uid.slice(0, 8)}...`,
     };
   }
 
-  getCredentials(): Credentials {
-    return this.credentials;
+  getCredentials(): Credentials | null {
+    return this.currentCredentials();
   }
 
   async handleModels(): Promise<Response> {
@@ -112,6 +140,18 @@ export class CodeBuddyFacade {
   }
 
   private async respondInner(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
+    // 按需回源（惰性）：当前无凭证时先读一次凭证源再判定，登录后下一个请求即恢复、无需重启。
+    let creds = this.currentCredentials();
+    if (!creds) {
+      const candidate = await this.reloadOnce();
+      // 回源候选是纯读结果：仅当当前无凭证时采纳——磁盘可能比内存旧（内置刷新成功不落盘），避免旧值覆盖新凭证
+      if (candidate) {
+        this.source.adopt(candidate);
+        creds = candidate;
+      }
+    }
+    if (!creds) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
+
     let messages: any[];
     try {
       messages = normalizeMessages(body.messages ?? []);
@@ -172,9 +212,17 @@ export class CodeBuddyFacade {
     });
 
     const url = `${this.config.endpoint}/v2/chat/completions`;
+    // 本次发送所用凭证：401 后的内置刷新与回源判定都以它为基线，而非 401 时刻的源现值——
+    // 并发交错下另一请求可能已采纳新凭证，若与源现值比对，会把「本次所用旧 token + 回源同一新 token」误判为无新凭证而放弃本可成功的重试。
+    const sent = creds;
+    // 内置刷新失败后经回源判定仍无新凭证（含磁盘无凭证）→ 401 终态指向「请登录 CodeBuddy CN」
+    let reauthStale = false;
+    // 回源候选只用于本次重试：磁盘可能比内存旧（内置刷新成功只进内存、不落盘），
+    // 「候选与本次发送不同」不代表候选更新——重试成功才采纳，失败保持 current 不变
+    let pendingAdopt: Credentials | null = null;
     const resp = await postChat({
       url,
-      headers: makeHeaders(this.credentials),
+      headers: makeHeaders(creds),
       body: requestBody,
       fetchImpl: this.opts.fetchImpl,
       onUnauthorized: process.env.CODEBUDDY_AUTO_REFRESH === "0"
@@ -182,19 +230,35 @@ export class CodeBuddyFacade {
         : async () => {
           const next = await refreshAccessToken({
             config: this.config,
-            credentials: this.credentials,
+            credentials: sent,
             fetchImpl: this.opts.fetchImpl,
           });
-          if (!next) return null;
-          this.credentials = next;
+          if (!next) {
+            // 并发兄弟请求可能已把刷新成功的新凭证 adopt 进内存：优先用内存现值重试（零磁盘成本，且必不比磁盘候选旧）
+            const current = this.currentCredentials();
+            if (current && (current.accessToken !== sent.accessToken || current.uid !== sent.uid)) {
+              return makeHeaders(current);
+            }
+            // 内存无新凭证 → 按需回源：候选的 accessToken 或 uid 与本次发送所用不同才重试，成功后再采纳
+            const reloaded = await this.reloadOnce();
+            if (reloaded && (reloaded.accessToken !== sent.accessToken || reloaded.uid !== sent.uid)) {
+              pendingAdopt = reloaded;
+              return makeHeaders(reloaded);
+            }
+            reauthStale = true;
+            return null;
+          }
+          this.source.adopt(next);
           return makeHeaders(next);
         },
       onQueue: async (peek) => {
+        const creds = this.currentCredentials();
+        if (!creds) return false;
         const timeout = Number(process.env.CODEBUDDY_QUEUE_TIMEOUT_MS ?? 120000);
         const retryAfterMs = Number(peek?.data?.retry_after ?? peek?.retry_after ?? 5) * 1000;
         const status = await fetchQueueStatus({
           config: this.config,
-          credentials: this.credentials,
+          credentials: creds,
           model: model.id,
           requestId,
           fetchImpl: this.opts.fetchImpl,
@@ -205,6 +269,12 @@ export class CodeBuddyFacade {
         return true;
       },
     });
+
+    // 候选重试成功才采纳：失败时 current 保持不变（可能是内存中较新的凭证，留给下一次刷新自愈）
+    if (resp.ok && pendingAdopt) {
+      this.source.adopt(pendingAdopt);
+      pendingAdopt = null;
+    }
 
     if (resp.ok && (resp.headers.get("content-type") ?? "").includes("application/json")) {
       const peek = await resp.clone().json().catch(() => null);
@@ -217,6 +287,7 @@ export class CodeBuddyFacade {
     if (!resp.ok) {
       const err = await readUpstreamError(resp);
       if (resp.status === 401) {
+        if (reauthStale) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
         return jsonError(401, `CodeBuddy 鉴权失败，请重新登录或更新凭证：${err.message}`, err.code);
       }
       if (resp.status === 429) return jsonError(429, err.message, err.code);
