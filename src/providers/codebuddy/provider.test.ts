@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mountProviders } from "../../registry";
 import { createCodebuddyProvider } from "./index";
-import { staticSource, type CredentialSource } from "./credentials";
+import { defaultCredentialSource, staticSource, type CredentialSource } from "./credentials";
 import type { Credentials } from "./types";
 
 const oldEnv = { ...process.env };
@@ -278,6 +278,39 @@ describe("codebuddy 401 self-heal (T3)", () => {
     expect(chatCalls).toBe(2);
     expect(bearerSeen).toEqual(["Bearer tok", "Bearer new"]);
     expect(reloadCalls).toBe(1);
+  });
+
+  test("stale disk reload cannot downgrade adopted credentials (production source, interleaved)", async () => {
+    // 磁盘停留在旧 token（内置刷新成功不落盘）：请求 B 以旧凭证在飞吃 401 的同时，
+    // 另一路径已刷新成功并把新凭证 adopt 进内存；B 回源读到磁盘旧值（与本次发送相同）→
+    // 不得降级 current；随后请求 C 必须用内存中的新凭证成功。
+    const t2: Credentials = { accessToken: "new", refreshToken: "ref2", uid: "u1", source: "env" };
+    let disk = credentials;
+    const source = defaultCredentialSource({ load: () => disk });
+    let chatCalls = 0;
+    const bearerSeen: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes("/auth/token/refresh")) return refreshDenied();
+      chatCalls++;
+      bearerSeen.push(new Headers(init?.headers).get("authorization") ?? "");
+      if (chatCalls === 1) {
+        source.adopt(t2); // 交错：B 在飞时另一请求完成刷新并采纳 t2（磁盘仍旧值）
+        return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+      }
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: source, fetchImpl }),
+    ]);
+    const respB = await handler(chatRequest());
+    expect(respB.status).toBe(401);
+    const jsonB: any = await respB.json();
+    expect(jsonB.error.message).toBe("请登录 CodeBuddy CN");
+
+    const respC = await handler(chatRequest());
+    expect(respC.status).toBe(200);
+    expect(bearerSeen).toEqual(["Bearer tok", "Bearer new"]);
   });
 });
 

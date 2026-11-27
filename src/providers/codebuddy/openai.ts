@@ -142,7 +142,14 @@ export class CodeBuddyFacade {
   private async respondInner(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
     // 按需回源（惰性）：当前无凭证时先读一次凭证源再判定，登录后下一个请求即恢复、无需重启。
     let creds = this.currentCredentials();
-    if (!creds) creds = await this.reloadOnce();
+    if (!creds) {
+      const candidate = await this.reloadOnce();
+      // 回源候选是纯读结果：仅当当前无凭证时采纳——磁盘可能比内存旧（内置刷新成功不落盘），避免旧值覆盖新凭证
+      if (candidate) {
+        this.source.adopt(candidate);
+        creds = candidate;
+      }
+    }
     if (!creds) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
 
     let messages: any[];
@@ -224,9 +231,11 @@ export class CodeBuddyFacade {
             fetchImpl: this.opts.fetchImpl,
           });
           if (!next) {
-            // 内置 refreshToken 刷新失败 → 按需回源：读到的 accessToken 或 uid 与本次发送所用凭证不同才算新凭证，重试一次（reload 内部已写回，无需再 adopt）
+            // 内置 refreshToken 刷新失败 → 按需回源：候选与本次发送所用凭证不同才算新凭证，
+            // 显式采纳（adopt 是唯一写回）后重试一次；候选缺失/相同则不改源状态，落 401「请登录」终态
             const reloaded = await this.reloadOnce();
             if (reloaded && (reloaded.accessToken !== sent.accessToken || reloaded.uid !== sent.uid)) {
+              this.source.adopt(reloaded);
               return makeHeaders(reloaded);
             }
             reauthStale = true;
