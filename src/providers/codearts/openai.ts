@@ -8,11 +8,18 @@ import { getCredentials } from "./config";
 import { refreshNow } from "./refresher";
 import type { GatewayConfig, ModelInfo } from "./config";
 import type { TelemetrySimulator } from "./telemetry";
-import { aggregateSseToCompletion, normalizeChatSseUsage, NO_CHOICES } from "../../shared/sse";
-import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, isTransientUpstreamMessage, PROXY_ERROR_HEADER } from "../../shared/errors";
+import { aggregateSseToCompletion, normalizeChatSseUsage, UpstreamSseError } from "../../shared/sse";
+import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, PROXY_ERROR_HEADER } from "../../shared/errors";
 import { dumpUpstream, type FetchLike } from "../../shared/trace";
 import { serviceLogger } from "../../shared/log";
-import { createRetryBudget, type RetryBudget } from "./retry";
+import {
+  createRetryBudget,
+  createRetryRuntime,
+  planFrameRetry,
+  retryClassForFrameError,
+  type RetryBudget,
+  type RetryRuntime,
+} from "./retry";
 
 const CLIENT_TYPE = "IDE";
 const CLIENT_VERSION = "26.11.200";
@@ -22,8 +29,6 @@ const OT_FUNCTION = "agent-claw";
 const USER_AGENT = process.env.PROXY_USER_AGENT ?? "opencode/126.11.2-20261117200150";
 const LANGUAGE = "en-us";
 const IDLE_TO_IDLE_MS = 120000; // 无请求 2 分钟后发 idle 收尾
-// 非流式聚合在尚未向客户端发出任何字节前，瞬时网络错误重试一次。
-const NON_STREAM_ATTEMPTS = 2;
 
 function clientIp(): string {
   for (const list of Object.values(networkInterfaces())) {
@@ -42,25 +47,30 @@ function secIsoZ(d = new Date()): string {
 
 interface SessionState { id: string; firstRequestDone: boolean; lastActivity: number }
 
-/** 上游错误消息是否值得重试：由共享分类决定（5xx/连接类/超时）。参数错、限流、鉴权不重试。 */
-function isTransientFailure(message: string): boolean {
-  // 真空流不是网络故障：重试只会把一次失败变成两次上游调用。
-  return message !== NO_CHOICES && isTransientUpstreamMessage(message);
+/** 门面的可注入依赖：401 刷新动作与帧内重试时序（单测注入假实现，不触网、不真实等待）。 */
+export interface OpenAIFacadeDeps {
+  refresh?: (signal?: AbortSignal) => Promise<unknown>;
+  retry?: Partial<RetryRuntime>;
 }
 
 export class OpenAIFacade {
   private sessions = new Map<string, SessionState>();
   private heartbeats: HeartbeatManager;
   private chatUrl: string;
+  private refreshImpl: (signal?: AbortSignal) => Promise<unknown>;
+  private retry: RetryRuntime;
 
   constructor(
     private snap: SnapClient,
     private gw: GatewayConfig,
     private telemetry: TelemetrySimulator,
     private fetchImpl: FetchLike = fetch,
+    deps: OpenAIFacadeDeps = {},
   ) {
     this.heartbeats = new HeartbeatManager(new URL(this.chatOrigin()).origin, { fetch: this.fetchImpl });
     this.chatUrl = `${this.chatOrigin()}/api/v2/chat/completions`;
+    this.refreshImpl = deps.refresh ?? ((signal) => refreshNow(this.fetchImpl, signal));
+    this.retry = createRetryRuntime(deps.retry);
     // 会话空闲清理：发 idle 心跳收尾
     setInterval(() => {
       const now = Date.now();
@@ -82,9 +92,10 @@ export class OpenAIFacade {
     body: any,
     signal?: AbortSignal,
     budget?: RetryBudget,
+    opts: { chargeBudget?: boolean } = {},
   ): Promise<Response> {
     dumpUpstream("codearts", this.chatUrl, body);
-    return this.snap.chat(this.chatUrl, headers, body, { signal, budget });
+    return this.snap.chat(this.chatUrl, headers, body, { signal, budget, chargeBudget: opts.chargeBudget });
   }
 
   modelsPayload(): any {
@@ -157,8 +168,8 @@ export class OpenAIFacade {
     if (signal?.aborted) return clientAbortResponse();
     if (!body || !Array.isArray(body.messages))
       return jsonError(400, "invalid_request: messages is required");
-    // 一次入站请求一份总尝试预算：门面内层（聚合重试、401 重发）与加密客户端共享，
-    // 避免分层重试成倍放大最坏 POST 次数。
+    // 一次入站请求一份总尝试预算：加密客户端的 HTTP 状态级重试与门面帧内重试共用，
+    // 避免分层重试成倍放大最坏 POST 次数；401 刷新后的重发是独立凭证修复动作，不占此预算。
     const retryBudget = createRetryBudget();
     const model = this.resolveModel(body.model);
     // 未知模型必须显式 4xx：静默回退 models[0] 会让客户端以为在用 A 实际在用 B。
@@ -246,7 +257,7 @@ export class OpenAIFacade {
         // STS 过期/失效：尝试强制刷新后重试一次（请求链内刷新与重发均进入四层记录）
         const errText = await resp.text().catch(() => "");
         try {
-          await refreshNow(this.fetchImpl, signal);
+          await this.refreshImpl(signal);
         } catch (e: any) {
           if (signal?.aborted) throw clientAbortError();
           const reason = extractUpstreamErrorMessage(errText) ?? `upstream 401, refresh failed: ${e?.message ?? e}`;
@@ -255,7 +266,8 @@ export class OpenAIFacade {
         if (signal?.aborted) throw clientAbortError();
         serviceLogger.log("[openai] 401 → STS 已刷新，重试一次");
         try {
-          resp = await this.chatUpstream(signedHeaders(), mapped, signal, retryBudget);
+          // 凭证修复动作不占瞬时重试预算：预算耗尽也照常重发，但仍然受取消信号约束。
+          resp = await this.chatUpstream(signedHeaders(), mapped, signal, retryBudget, { chargeBudget: false });
         } catch (e: any) {
           if (signal?.aborted) throw clientAbortError();
           // 刷新成功但重发网络失败：交给上层按瞬时错误处理，不要伪装成 401。
@@ -293,19 +305,18 @@ export class OpenAIFacade {
     }
 
     // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对 non-stream 请求也回 SSE）。
-    // 只对「聚合/读取阶段」的瞬时故障再试一次；上游尝试与加密客户端共享同一份重试预算。
-    // #52 将退役这条独立尝试常量，并把重试边界收敛到「首字节前」。
-    let lastMessage = "upstream error";
-    let lastStatus = 502;
-    for (let attempt = 1; attempt <= NON_STREAM_ATTEMPTS; attempt++) {
+    // 重试边界收敛到「首字节前」，由共享预算统一裁决：
+    // - HTTP 非 2xx 由加密客户端按状态档位重试，门面不再另起尝试循环；
+    // - 帧内 Busy（ModelArts.81101）/ 429 按限流档重试；
+    // - 帧内其它错误、空响应（NO_CHOICES）、空闲超时与裸网络错误直接上报，不重试。
+    let frameRetries = 0;
+    for (;;) {
       if (signal?.aborted) return clientAbortResponse();
       let resp: Response;
       try {
         resp = await sendOnce();
       } catch (e: any) {
-        // 取消不是瞬时故障：立即收手，不消耗外层尝试。
         if (signal?.aborted) return clientAbortResponse();
-        // snap 已重试过：直接按分类返回，不再消耗外层预算
         const message = e?.message ?? String(e);
         return jsonError(classifyUpstreamStatus(message), message);
       }
@@ -323,13 +334,29 @@ export class OpenAIFacade {
       } catch (e: any) {
         // 读取/聚合阶段被取消：不把 AbortError 当瞬时故障重试。
         if (signal?.aborted) return clientAbortResponse();
-        lastMessage = e?.message ?? String(e);
-        lastStatus = classifyUpstreamStatus(lastMessage);
-        if (attempt < NON_STREAM_ATTEMPTS && isTransientFailure(lastMessage)) continue;
-        break;
+        const message = e?.message ?? String(e);
+        const frame = e instanceof UpstreamSseError ? e.frame : null;
+        const frameClass = retryClassForFrameError(frame);
+        const plan = planFrameRetry({
+          budget: retryBudget,
+          frame,
+          now: this.retry.now,
+          random: this.retry.random,
+        });
+        // 本地计数兜底：即便某条上游路径没有扣预算，也不越过该类别的总尝试上限。
+        if (!plan || frameRetries >= plan.max - 1)
+          return jsonError(frameClass ? 429 : classifyUpstreamStatus(message), message);
+        serviceLogger.warn(
+          `[openai] 帧内错误重试 class=${plan.cls} attempt=${plan.attempt}/${plan.max} delay=${plan.delayMs}ms`,
+        );
+        try {
+          await this.retry.sleep(plan.delayMs, signal);
+        } catch {
+          return clientAbortResponse();
+        }
+        frameRetries++;
       }
     }
-    return jsonError(lastStatus, lastMessage);
   }
 }
 

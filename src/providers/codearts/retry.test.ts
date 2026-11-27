@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createRetryBudget, planRetry, retryClassForStatus, sleep } from "./retry";
+import { createRetryBudget, planFrameRetry, planRetry, retryClassForFrameError, retryClassForStatus, sleep } from "./retry";
 
 describe("state-level retry classes", () => {
   test("429 / 406 and 502 use the long ladder; 500 / 503 / 504 / 407 use the short one", () => {
@@ -44,6 +44,35 @@ describe("state-level retry classes", () => {
     for (const status of [400, 401, 404, 408, 415, 505]) {
       expect(planRetry({ budget, status })).toBeNull();
     }
+  });
+});
+
+describe("embedded frame errors", () => {
+  test("only structured Busy / 429 error codes map to the rate-limit tier", () => {
+    // 上游把限流塞进 HTTP 200 SSE 的形态（error.code / error_code 结构化错误码）：
+    // Busy = ModelArts.81101；429 以内嵌状态段出现。
+    expect(retryClassForFrameError({ code: "ModelArts.81101" })).toBe("rate_limit");
+    expect(retryClassForFrameError({ code: "InferHub.ModelArts.81101" })).toBe("rate_limit");
+    expect(retryClassForFrameError({ code: "InferHub.ModelArts.81101.429" })).toBe("rate_limit");
+    expect(retryClassForFrameError({ code: "InferHub.Some.429" })).toBe("rate_limit");
+    // 非限流错误码、缺失错误码、相似但不同的错误码都不重试。
+    expect(retryClassForFrameError({ code: "InferHub.001001005.400" })).toBeNull();
+    expect(retryClassForFrameError({ code: "ModelArts.81102" })).toBeNull();
+    expect(retryClassForFrameError({ code: "InferHub.1429" })).toBeNull();
+    expect(retryClassForFrameError({})).toBeNull();
+    expect(retryClassForFrameError(null)).toBeNull();
+  });
+
+  test("frame retries share the rate-limit cap with status-level retries", () => {
+    const budget = createRetryBudget();
+    budget.attempts = 9;
+    // 指数分量在 9 次后已封顶 5s；random=()=>0 消除 jitter。
+    expect(planFrameRetry({ budget, frame: { code: "ModelArts.81101" }, random: () => 0 })?.delayMs).toBe(5000);
+    budget.attempts = 10;
+    expect(planFrameRetry({ budget, frame: { code: "ModelArts.81101" } })).toBeNull();
+    // 非限流帧即使预算充裕也不产生重试计划。
+    budget.attempts = 1;
+    expect(planFrameRetry({ budget, frame: { code: "InferHub.001001005.400" } })).toBeNull();
   });
 });
 

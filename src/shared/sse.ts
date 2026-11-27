@@ -43,22 +43,49 @@ export function mapUsage(usage: any): any | undefined {
 // 上游可能把错误塞进 HTTP 200 的 SSE（codearts 实测：`{"text":"[DONE]","error_code":"InferHub.…","error_msg":"…"}`）。
 // 这种帧没有 choices；若当作空回答处理，客户端会看到一次「什么都没发」的正常结束。
 // 判定从严：只认明确带错误字段的形态，避免把上游的心跳/计数帧当成错误。
-export function upstreamErrorFromChunk(chunk: any): string | null {
+export interface UpstreamErrorFrame {
+  /** 结构化的错误码（`error.code` / `error_code`），供重试档位判定 */
+  code?: string;
+  message?: string;
+}
+
+export function upstreamErrorFrameFromChunk(chunk: any): UpstreamErrorFrame | null {
   if (!chunk || typeof chunk !== "object") return null;
   if (Array.isArray(chunk.choices) && chunk.choices.length > 0) return null;
   if (chunk.error && typeof chunk.error === "object") {
+    const code = chunk.error.code;
     const msg = chunk.error.message ?? chunk.error.msg;
-    if (chunk.error.code !== undefined || msg !== undefined)
-      return `${chunk.error.code ?? "error"}${msg ? `: ${msg}` : ""}`;
+    if (code !== undefined || msg !== undefined)
+      return {
+        code: code == null ? undefined : String(code),
+        message: msg == null ? undefined : String(msg),
+      };
   }
   if (chunk.error_code !== undefined || chunk.error_msg !== undefined)
-    return `${chunk.error_code ?? "error"}${chunk.error_msg ? `: ${chunk.error_msg}` : ""}`;
+    return {
+      code: chunk.error_code == null ? undefined : String(chunk.error_code),
+      message: chunk.error_msg == null ? undefined : String(chunk.error_msg),
+    };
   return null;
+}
+
+export function upstreamErrorFromChunk(chunk: any): string | null {
+  const frame = upstreamErrorFrameFromChunk(chunk);
+  if (!frame) return null;
+  return `${frame.code ?? "error"}${frame.message ? `: ${frame.message}` : ""}`;
 }
 
 // 空流与「只有错误帧」的流都归到同一条报错，但把上游原话带出去——
 // 通用的一句「no choices」会让调用方查不到任何线索。
 export const NO_CHOICES = "no choices in upstream SSE";
+
+/** 只有错误帧（或空流）的 200 SSE 在聚合时抛出；保留结构化错误帧供调用方判定重试档位。 */
+export class UpstreamSseError extends Error {
+  constructor(message: string, readonly frame: UpstreamErrorFrame | null) {
+    super(message);
+    this.name = "UpstreamSseError";
+  }
+}
 
 export function mapFinishReason(reason: any): string {
   if (reason === "content-filter" || reason === "content_filter") return "content_filter";
@@ -151,6 +178,7 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
   let usage: any;
   const slots = new Map<number, Slot>();
   let upstreamError: string | null = null;
+  let upstreamFrame: UpstreamErrorFrame | null = null;
 
   for await (const data of sseData(body)) {
     if (!data || data === "[DONE]") continue;
@@ -163,6 +191,7 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
     if (!id && chunk.id) id = chunk.id;
     if (!model && chunk.model) model = chunk.model;
     if (!created && chunk.created) created = chunk.created;
+    upstreamFrame ??= upstreamErrorFrameFromChunk(chunk);
     upstreamError ??= upstreamErrorFromChunk(chunk);
     if (chunk.usage) {
       const prev = usage ?? {};
@@ -202,7 +231,8 @@ export async function aggregateSseToCompletion(body: ReadableStream<Uint8Array>)
   }
 
   // 空流 / 只有错误事件的流不是成功响应。错误帧优先：它比通用文案更能说明发生了什么。
-  if (slots.size === 0) throw new Error(upstreamError ? `${NO_CHOICES}: ${upstreamError}` : NO_CHOICES);
+  if (slots.size === 0)
+    throw new UpstreamSseError(upstreamError ? `${NO_CHOICES}: ${upstreamError}` : NO_CHOICES, upstreamFrame);
 
   const choices = [...slots.keys()].sort((a, b) => a - b).map((idx) => {
     const s = slots.get(idx)!;
