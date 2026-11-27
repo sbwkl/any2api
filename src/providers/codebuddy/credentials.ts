@@ -5,9 +5,9 @@ import type { Credentials } from "./types";
 export interface CredentialSource {
   /** 当前内存凭证；未就绪时为 null */
   get(): Credentials | null;
-  /** 按需回源：重新读取凭证源（CODEBUDDY_SESSION_JSON → CODEBUDDY_TOKEN/UID/REFRESH_TOKEN → Keychain + state.vscdb）；无凭证/失败返回 null，不抛错 */
+  /** 按需回源：重新读取凭证源并写回当前凭证（写回是 reload 的内建语义，调用方取返回值即可、无需再 adopt）；无凭证/失败返回 null，不抛错 */
   reload(): Promise<Credentials | null>;
-  /** 采纳新凭证（内置 refreshToken 刷新成功后回写），使后续请求可见 */
+  /** 采纳新凭证使后续请求可见；仅用于「内置 refreshToken 刷新成功」的回写，磁盘回源写回统一走 reload() */
   adopt(next: Credentials): void;
 }
 

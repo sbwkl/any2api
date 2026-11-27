@@ -1,7 +1,7 @@
 import { test, expect, describe } from "bun:test";
 import { gunzipSync } from "node:zlib";
 import { CodeBuddyFacade } from "./openai";
-import { staticSource, type CredentialSource } from "./credentials";
+import { type CredentialSource } from "./credentials";
 import type { Credentials, ProductConfig } from "./types";
 
 const config: ProductConfig = {
@@ -53,7 +53,7 @@ function sseResponse(): Response {
   return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 }
 
-// 可变假凭证源：get() 返回当前值，adopt() 采纳新值，set() 供测试直接改写源状态
+// 本文件统一的假凭证源工厂（staticSource 的同形可变版）：get() 返回当前值，adopt() 采纳新值，set() 供测试直接改写源状态
 function sourceWith(initial: Credentials) {
   let current = initial;
   const source: CredentialSource = {
@@ -69,7 +69,7 @@ function sourceWith(initial: Credentials) {
 
 describe("openai facade", () => {
   test("models lists the configured pool", async () => {
-    const facade = new CodeBuddyFacade(config, staticSource(credentials));
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source);
     const resp = await facade.handleModels();
     const json: any = await resp.json();
     expect(json.object).toBe("list");
@@ -91,7 +91,7 @@ describe("openai facade", () => {
       return sseResponse();
     }) as unknown as typeof fetch;
 
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -105,7 +105,7 @@ describe("openai facade", () => {
 
   test("streaming moves usage into a trailing chunk with empty choices", async () => {
     const fetchImpl = (async () => sseResponse()) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -127,7 +127,7 @@ describe("openai facade", () => {
 
   test("aggregates upstream SSE when stream=false", async () => {
     const fetchImpl = (async () => sseResponse()) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -156,7 +156,7 @@ describe("openai facade", () => {
       return sseResponse();
     }) as unknown as typeof fetch;
 
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -176,7 +176,7 @@ describe("openai facade", () => {
         urls.push(String(url));
         return Response.json({ code: 401, msg: "expired" }, { status: 401 });
       }) as unknown as typeof fetch;
-      const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+      const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
       const resp = await facade.handleChat(chatRequest({
         model: "hy4flash-free",
         messages: [{ role: "user", content: "hi" }],
@@ -202,7 +202,7 @@ describe("openai facade", () => {
       if (chatCalls === 1) return Response.json({ code: 6020, data: { retry_after: 0 } });
       return sseResponse();
     }) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -214,7 +214,7 @@ describe("openai facade", () => {
 
   test("network failure becomes a 502 OpenAI error", async () => {
     const fetchImpl = (async () => { throw new Error("network down"); }) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -228,7 +228,7 @@ describe("openai facade", () => {
 
   test("empty upstream stream becomes a 502", async () => {
     const fetchImpl = (async () => new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } })) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -243,7 +243,7 @@ describe("openai facade", () => {
         status: 200,
         headers: { "Content-Type": "text/event-stream" },
       })) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -253,7 +253,7 @@ describe("openai facade", () => {
   });
 
   test("malformed messages/tools return 400", async () => {
-    const facade = new CodeBuddyFacade(config, staticSource(credentials));
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source);
     const r1 = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{}],
@@ -272,7 +272,7 @@ describe("openai facade", () => {
 
   test("6021 queue full maps to 429", async () => {
     const fetchImpl = (async () => Response.json({ code: 6021, msg: "queue full" })) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],
@@ -285,7 +285,7 @@ describe("openai facade", () => {
   });
 
   test("unknown model returns 404 model_not_found", async () => {
-    const facade = new CodeBuddyFacade(config, staticSource(credentials));
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source);
     const resp = await facade.handleChat(chatRequest({
       model: "nope",
       messages: [{ role: "user", content: "hi" }],
@@ -302,7 +302,7 @@ describe("openai facade", () => {
         { code: 11101, msg: "Non-stream chat request is currently not supported", displayMsg: { en: "No stream" } },
         { status: 400 },
       )) as unknown as typeof fetch;
-    const facade = new CodeBuddyFacade(config, staticSource(credentials), { fetchImpl });
+    const facade = new CodeBuddyFacade(config, sourceWith(credentials).source, { fetchImpl });
     const resp = await facade.handleChat(chatRequest({
       model: "hy4flash-free",
       messages: [{ role: "user", content: "hi" }],

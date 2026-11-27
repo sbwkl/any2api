@@ -141,9 +141,9 @@ export class CodeBuddyFacade {
 
   private async respondInner(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
     // 按需回源（惰性）：当前无凭证时先读一次凭证源再判定，登录后下一个请求即恢复、无需重启。
-    let ready = this.currentCredentials();
-    if (!ready) ready = await this.reloadOnce();
-    if (!ready) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
+    let creds = this.currentCredentials();
+    if (!creds) creds = await this.reloadOnce();
+    if (!creds) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
 
     let messages: any[];
     try {
@@ -205,28 +205,28 @@ export class CodeBuddyFacade {
     });
 
     const url = `${this.config.endpoint}/v2/chat/completions`;
+    // 本次发送所用凭证：401 后的内置刷新与回源判定都以它为基线，而非 401 时刻的源现值——
+    // 并发交错下另一请求可能已采纳新凭证，若与源现值比对，会把「本次所用旧 token + 回源同一新 token」误判为无新凭证而放弃本可成功的重试。
+    const sent = creds;
     // 内置刷新失败后经回源判定仍无新凭证（含磁盘无凭证）→ 401 终态指向「请登录 CodeBuddy CN」
     let reauthStale = false;
     const resp = await postChat({
       url,
-      headers: makeHeaders(ready),
+      headers: makeHeaders(creds),
       body: requestBody,
       fetchImpl: this.opts.fetchImpl,
       onUnauthorized: process.env.CODEBUDDY_AUTO_REFRESH === "0"
         ? undefined
         : async () => {
-          const creds = this.currentCredentials();
-          if (!creds) return null;
           const next = await refreshAccessToken({
             config: this.config,
-            credentials: creds,
+            credentials: sent,
             fetchImpl: this.opts.fetchImpl,
           });
           if (!next) {
-            // 内置 refreshToken 刷新失败 → 按需回源：读到的 accessToken 或 uid 与当前不同才算新凭证，采纳并重试一次
+            // 内置 refreshToken 刷新失败 → 按需回源：读到的 accessToken 或 uid 与本次发送所用凭证不同才算新凭证，重试一次（reload 内部已写回，无需再 adopt）
             const reloaded = await this.reloadOnce();
-            if (reloaded && (reloaded.accessToken !== creds.accessToken || reloaded.uid !== creds.uid)) {
-              this.source.adopt(reloaded);
+            if (reloaded && (reloaded.accessToken !== sent.accessToken || reloaded.uid !== sent.uid)) {
               return makeHeaders(reloaded);
             }
             reauthStale = true;

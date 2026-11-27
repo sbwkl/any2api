@@ -34,38 +34,38 @@ export function createCodebuddyProvider(deps: CodebuddyProviderDeps = {}): Provi
         fetchImpl: deps.fetchImpl,
       });
 
-    if (credentials) {
-      serviceLogger.log(`[codebuddy] 凭证就绪 uid=${credentials.uid.slice(0, 8)}... 来源=${credentials.source}`);
-    } else {
-      serviceLogger.log("[codebuddy] 凭证未就绪：已挂载，等待登录后按需回源");
-    }
-    serviceLogger.log(`[codebuddy] 模型池: ${config.models.map((m) => m.id).join(", ")}`);
-    serviceLogger.log(`[codebuddy] 提示词: ${config.prompts.length} 个，agent: ${config.agents.map((a) => a.name).join(", ") || "(无)"}`);
+      if (credentials) {
+        serviceLogger.log(`[codebuddy] 凭证就绪 uid=${credentials.uid.slice(0, 8)}... 来源=${credentials.source}`);
+      } else {
+        serviceLogger.log("[codebuddy] 凭证未就绪：已挂载，等待登录后按需回源");
+      }
+      serviceLogger.log(`[codebuddy] 模型池: ${config.models.map((m) => m.id).join(", ")}`);
+      serviceLogger.log(`[codebuddy] 提示词: ${config.prompts.length} 个，agent: ${config.agents.map((a) => a.name).join(", ") || "(无)"}`);
 
-    if (process.env.CODEBUDDY_MSG_CENTER === "1") {
-      const poller = new MsgCenterPoller({ config, getCredentials: () => facade.getCredentials() });
-      poller.start();
-      serviceLogger.log("[codebuddy] msg-center 轮询已开启（30s）");
-    }
+      if (process.env.CODEBUDDY_MSG_CENTER === "1") {
+        const poller = new MsgCenterPoller({ config, getCredentials: () => facade.getCredentials() });
+        poller.start();
+        serviceLogger.log("[codebuddy] msg-center 轮询已开启（30s）");
+      }
 
-    const backend: ChatBackend = {
-      models: () => facade.modelsPayload().data,
-      health: () => facade.healthPayload(),
-      profileFor: (req) => facade.profileFor(req),
-      handleChat: (req) => facade.handleChat(req),
-      respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey, (opts.profile as Profile) ?? "chat"),
-    };
+      const backend: ChatBackend = {
+        models: () => facade.modelsPayload().data,
+        health: () => facade.healthPayload(),
+        profileFor: (req) => facade.profileFor(req),
+        handleChat: (req) => facade.handleChat(req),
+        respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey, (opts.profile as Profile) ?? "chat"),
+      };
 
-    return {
-      routes: createProtocolRoutes(backend, {
-        toolChoice: "auto-only",
-        normalizeErrors: true,
-        thinking: true,
-        thinkingToEffort: true,
-        promptTokensIncludeCache: true,
-      }),
-      health: () => facade.healthPayload(),
-    };
+      return {
+        routes: createProtocolRoutes(backend, {
+          toolChoice: "auto-only",
+          normalizeErrors: true,
+          thinking: true,
+          thinkingToEffort: true,
+          promptTokensIncludeCache: true,
+        }),
+        health: () => facade.healthPayload(),
+      };
     },
   };
 }

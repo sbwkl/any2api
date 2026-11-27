@@ -239,6 +239,46 @@ describe("codebuddy 401 self-heal (T3)", () => {
     expect(chatCalls).toBe(2);
     expect(headersSeen).toEqual([{ authorization: "Bearer tok", userId: "u2" }]);
   });
+
+  test("401 reload baseline is the credentials this request sent, so an interleaved adopt still retries", async () => {
+    const newCreds: Credentials = { accessToken: "new", refreshToken: "ref2", uid: "u1", source: "env" };
+    let chatCalls = 0;
+    const bearerSeen: string[] = [];
+    let reloadCalls = 0;
+    let current: Credentials = credentials;
+    const source: CredentialSource = {
+      get: () => current,
+      reload: async () => {
+        reloadCalls++;
+        return current;
+      },
+      adopt: (next) => { current = next; },
+    };
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes("/auth/token/refresh")) return refreshDenied();
+      chatCalls++;
+      const auth = new Headers(init?.headers).get("authorization") ?? "";
+      bearerSeen.push(auth);
+      if (chatCalls === 1) {
+        // 交错：本请求以旧凭证吃 401 的同时，另一路径已采纳新 token（源 current 已变为 new）
+        current = newCreds;
+        return Response.json({ code: 401, msg: "expired" }, { status: 401 });
+      }
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: source, fetchImpl }),
+    ]);
+    const resp = await handler(chatRequest());
+
+    // 回源判定基线是本次发送所用凭证（旧 tok），而非 401 时刻的源现值：
+    // 回源读到的新 token 与本次所用旧 token 不同 → 重试一次成功
+    expect(resp.status).toBe(200);
+    expect(chatCalls).toBe(2);
+    expect(bearerSeen).toEqual(["Bearer tok", "Bearer new"]);
+    expect(reloadCalls).toBe(1);
+  });
 });
 
 describe("codebuddy credentials-not-ready state", () => {
