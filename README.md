@@ -124,6 +124,8 @@ curl -N http://127.0.0.1:8787/codearts/v1/chat/completions \
 
 当前模型池：启动时通过 Policy Center `POST /v1/policy/bundle`（Agent-Type: PromptCenter，商业版 x-auth-token 为空串、靠 provider 层 AKSK 签名认证）动态发现——这是 IDE 模型下拉的真实数据源，后端调整模型无需改代码；失败时回退观测池（`glm-5.3-flash`、`deepseek-v4.1-flash`）。
 
+取消传播：客户端中断入站请求时，代理立即中止该请求发起的上游 chat（流式与非流式），观测关闭时同样生效，且不消耗重试预算；密钥协商、心跳、遥测、凭证保活与启动时模型发现等后台主动调用不受影响。
+
 ### CodeBuddy（codebuddy provider）
 
 Base URL 用 `/codebuddy/v1`：
@@ -165,7 +167,7 @@ resp = client.chat.completions.create(
 默认关闭；设置 `TRACE_CAPTURE_DIR` 后，每个入站请求（含 `/healthz`、404）产生一行 JSONL（`capture-YYYY-MM-DD.jsonl`，`schema: 3`），一次请求的记录内嵌四层观测：
 
 - **L1 入站请求**：方法、路径、请求头（Authorization / x-api-key / cookie 等敏感值记 `<redacted>`）、解析后的请求 JSON；解析失败时改记 `raw_request` 原文。
-- **L2 上游请求**：请求上下文内的每次上游调用按发生顺序进入 `upstream[]`，含方法、URL、请求头（同样脱敏）与加密 / gzip 前的明文 body；401 刷新重发、排队重试、加密协商重发各算一次尝试。
+- **L2 上游请求**：请求上下文内的每次上游调用按发生顺序进入 `upstream[]`，含方法、URL、请求头（同样脱敏）与加密 / gzip 前的明文 body；每条 L2 条目对应一次上游调用（401 刷新重发、排队重试、加密协商重发都会各自产生一条）。L2 条目数不等于重试预算：CodeArts 的重试预算按整次入站请求的 chat 尝试计数，401 刷新后的重发不占用该预算。
 - **L3 上游可读响应**：每次尝试经 provider 解码后、协议翻译前的状态、头、完整响应文本与输出块到达时间（`t_ms` / `bytes`）。CodeArts 加密 chat 记录解密后的 SSE 明文，不含 `x-encrypt-*` 头，`content-type` 为解码后的类型；`chunks[].bytes` 为解码后输出块的 UTF-8 字节数，可与 L3 body 对账。非加密上游保持现有记录语义。
 - **L4 出站响应**：状态、头、`content_type`、重组后的完整正文、`first_byte_ms` / `duration_ms`、`complete` 与 `abort_reason`。
 
