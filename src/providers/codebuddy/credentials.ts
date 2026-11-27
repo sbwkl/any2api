@@ -1,5 +1,5 @@
 // 凭证源抽象 — facade 经此按请求获取凭证，不再在构造时捕获固定凭证对象。
-// 生产默认实现（defaultCredentialSource，包装 loadCredentials）随 provider 工厂引入。
+import { loadCredentials } from "./config";
 import type { Credentials } from "./types";
 
 export interface CredentialSource {
@@ -17,6 +17,26 @@ export function staticSource(credentials: Credentials): CredentialSource {
   return {
     get: () => current,
     reload: async () => current,
+    adopt: (next) => {
+      current = next;
+    },
+  };
+}
+
+/** 生产默认源：构造时立即加载一次真实凭证（缺凭证抛出 → create 失败/503，与现状一致）；
+ *  reload() 按需回源重跑 loadCredentials()，取源优先级不变（SESSION_JSON → env → Keychain + state.vscdb），失败返回 null。 */
+export function defaultCredentialSource(): CredentialSource {
+  let current: Credentials | null = loadCredentials();
+  return {
+    get: () => current,
+    reload: async () => {
+      try {
+        current = loadCredentials();
+      } catch {
+        current = null;
+      }
+      return current;
+    },
     adopt: (next) => {
       current = next;
     },
