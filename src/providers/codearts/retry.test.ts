@@ -55,6 +55,10 @@ describe("embedded frame errors", () => {
     expect(retryClassForFrameError({ code: "InferHub.ModelArts.81101" })).toBe("rate_limit");
     expect(retryClassForFrameError({ code: "InferHub.ModelArts.81101.429" })).toBe("rate_limit");
     expect(retryClassForFrameError({ code: "InferHub.Some.429" })).toBe("rate_limit");
+    // HTTP 429 观测到的 APIG.0308 同样是限流信号（结构化 `error.code` / 顶层 `error_code`）；
+    // 尚无真实帧内 429 样本，见执行计划 §5.4「待验证」。
+    expect(retryClassForFrameError({ code: "APIG.0308" })).toBe("rate_limit");
+    expect(retryClassForFrameError({ code: "InferHub.APIG.0308" })).toBe("rate_limit");
     // 非限流错误码、缺失错误码、相似但不同的错误码都不重试。
     expect(retryClassForFrameError({ code: "InferHub.001001005.400" })).toBeNull();
     expect(retryClassForFrameError({ code: "ModelArts.81102" })).toBeNull();

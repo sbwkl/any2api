@@ -68,7 +68,7 @@ Owner：wayne
 
 | 类别 | 上限 |
 |---|---:|
-| 429 / 406 / 帧内 Busy（`ModelArts.81101`） | 10 |
+| 429 / 406 / 帧内 Busy（`ModelArts.81101`）/ 帧内限流码（独立 `.429` 段、`APIG.0308`） | 10 |
 | 502 | 10 |
 | 500 / 503 / 504 | 3 |
 | 407 | 3 |
@@ -79,7 +79,7 @@ Owner：wayne
 - **维持不重试**：空响应（`NO_CHOICES`）、180s 空闲超时。
 - **删除**：`SnapClient` 网络错误同 key 重试一次（官方判不可重试）；`NON_STREAM_ATTEMPTS` 外层一次重试（由预算统一裁决）。
 - **保留**：`ENCRYPT_KEY_EXPIRED` 换 key 重发（扣预算）。
-- **不实现**：`need-switch-model` 自动切模型（映射为不可重试的明确错误）；`x-session-retry` 请求头；官方 ≤20 内部路径；env 开关。
+- **不实现**：`need-switch-model` 自动切模型；该响应头出现时立即停止重试并返回不可重试的明确错误（409）；`x-session-retry` 请求头；官方 ≤20 内部路径；env 开关。
 - **日志**：每次重试输出类别、attempt/max、delay；不静默。
 
 ### 3.3 三刀落地与行为 delta
@@ -107,7 +107,7 @@ Owner：wayne
 
 - codebuddy 的取消/重试行为（已有 `onQueue` / `retry_after` 语义）。
 - 60s 静默断连恢复；trace schema 升版；流式首包预读。
-- `need-switch-model` 自动切模型；`x-session-retry` 请求头。
+- `need-switch-model` 自动切模型（仅映射为不可重试的明确错误）；`x-session-retry` 请求头。
 - 环境变量开关；影子实例验证（如需要另开 issue）。
 - 全量 e2e 基线重跑。
 
@@ -143,6 +143,8 @@ Owner：wayne
 | L3 key-exchange | `status=200`、`complete=true`（后台协商不跟随取消） |
 | L3 chat | `status=200`、`complete=false`（中止时仅有首个 chunk 到达） |
 
+该 `status=200` 对应「流式响应已提交给客户端之后」的取消路径：首字节已发出，HTTP 状态不能再改写，中断由 `abort_reason=client_disconnect` 表达。若取消发生在出站响应提交之前（尚未发出任何响应字节），代理返回 `499` 空体（见 README / `protocol-spec.md`）；两条路径分别产生 200 与 499，互不矛盾。
+
 断言落在 `src/registry.test.ts` 的「client disconnect aborts the upstream chat…」：`abort_reason=client_disconnect`、L3 `complete:false`、`chatCalls.length=1`；观测关闭时另有用例断言同样中止。
 
 ### 5.2 观测复核二：429 → 200 重试成功
@@ -170,6 +172,7 @@ Owner：wayne
 - 60 秒静默断连的线上表现仍未验证（官方内核保留日志无 ECONNRESET 样本）。
 - 180s 空闲超时未做真实定时器端到端联调：`SnapClient` 有 50ms 缩短超时的真实定时器用例，门面级仅有注入错误覆盖。
 - 流式 HTTP 200 SSE 内嵌 Busy/429 的识别未实现（见 §7）。
+- 帧内限流码 `APIG.0308` 的映射依据是 HTTP 429 的实测观测，尚无真实帧内 429 样本（待验证）；当前只有注入假帧的确定性单测。
 
 ## 6. 回滚方案
 

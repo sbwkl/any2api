@@ -541,7 +541,7 @@ describe("codearts client cancellation (registry integration)", () => {
       models: () => facade.modelsPayload().data,
       health: () => ({ ok: true }),
       handleChat: (req) => facade.handleChat(req),
-      respond: (body, opts) => facade.respond(body, opts.stream, opts.sessionKey, opts.signal),
+      respond: (body, opts) => facade.respond(body, opts),
     };
     const provider: ProviderModule = {
       name: "codearts",

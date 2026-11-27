@@ -13,10 +13,12 @@ import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage
 import { dumpUpstream, type FetchLike } from "../../shared/trace";
 import { serviceLogger } from "../../shared/log";
 import {
+  clientAbortError,
   createRetryBudget,
   createRetryRuntime,
   planFrameRetry,
   retryClassForFrameError,
+  waitForRetry,
   type RetryBudget,
   type RetryRuntime,
 } from "./retry";
@@ -46,6 +48,13 @@ function secIsoZ(d = new Date()): string {
 }
 
 interface SessionState { id: string; firstRequestDone: boolean; lastActivity: number }
+
+/** respond 的单 opts 形状：流式开关、会话 key 与入站取消信号，避免位置参数互换。 */
+export interface RespondOptions {
+  stream: boolean;
+  sessionKey: string;
+  signal?: AbortSignal;
+}
 
 /** 门面的可注入依赖：401 刷新动作与帧内重试时序（单测注入假实现，不触网、不真实等待）。 */
 export interface OpenAIFacadeDeps {
@@ -158,13 +167,14 @@ export class OpenAIFacade {
       return jsonError(400, "invalid_request: messages is required");
     const sessionKey =
       (req.headers.get("x-codearts-session") || (typeof body.user === "string" && body.user) || "default").slice(0, 128);
-    return this.respond(body, body.stream === true, sessionKey, req.signal);
+    return this.respond(body, { stream: body.stream === true, sessionKey, signal: req.signal });
   }
 
   // 内部统一管线（协议适配层复用）：body 为 OpenAI chat 形态。
-  // wantStream=true → 透传上游 SSE（OpenAI chunk）；false → 聚合为单个 chat.completion JSON。
-  // signal：入站请求的取消信号；一旦中止，立即停止本次请求发起的 chat 调用，且绝不重试。
-  async respond(body: any, wantStream: boolean, sessionKey: string, signal?: AbortSignal): Promise<Response> {
+  // opts.stream=true → 透传上游 SSE（OpenAI chunk）；false → 聚合为单个 chat.completion JSON。
+  // opts.signal：入站请求的取消信号；一旦中止，立即停止本次请求发起的 chat 调用，且绝不重试。
+  async respond(body: any, opts: RespondOptions): Promise<Response> {
+    const { stream: wantStream, sessionKey, signal } = opts;
     if (signal?.aborted) return clientAbortResponse();
     if (!body || !Array.isArray(body.messages))
       return jsonError(400, "invalid_request: messages is required");
@@ -307,9 +317,8 @@ export class OpenAIFacade {
     // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对 non-stream 请求也回 SSE）。
     // 重试边界收敛到「首字节前」，由共享预算统一裁决：
     // - HTTP 非 2xx 由加密客户端按状态档位重试，门面不再另起尝试循环；
-    // - 帧内 Busy（ModelArts.81101）/ 429 按限流档重试；
+    // - 帧内 Busy（ModelArts.81101）/ 限流码（`.429` 段、`APIG.0308`）按限流档重试；
     // - 帧内其它错误、空响应（NO_CHOICES）、空闲超时与裸网络错误直接上报，不重试。
-    let frameRetries = 0;
     for (;;) {
       if (signal?.aborted) return clientAbortResponse();
       let resp: Response;
@@ -337,24 +346,20 @@ export class OpenAIFacade {
         const message = e?.message ?? String(e);
         const frame = e instanceof UpstreamSseError ? e.frame : null;
         const frameClass = retryClassForFrameError(frame);
+        // 单一预算同时约束状态级与帧内重试：预算用尽时计划为 null，总尝试次数不会被两层放大。
         const plan = planFrameRetry({
           budget: retryBudget,
           frame,
           now: this.retry.now,
           random: this.retry.random,
         });
-        // 本地计数兜底：即便某条上游路径没有扣预算，也不越过该类别的总尝试上限。
-        if (!plan || frameRetries >= plan.max - 1)
+        if (!plan)
           return jsonError(frameClass ? 429 : classifyUpstreamStatus(message), message);
-        serviceLogger.warn(
-          `[openai] 帧内错误重试 class=${plan.cls} attempt=${plan.attempt}/${plan.max} delay=${plan.delayMs}ms`,
-        );
         try {
-          await this.retry.sleep(plan.delayMs, signal);
+          await waitForRetry(plan, this.retry, signal, `code=${frame?.code ?? "unknown"}`);
         } catch {
           return clientAbortResponse();
         }
-        frameRetries++;
       }
     }
   }
@@ -368,12 +373,6 @@ function jsonError(status: number, message: string): Response {
 }
 
 /** 客户端取消是终止信号而不是上游故障：不重试、不刷新、不再发新请求。 */
-function clientAbortError(): Error {
-  const err = new Error("client disconnected");
-  err.name = "AbortError";
-  return err;
-}
-
 function clientAbortResponse(): Response {
   return new Response(null, { status: 499 });
 }

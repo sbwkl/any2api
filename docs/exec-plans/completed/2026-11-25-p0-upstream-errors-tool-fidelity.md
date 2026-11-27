@@ -5,6 +5,7 @@
 Owner：wayne
 所属模块/入口：`src/shared/errors.ts`、`src/providers/codearts/`、`src/protocols/anthropic.ts`、`src/protocols/responses.ts`
 关联：本文件 §2 的审计快照；[#22](https://github.com/sbwkl/any2api/issues/22)（服务端工具产品评估，不在本次范围）、[#24](https://github.com/sbwkl/any2api/issues/24)（namespace 工具静默丢弃）
+superseded_by：[CodeArts 取消传播与重试分级](2026-11-27-codearts-cancel-propagation-and-retry-grading.md)（§3.2 的瞬时重试策略）
 验证命令：测试 `bun test`；编译/构建 `bun build src/index.ts --target=bun`；文档结构与本地链接检查：未配置；待补。
 
 > 当前事实源：本文件保留本次修复的历史事实与证据，不回溯改写；当前 CodeArts L3 默认记录解密后的明文（记录 schema 3），见 [ADR](../../design-docs/adr/codearts-l3-decrypted-plaintext.md) 与 [已实现变更](../active/2026-11-25-codearts-l3-decrypted-plaintext.md)。§3.2 的瞬时重试策略（网络错误同 key 重试一次、非流式再重试一次）已被 2026-11-27 的[取消传播与重试分级](2026-11-27-codearts-cancel-propagation-and-retry-grading.md)取代。

@@ -1,5 +1,6 @@
 // CodeArts 状态级重试策略 — 档位判定、退避计算、单一预算扣减，与官方内核重试表对齐。
 // 预算语义：一次入站请求一个总尝试计数器（含换密钥重发）；阈值与总尝试次数比较。
+import { serviceLogger } from "../../shared/log";
 
 export type RetryClass = "rate_limit" | "gateway" | "server";
 
@@ -74,6 +75,24 @@ export function retryDelayMs(
   return exponential + jitter;
 }
 
+/** 从档位判定到重试计划：状态级与帧内错误共用同一份预算与上限语义。 */
+function planForClass(
+  cls: RetryClass | null,
+  budget: RetryBudget,
+  headers: Headers | undefined,
+  opts: { now?: () => number; random?: () => number },
+): RetryPlan | null {
+  if (!cls) return null;
+  const max = RETRY_LIMITS[cls];
+  if (budget.attempts >= max) return null;
+  return {
+    cls,
+    max,
+    attempt: budget.attempts,
+    delayMs: retryDelayMs(budget.attempts, headers, opts),
+  };
+}
+
 /**
  * 判定一次失败是否值得重试。budget.attempts 是「已发出的尝试数」，
  * 因此 attempts >= max 表示总次数已用尽，不得再重试。
@@ -85,28 +104,26 @@ export function planRetry(input: {
   now?: () => number;
   random?: () => number;
 }): RetryPlan | null {
-  const cls = retryClassForStatus(input.status);
-  if (!cls) return null;
-  const max = RETRY_LIMITS[cls];
-  if (input.budget.attempts >= max) return null;
-  return {
-    cls,
-    max,
-    attempt: input.budget.attempts,
-    delayMs: retryDelayMs(input.budget.attempts, input.headers, { now: input.now, random: input.random }),
-  };
+  return planForClass(retryClassForStatus(input.status), input.budget, input.headers, {
+    now: input.now,
+    random: input.random,
+  });
 }
 
 // 帧内错误只认结构化的错误码：模型正文里出现「429」「Busy」不算限流，
 // 只有上游把错误塞进 HTTP 200 SSE 的错误帧（`error.code` / `error_code`）才进入判定。
+// `APIG.0308` 来自 HTTP 429 的实测观测，帧内形态尚无真实样本（执行计划 §5.4 待验证）。
 const FRAME_BUSY_CODE = /(?:^|\.)ModelArts\.81101(?:\.|$)/;
 const FRAME_RATE_LIMIT_CODE = /(?:^|\.)429(?:\.|$)/;
+const FRAME_APIG_RATE_LIMIT_CODE = /(?:^|\.)APIG\.0308(?:\.|$)/;
 
-/** 帧内错误的档位：Busy（`ModelArts.81101`）与 429 归限流档，其它错误一律不可重试。 */
+/** 帧内错误的档位：Busy（`ModelArts.81101`）与限流码（独立 `.429` 段 / `APIG.0308`）归限流档，其它错误一律不可重试。 */
 export function retryClassForFrameError(frame: { code?: string } | null | undefined): RetryClass | null {
   const code = frame?.code;
   if (typeof code !== "string" || code === "") return null;
-  return FRAME_BUSY_CODE.test(code) || FRAME_RATE_LIMIT_CODE.test(code) ? "rate_limit" : null;
+  return FRAME_BUSY_CODE.test(code) || FRAME_RATE_LIMIT_CODE.test(code) || FRAME_APIG_RATE_LIMIT_CODE.test(code)
+    ? "rate_limit"
+    : null;
 }
 
 /** 帧内错误的重试计划：与状态级重试共用同一份预算，但上游没有可靠的 retry-after。 */
@@ -116,19 +133,14 @@ export function planFrameRetry(input: {
   now?: () => number;
   random?: () => number;
 }): RetryPlan | null {
-  const cls = retryClassForFrameError(input.frame);
-  if (!cls) return null;
-  const max = RETRY_LIMITS[cls];
-  if (input.budget.attempts >= max) return null;
-  return {
-    cls,
-    max,
-    attempt: input.budget.attempts,
-    delayMs: retryDelayMs(input.budget.attempts, undefined, { now: input.now, random: input.random }),
-  };
+  return planForClass(retryClassForFrameError(input.frame), input.budget, undefined, {
+    now: input.now,
+    random: input.random,
+  });
 }
 
-function abortError(): Error {
+/** 客户端取消是终止信号而不是网络故障：重试链、加密客户端与门面共用同一个错误形状。 */
+export function clientAbortError(): Error {
   const err = new Error("client disconnected");
   err.name = "AbortError";
   return err;
@@ -138,12 +150,12 @@ function abortError(): Error {
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
-      reject(abortError());
+      reject(clientAbortError());
       return;
     }
     const onAbort = () => {
       clearTimeout(timer);
-      reject(abortError());
+      reject(clientAbortError());
     };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
@@ -163,4 +175,28 @@ export interface RetryRuntime {
 
 export function createRetryRuntime(partial: Partial<RetryRuntime> = {}): RetryRuntime {
   return { sleep, now: () => Date.now(), random: () => Math.random(), ...partial };
+}
+
+// 重试日志只有一个前缀与一套字段：类别、attempt/max、delay。
+// 状态级（SnapClient）与帧内（门面）重试走同一格式，避免 [snap] / [openai] 两套前缀。
+const RETRY_LOG_PREFIX = "[codearts]";
+
+export function retryLogLine(plan: RetryPlan, detail?: string): string {
+  return `${RETRY_LOG_PREFIX} 重试 class=${plan.cls} attempt=${plan.attempt}/${plan.max} delay=${plan.delayMs}ms${detail ? ` ${detail}` : ""}`;
+}
+
+/** 换密钥重发不是瞬时重试档位：沿用同一日志格式，类别记 `key_expired`。 */
+export function logKeyExpiredResend(attempt: number): void {
+  serviceLogger.warn(`${RETRY_LOG_PREFIX} 重试 class=key_expired attempt=${attempt} max=- delay=0ms（换密钥重发）`);
+}
+
+/** 共享的重试执行尾段：记日志 → 可取消等待。取消语义由调用方决定（抛错或返回 499）。 */
+export async function waitForRetry(
+  plan: RetryPlan,
+  runtime: RetryRuntime,
+  signal?: AbortSignal,
+  detail?: string,
+): Promise<void> {
+  serviceLogger.warn(retryLogLine(plan, detail));
+  await runtime.sleep(plan.delayMs, signal);
 }

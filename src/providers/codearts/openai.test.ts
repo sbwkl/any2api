@@ -13,19 +13,6 @@ function countAttempt(opts: any): void {
   if (opts?.budget) opts.budget.attempts++;
 }
 
-function makeFacade(chat: (...args: any[]) => Promise<Response>): OpenAIFacade {
-  process.env.CODEARTS_CLI_AK = "ak";
-  process.env.CODEARTS_CLI_SK = "sk";
-  process.env.SNAP_ORIGIN = "https://example.test";
-  const snap = { chat: async (...args: any[]) => { countAttempt(args[3]); return chat(...args); } } as any;
-  const gw = { models: [{ modelId: "m", modelName: "M" }] } as any;
-  const telemetry = { recordChat() {} } as any;
-  const facade = new OpenAIFacade(snap, gw, telemetry, fetch, { retry: { sleep: async () => {} } });
-  // 避免 HeartbeatManager 的 30s 定时器拖住测试进程
-  (facade as any).heartbeats = { startBusy() {}, stopBusy() {} };
-  return facade;
-}
-
 /** 记录每次 snap.chat 的入参；chat 收到的第 4 个参数是调用选项（含 signal）。 */
 function makeRecordingFacade(chat: (...args: any[]) => Promise<Response>): { facade: OpenAIFacade; calls: any[][] } {
   process.env.CODEARTS_CLI_AK = "ak";
@@ -41,9 +28,15 @@ function makeRecordingFacade(chat: (...args: any[]) => Promise<Response>): { fac
   } as any;
   const gw = { models: [{ modelId: "m", modelName: "M" }] } as any;
   const telemetry = { recordChat() {} } as any;
-  const facade = new OpenAIFacade(snap, gw, telemetry, fetch, { retry: { sleep: async () => {} } });
+  const facade = new OpenAIFacade(snap, gw, telemetry, fetch, { retry: { sleep: async () => {}, random: () => 0 } });
+  // 避免 HeartbeatManager 的 30s 定时器拖住测试进程
   (facade as any).heartbeats = { startBusy() {}, stopBusy() {} };
   return { facade, calls };
+}
+
+/** 只关心门面行为的用例：不需要逐一检查 snap.chat 入参。 */
+function makeFacade(chat: (...args: any[]) => Promise<Response>): OpenAIFacade {
+  return makeRecordingFacade(chat).facade;
 }
 
 /** HTTP 200 + SSE 帧：非流式聚合看到的帧内错误。 */
@@ -147,7 +140,7 @@ test("empty SSE on a non-stream request becomes 502 without a retry", async () =
     calls++;
     return new Response("", { status: 200, headers: { "Content-Type": "text/event-stream" } });
   });
-  const resp = await facade.respond(body, false, "session");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session" });
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
   expect(j.error.message).toContain("no choices");
@@ -162,7 +155,7 @@ test("error-only SSE on a non-stream request becomes 502", async () => {
       status: 200,
       headers: { "Content-Type": "text/event-stream" },
     }));
-  const resp = await facade.respond(body, false, "session2");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session2" });
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
   expect(j.error.type).toBe("server_error");
@@ -174,7 +167,7 @@ test("an embedded 429 inside a 200 SSE becomes a 429 rate_limit error", async ()
       status: 200,
       headers: { "Content-Type": "text/event-stream" },
     }));
-  const resp = await facade.respond(body, false, "session429");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session429" });
   expect(resp.status).toBe(429);
   expect(resp.headers.get("x-any2api-error-source")).toBe("proxy");
   const j: any = await resp.json();
@@ -191,7 +184,7 @@ test("an embedded 400 inside a 200 SSE is not retried and becomes a 400", async 
       headers: { "Content-Type": "text/event-stream" },
     });
   });
-  const resp = await facade.respond(body, false, "session400");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session400" });
   expect(resp.status).toBe(400);
   const j: any = await resp.json();
   expect(j.error.type).toBe("invalid_request_error");
@@ -204,7 +197,7 @@ test("a non-2xx upstream status becomes a proxy error with the upstream message"
       status: 504,
       headers: { "Content-Type": "application/json" },
     }));
-  const resp = await facade.respond(body, false, "session504");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session504" });
   expect(resp.status).toBe(504);
   expect(resp.headers.get("x-any2api-error-source")).toBe("proxy");
   const j: any = await resp.json();
@@ -218,7 +211,7 @@ test("a reset during non-stream aggregation is reported without a replay", async
     calls++;
     return resetStream();
   });
-  const resp = await facade.respond(body, false, "sessionReset");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionReset" });
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
   expect(j.error.type).toBe("server_error");
@@ -234,7 +227,7 @@ test("an embedded Busy frame is retried with the rate-limit tier and can recover
       ? sseResponse(BUSY_FRAME)
       : new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
   });
-  const resp = await facade.respond(body, false, "sessionBusyRecover");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionBusyRecover" });
   expect(resp.status).toBe(200);
   const j: any = await resp.json();
   expect(j.choices[0].message.content).toBe("OK");
@@ -247,7 +240,7 @@ test("the rate-limit ladder for an embedded Busy frame stops at ten total attemp
     calls++;
     return sseResponse(BUSY_FRAME);
   });
-  const resp = await facade.respond(body, false, "sessionBusyExhausted");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionBusyExhausted" });
   expect(resp.status).toBe(429);
   const j: any = await resp.json();
   expect(j.error.type).toBe("rate_limit_error");
@@ -263,9 +256,44 @@ test("an embedded 429 frame is retried with the rate-limit tier", async () => {
       ? sseResponse(RATE_LIMIT_FRAME)
       : new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
   });
-  const resp = await facade.respond(body, false, "sessionFrame429");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionFrame429" });
   expect(resp.status).toBe(200);
   expect(calls).toBe(2);
+});
+
+test("an embedded APIG.0308 frame (top-level error_code) uses the rate-limit tier", async () => {
+  // HTTP 429 观测到的 APIG.0308 也按结构化帧内错误码识别；不做正文关键词匹配。
+  const apigFrame = `{"text":"[DONE]","error_code":"APIG.0308","error_msg":"Too many requests"}`;
+  const { facade, chatCalls } = makeScriptedFacade([sseStep(apigFrame), OK_SSE_STEP]);
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionApigFrame" });
+  expect(resp.status).toBe(200);
+  expect(chatCalls).toHaveLength(2);
+});
+
+test("a need-switch-model header on a 429 stops retries with an explicit non-retryable error", async () => {
+  const { facade, chatCalls } = makeScriptedFacade([
+    { status: 429, body: "APIG.0308", headers: { "need-switch-model": "true" } },
+    OK_SSE_STEP,
+  ]);
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionNeedSwitch" });
+  // 上游要求切换模型：不得被 429 长阶梯继续重试
+  expect(chatCalls).toHaveLength(1);
+  expect(resp.status).toBe(409);
+  const j: any = await resp.json();
+  expect(j.error.type).toBe("invalid_request_error");
+  expect(j.error.message).toContain("need-switch-model");
+  expect(j.error.message).toContain("does not support automatic model switching");
+});
+
+test("a need-switch-model header on a 2xx response is not treated as success", async () => {
+  const { facade, chatCalls } = makeScriptedFacade([
+    { status: 200, body: "ignored", headers: { "need-switch-model": "true" } },
+  ]);
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionNeedSwitch200" });
+  expect(chatCalls).toHaveLength(1);
+  expect(resp.status).toBe(409);
+  const j: any = await resp.json();
+  expect(j.error.message).toContain("need-switch-model");
 });
 
 test("an embedded non-rate-limit error is reported without a retry", async () => {
@@ -274,7 +302,7 @@ test("an embedded non-rate-limit error is reported without a retry", async () =>
     calls++;
     return sseResponse(`{"error":{"code":"InferHub.001001005.400","message":"request param is invalid"}}`);
   });
-  const resp = await facade.respond(body, false, "sessionFrame400");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionFrame400" });
   expect(resp.status).toBe(400);
   const j: any = await resp.json();
   expect(j.error.message).toContain("request param is invalid");
@@ -297,7 +325,7 @@ test("model content containing 429 or Busy is not mistaken for a frame error", a
       { status: 200, headers: { "Content-Type": "text/event-stream" } },
     );
   });
-  const resp = await facade.respond(body, false, "sessionContentBuzz");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionContentBuzz" });
   expect(resp.status).toBe(200);
   const j: any = await resp.json();
   expect(j.choices[0].message.content).toBe("got 429 Busy, retrying");
@@ -312,7 +340,7 @@ test("an idle-timeout failure during non-stream aggregation is not retried", asy
       start(ctrl) { ctrl.error(new Error("upstream idle timeout after 180000ms")); },
     }), { status: 200, headers: { "Content-Type": "text/event-stream" } });
   });
-  const resp = await facade.respond(body, false, "sessionIdleTimeout");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionIdleTimeout" });
   expect(resp.status).toBe(504);
   const j: any = await resp.json();
   expect(j.error.message).toContain("idle timeout");
@@ -325,7 +353,7 @@ test("a bare connection failure is not retried by the facade", async () => {
     calls++;
     throw new Error("socket connection was closed");
   });
-  const resp = await facade.respond(body, false, "sessionConn");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionConn" });
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
   expect(j.error.type).toBe("server_error");
@@ -341,7 +369,7 @@ test("one retry budget is shared by every snap call of a single inbound request"
       ? sseResponse(BUSY_FRAME)
       : new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
   });
-  const resp = await facade.respond(body, false, "sessionBudget");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionBudget" });
   expect(resp.status).toBe(200);
   expect(recordings).toHaveLength(2);
   const budget = recordings[0][3]?.budget;
@@ -354,7 +382,7 @@ test("one retry budget is shared by every snap call of a single inbound request"
 test("streaming requests also carry the shared budget to the snap client", async () => {
   const { facade, calls } = makeRecordingFacade(async () =>
     new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
-  const resp = await facade.respond({ ...body, stream: true }, true, "sessionBudgetStream");
+  const resp = await facade.respond({ ...body, stream: true }, { stream: true, sessionKey: "sessionBudgetStream" });
   await resp.text();
   expect(calls).toHaveLength(1);
   expect(calls[0][3]?.budget).toBeDefined();
@@ -368,8 +396,7 @@ test("unknown model is rejected with 404 instead of falling back to models[0]", 
   });
   const resp = await facade.respond(
     { model: "zzz-no-such", messages: [{ role: "user", content: "hi" }] },
-    false,
-    "session3",
+    { stream: false, sessionKey: "session3" },
   );
   expect(upstreamCalled).toBe(false);
   expect(resp.status).toBe(404);
@@ -390,7 +417,7 @@ test("streaming response moves usage off the finish chunk", async () => {
   ].join("\n");
   const facade = makeFacade(async () =>
     new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
-  const resp = await facade.respond(body, true, "session4");
+  const resp = await facade.respond(body, { stream: true, sessionKey: "session4" });
   expect(resp.status).toBe(200);
   const text = await resp.text();
   const frames = text
@@ -431,7 +458,7 @@ test("an already-aborted request never calls the upstream chat", async () => {
   const controller = new AbortController();
   controller.abort();
   const { facade, calls } = makeRecordingFacade(async () => Response.json({ ok: true }));
-  const resp = await facade.respond(body, false, "sessionAbortEntry", controller.signal);
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionAbortEntry", signal: controller.signal });
   expect(resp.status).toBe(499);
   expect(calls).toHaveLength(0);
 });
@@ -444,7 +471,7 @@ test("aborting during non-stream aggregation stops without retrying or re-reques
     started();
     return abortableSse(controller.signal);
   });
-  const pending = facade.respond(body, false, "sessionAbortAgg", controller.signal);
+  const pending = facade.respond(body, { stream: false, sessionKey: "sessionAbortAgg", signal: controller.signal });
   await startedP;
   controller.abort();
   const resp = await pending;
@@ -461,7 +488,7 @@ test("aborting during a streamed response leaves exactly one upstream request", 
     started();
     return abortableSse(controller.signal);
   });
-  const resp = await facade.respond({ ...body, stream: true }, true, "sessionAbortStream", controller.signal);
+  const resp = await facade.respond({ ...body, stream: true }, { stream: true, sessionKey: "sessionAbortStream", signal: controller.signal });
   await startedP;
   controller.abort();
   await expect(resp.text()).rejects.toBeDefined();
@@ -477,7 +504,7 @@ test("after a 401 response an aborted request does not refresh credentials or re
     controller.abort();
     return new Response('{"error":"token expired"}', { status: 401, headers: { "Content-Type": "application/json" } });
   });
-  const resp = await facade.respond(body, false, "sessionAbort401", controller.signal);
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionAbort401", signal: controller.signal });
   expect(resp.status).toBe(499);
   expect(calls).toBe(1);
 });
@@ -493,7 +520,7 @@ test("a 401 refresh resends once without consuming the transient retry budget", 
   ];
   const { facade, chatCalls, refreshCalls } = makeScriptedFacade(script, { refresh: async () => ({}) });
 
-  const resp = await facade.respond(body, false, "session401Budget");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session401Budget" });
 
   expect(resp.status).toBe(200);
   expect(refreshCalls()).toBe(1);
@@ -509,7 +536,7 @@ test("a 401 refresh still fires when the retry budget is exhausted", async () =>
   ];
   const { facade, chatCalls, refreshCalls } = makeScriptedFacade(script, { refresh: async () => ({}) });
 
-  const resp = await facade.respond(body, false, "session401Exhausted");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session401Exhausted" });
 
   expect(resp.status).toBe(200);
   expect(refreshCalls()).toBe(1);
@@ -531,7 +558,7 @@ test("a 401 refresh aborted by the client stops without resending", async () => 
     },
   );
 
-  const resp = await facade.respond(body, false, "session401AbortRefresh", controller.signal);
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session401AbortRefresh", signal: controller.signal });
 
   expect(resp.status).toBe(499);
   expect(chatCalls).toHaveLength(1);
@@ -540,13 +567,13 @@ test("a 401 refresh aborted by the client stops without resending", async () => 
 test("non-stream HTTP 429 / embedded Busy use the ten-attempt rate-limit tier", async () => {
   // 真 SnapClient：429 由加密客户端在共享预算内重试到长阶梯上限
   const http429 = makeScriptedFacade(Array.from({ length: 10 }, () => ({ status: 429, body: "APIG.0308" })));
-  const resp429 = await http429.facade.respond(body, false, "sessionHttp429Tier");
+  const resp429 = await http429.facade.respond(body, { stream: false, sessionKey: "sessionHttp429Tier" });
   expect(resp429.status).toBe(429);
   expect(http429.chatCalls).toHaveLength(10);
 
   // 帧内 Busy：门面在同一份预算内重试，同样是 10 次总尝试（不分层放大）
   const busy = makeScriptedFacade(Array.from({ length: 10 }, () => sseStep(BUSY_FRAME)));
-  const respBusy = await busy.facade.respond(body, false, "sessionBusyTier");
+  const respBusy = await busy.facade.respond(body, { stream: false, sessionKey: "sessionBusyTier" });
   expect(respBusy.status).toBe(429);
   const j: any = await respBusy.json();
   expect(j.error.type).toBe("rate_limit_error");
@@ -558,10 +585,23 @@ test("non-stream HTTP 503 uses the three-attempt server tier", async () => {
   const { facade, chatCalls } = makeScriptedFacade(
     Array.from({ length: 3 }, () => ({ status: 503, body: "APIG.0613" })),
   );
-  const resp = await facade.respond(body, false, "session503Tier");
+  const resp = await facade.respond(body, { stream: false, sessionKey: "session503Tier" });
   expect(resp.status).toBe(503);
   // 短阶梯 3 次总尝试；门面不叠加独立重试，最坏请求次数不会变成 6
   expect(chatCalls).toHaveLength(3);
+});
+
+test("mixed HTTP and frame retries stop at the same ten total attempts", async () => {
+  // 3 次 HTTP 429 之后连续 7 次帧内 Busy：预算用尽即停，总尝试次数不被分层放大。
+  const { facade, chatCalls } = makeScriptedFacade([
+    { status: 429, body: "APIG.0308" },
+    { status: 429, body: "APIG.0308" },
+    { status: 429, body: "APIG.0308" },
+    ...Array.from({ length: 7 }, () => sseStep(BUSY_FRAME)),
+  ]);
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionMixedTier" });
+  expect(resp.status).toBe(429);
+  expect(chatCalls).toHaveLength(10);
 });
 
 test("streaming retries non-2xx before any byte reaches the client", async () => {
@@ -570,7 +610,7 @@ test("streaming retries non-2xx before any byte reaches the client", async () =>
     { status: 503, body: "APIG.0613" },
     OK_SSE_STEP,
   ]);
-  const resp = await facade.respond({ ...body, stream: true }, true, "sessionStreamPreByte");
+  const resp = await facade.respond({ ...body, stream: true }, { stream: true, sessionKey: "sessionStreamPreByte" });
   expect(resp.status).toBe(200);
   await resp.text();
   expect(chatCalls).toHaveLength(3);
@@ -582,7 +622,7 @@ test("streaming surfaces a mid-stream failure without replaying after bytes", as
     calls++;
     return resetStream();
   });
-  const resp = await facade.respond({ ...body, stream: true }, true, "sessionStreamPostByte");
+  const resp = await facade.respond({ ...body, stream: true }, { stream: true, sessionKey: "sessionStreamPostByte" });
   expect(resp.status).toBe(200);
   // 首帧已经到达客户端；读取失败只上报，不再发第二次上游请求
   await expect(resp.text()).rejects.toBeDefined();
