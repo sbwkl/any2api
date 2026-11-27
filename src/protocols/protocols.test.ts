@@ -20,13 +20,20 @@ function makeBackend(overrides: Partial<ChatBackend> = {}): ChatBackend {
   };
 }
 
-function dispatch(routes: ReturnType<typeof createProtocolRoutes>, path: string, method: string, body?: any): Promise<Response> {
+function dispatch(
+  routes: ReturnType<typeof createProtocolRoutes>,
+  path: string,
+  method: string,
+  body?: any,
+  init: RequestInit = {},
+): Promise<Response> {
   const route = routes.find((r) => r.path === path && r.method === method);
   if (!route) throw new Error(`no route ${method} ${path}`);
   const req = new Request(`http://localhost${path}`, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    ...init,
   });
   return Promise.resolve(route.handle(req));
 }
@@ -57,6 +64,56 @@ describe("shared protocol routes (codearts capabilities)", () => {
     const j: any = await resp.json();
     expect(j.type).toBe("message");
     expect(seen.tool_choice).toBe("required");
+  });
+
+  test("Anthropic route forwards the inbound abort signal to the backend", async () => {
+    let seen: AbortSignal | undefined;
+    const local = createProtocolRoutes(makeBackend({
+      respond: async (_body, opts) => { seen = opts.signal; return Response.json(completion); },
+    }), { toolChoice: "full", normalizeErrors: false });
+    const controller = new AbortController();
+    const resp = await dispatch(local, "/v1/messages", "POST", {
+      model: "m", max_tokens: 10, messages: [{ role: "user", content: "hi" }],
+    }, { signal: controller.signal });
+    expect(resp.status).toBe(200);
+    controller.abort();
+    // 传下去的是与入站请求绑定的同一条取消链，而不是一个无关/新建的 signal
+    expect(seen).toBeDefined();
+    expect(seen!.aborted).toBe(true);
+  });
+
+  test("Responses route forwards the inbound abort signal to the backend", async () => {
+    let seen: AbortSignal | undefined;
+    const local = createProtocolRoutes(makeBackend({
+      respond: async (_body, opts) => { seen = opts.signal; return Response.json(completion); },
+    }), { toolChoice: "full", normalizeErrors: false });
+    const controller = new AbortController();
+    const resp = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi" }, { signal: controller.signal });
+    expect(resp.status).toBe(200);
+    controller.abort();
+    expect(seen).toBeDefined();
+    expect(seen!.aborted).toBe(true);
+  });
+
+  test("streaming Anthropic/Responses routes also forward the abort signal", async () => {
+    const seen: Array<AbortSignal | undefined> = [];
+    const sse = 'data: {"id":"1","model":"m","created":1,"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":"stop"}]}\n\n';
+    const local = createProtocolRoutes(makeBackend({
+      respond: async (_body, opts) => {
+        seen.push(opts.signal);
+        return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      },
+    }), { normalizeErrors: true });
+    const controller = new AbortController();
+    const a = await dispatch(local, "/v1/messages", "POST", {
+      model: "m", max_tokens: 10, stream: true, messages: [{ role: "user", content: "hi" }],
+    }, { signal: controller.signal });
+    const r = await dispatch(local, "/v1/responses", "POST", { model: "m", input: "hi", stream: true }, { signal: controller.signal });
+    await a.text();
+    await r.text();
+    expect(seen).toHaveLength(2);
+    controller.abort();
+    expect(seen.every((s) => s?.aborted === true)).toBe(true);
   });
 
   test("Anthropic passthrough returns the provider error unchanged", async () => {

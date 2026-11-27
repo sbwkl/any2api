@@ -1,5 +1,11 @@
 import { test, expect, describe } from "bun:test";
-import { aggregateSseToCompletion, normalizeChatSseUsage, upstreamErrorFromChunk } from "./sse";
+import {
+  aggregateSseToCompletion,
+  normalizeChatSseUsage,
+  upstreamErrorFrameFromChunk,
+  upstreamErrorFromChunk,
+  UpstreamSseError,
+} from "./sse";
 
 function streamOf(text: string): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -112,6 +118,20 @@ describe("sse aggregation", () => {
     expect(upstreamErrorFromChunk({ error_code: "E1", error_msg: "boom" })).toBe("E1: boom");
     expect(upstreamErrorFromChunk({ error: { code: "E2", message: "kaput" } })).toBe("E2: kaput");
     expect(upstreamErrorFromChunk({ text: "[DONE]" })).toBeNull();
+  });
+
+  test("the structured error frame survives into the thrown aggregation error", async () => {
+    expect(upstreamErrorFrameFromChunk({ error: { code: "ModelArts.81101", message: "busy" } })).toEqual({
+      code: "ModelArts.81101",
+      message: "busy",
+    });
+    expect(upstreamErrorFrameFromChunk({ error_code: "E1", error_msg: "boom" })).toEqual({ code: "E1", message: "boom" });
+    expect(upstreamErrorFrameFromChunk({ choices: [{}], error_code: "nope" })).toBeNull();
+
+    const text = 'data: {"error":{"code":"ModelArts.81101","message":"busy"}}\n\n';
+    const error = await aggregateSseToCompletion(streamOf(text)).catch((e) => e);
+    expect(error).toBeInstanceOf(UpstreamSseError);
+    expect((error as UpstreamSseError).frame).toEqual({ code: "ModelArts.81101", message: "busy" });
   });
 });
 

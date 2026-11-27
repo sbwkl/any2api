@@ -124,6 +124,8 @@ curl -N http://127.0.0.1:8787/codearts/v1/chat/completions \
 
 当前模型池：启动时通过 Policy Center `POST /v1/policy/bundle`（Agent-Type: PromptCenter，商业版 x-auth-token 为空串、靠 provider 层 AKSK 签名认证）动态发现——这是 IDE 模型下拉的真实数据源，后端调整模型无需改代码；失败时回退观测池（`glm-5.3-flash`、`deepseek-v4.1-flash`）。
 
+取消传播：客户端中断入站请求时，代理立即中止该请求发起的上游 chat（流式与非流式），观测关闭时同样生效，且不消耗重试预算；密钥协商、心跳、遥测、凭证保活与启动时模型发现等后台主动调用不受影响。客户端在出站响应提交前取消时，代理返回 `499` 空体；若已开始向客户端输出（如流式首字节已发出），状态保持 `200`，中断记入四层观测的 `abort_reason=client_disconnect`。例外是 401 凭证刷新：令牌交换不挂入站取消信号，会自然完成并回写轮换后的 `refresh_token`，取消后不再重发上游 chat。这样做的理由是中止刷新会丢掉已轮换的令牌、导致共享存储留下已消费的旧 token（下次刷新报 `STS5.1806 AlreadyUsed`，可能要求重新登录），代价高于客户端取消后短暂留下一个后台令牌交换请求。
+
 ### CodeBuddy（codebuddy provider）
 
 Base URL 用 `/codebuddy/v1`：
@@ -166,7 +168,7 @@ resp = client.chat.completions.create(
 默认关闭；设置 `TRACE_CAPTURE_DIR` 后，每个入站请求（含 `/healthz`、404）产生一行 JSONL（`capture-YYYY-MM-DD.jsonl`，`schema: 3`），一次请求的记录内嵌四层观测：
 
 - **L1 入站请求**：方法、路径、请求头（Authorization / x-api-key / cookie 等敏感值记 `<redacted>`）、解析后的请求 JSON；解析失败时改记 `raw_request` 原文。
-- **L2 上游请求**：请求上下文内的每次上游调用按发生顺序进入 `upstream[]`，含方法、URL、请求头（同样脱敏）与加密 / gzip 前的明文 body；401 刷新重发、排队重试、加密协商重发各算一次尝试。
+- **L2 上游请求**：请求上下文内的每次上游调用按发生顺序进入 `upstream[]`，含方法、URL、请求头（同样脱敏）与加密 / gzip 前的明文 body；每条 L2 条目对应一次上游调用（401 刷新重发、排队重试、加密协商重发都会各自产生一条）。L2 条目数不等于重试预算：CodeArts 的重试预算按整次入站请求的 chat 尝试计数，401 刷新后的重发不占用该预算。
 - **L3 上游可读响应**：每次尝试经 provider 解码后、协议翻译前的状态、头、完整响应文本与输出块到达时间（`t_ms` / `bytes`）。CodeArts 加密 chat 记录解密后的 SSE 明文，不含 `x-encrypt-*` 头，`content-type` 为解码后的类型；`chunks[].bytes` 为解码后输出块的 UTF-8 字节数，可与 L3 body 对账。非加密上游保持现有记录语义。
 - **L4 出站响应**：状态、头、`content_type`、重组后的完整正文、`first_byte_ms` / `duration_ms`、`complete` 与 `abort_reason`。
 
@@ -208,7 +210,7 @@ bun run e2e:corpus [dir]                               # 对入站采集 JSONL �
 - 协议适配边界：图像块（含 `tool_result` 内嵌）映射为 OpenAI `image_url` 发送，仅当 `source` 未知时写占位符；强制 `tool_choice`（any/tool）上游不支持，仅 auto 生效（真实客户端同样只用 auto）；`previous_response_id` 无服务端存储语义（Codex 以全量上下文重发，不受影响）；Responses 的 `namespace` 工具展开为 `<namespace>__<member>` 送上游，返回时还原 `name` + `namespace`（服务端工具 `web_search` 仍按当前边界丢弃，见 #22）
 - 实弹基线（2026-11-24：32 pass / 17 fail / 4 not-supported / 4 skipped）暴露的现行缺口（修复另开分支）：Responses `input_image` 与 Anthropic `system` 数组中的图片被丢弃；Responses 流缺少 `response.output_text.done`；`logprobs` / `n` 在两家都静默忽略；codearts 的 `response_format`（json_object / json_schema）被静默丢弃，未知模型静默回退（`models[0]`）；codebuddy 的 `include_usage` 块带非空 `choices`，`json_schema` 已送达但上游输出仍带 markdown 围栏。详见基线报告与 exec-plan 缺陷清单。注：基线是 2026-11-24 快照；其中「上游 400 被映射为 502」已于 2026-11-25 修正为按上游状态分类（400/429/502/504）。
 - 残余可识别特征：Bun 与内核（Node）的 TLS 指纹差异、OTLP service.name 为占位值
-- 明文回退为死路径：chat 后端硬性要求加密通道（实测 8/8 得到内嵌 415 Unsupported Media Type）。2026-11-25 起代理不再对 chat 回退明文，改为同 key 重试一次后返回上游错误；`CODEARTS_FORCE_PLAINTEXT=1` 仅作调试开关
+- 明文回退为死路径：chat 后端硬性要求加密通道（实测 8/8 得到内嵌 415 Unsupported Media Type）。2026-11-25 起代理不再对 chat 回退明文；2026-11-27 起改为按状态级重试表恢复（429 / 406 / 502 总尝试 ≤10，500 / 503 / 504 / 407 总尝试 ≤3，其它 4xx/5xx 与裸网络错误不重试，整次请求共享一份预算）；非流式聚合另行识别 HTTP 200 SSE 内嵌的 Busy（`ModelArts.81101`）与限流码（独立 `.429` 段、HTTP 429 观测到的 `APIG.0308`）并按限流档重试，帧内其它错误、空响应与空闲超时不重试；上游响应头带 `need-switch-model` 时不自动切模型，立即停止重试并返回不可重试的明确错误（409）；401 刷新后的重发不占该预算；`CODEARTS_FORCE_PLAINTEXT=1` 仅作调试开关（明文路径同样占用共享尝试预算，帧内重试不会因此失去上界）
 - codebuddy 支持 OpenAI Chat + Anthropic Messages + OpenAI Responses；遥测（`/v2/report`、`/llm/data/report`、`/v1/traces`）未做，消息中心轮询需 `CODEBUDDY_MSG_CENTER=1` 显式开启
 - codebuddy 模型池读取本机云端产品缓存（24 个，与 IDE 一致）；缓存缺失时回退 product.json + agent models + 观测模型
 - codebuddy 默认不发送 `X-Device-Token`（实测当前通道可省略），不伪造 TuringShield

@@ -10,8 +10,8 @@ export interface ChatBackend {
   profileFor?(req: Request): string | undefined;
   /** OpenAI Chat 门面 */
   handleChat(req: Request): Promise<Response>;
-  /** 内部 OpenAI chat 管线；Anthropic/Responses 适配层复用 */
-  respond(body: any, opts: { stream: boolean; sessionKey: string; profile?: string }): Promise<Response>;
+  /** 内部 OpenAI chat 管线；Anthropic/Responses 适配层复用。signal 为入站请求的取消信号，由 provider 自行决定是否传播。 */
+  respond(body: any, opts: { stream: boolean; sessionKey: string; profile?: string; signal?: AbortSignal }): Promise<Response>;
 }
 
 export interface ProtocolCapabilities {
