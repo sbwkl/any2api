@@ -7,6 +7,7 @@ import { buildRequestBody, mapTools, mergeAgentPrompt, normalizeMessages } from 
 import { aggregateSseToCompletion, normalizeChatSseUsage } from "../../shared/sse";
 import { applyPromptCacheControl } from "../../shared/cache";
 import { errorTypeForStatus } from "../../shared/errors";
+import type { CredentialSource } from "./credentials";
 import type { Credentials, ProductConfig, Profile } from "./types";
 
 const PROFILES = new Set<Profile>(["chat", "ask", "craft"]);
@@ -20,14 +21,22 @@ function jsonError(status: number, message: string, code?: any): Response {
 
 export class CodeBuddyFacade {
   private sessions = new SessionRegistry();
-  private credentials: Credentials;
+  private source: CredentialSource;
 
   constructor(
     private config: ProductConfig,
-    credentials: Credentials,
+    source: CredentialSource,
     private opts: { deviceToken?: string; fetchImpl?: typeof fetch } = {},
   ) {
-    this.credentials = credentials;
+    this.source = source;
+  }
+
+  // 当前凭证：按请求从凭证源读取。T1 阶段源恒非空（生产在启动时已强制加载）；
+  // T2 引入「凭证未就绪」空态处理。
+  private currentCredentials(): Credentials {
+    const c = this.source.get();
+    if (!c) throw new Error("CodeBuddy 凭证未就绪");
+    return c;
   }
 
   modelsPayload() {
@@ -44,17 +53,18 @@ export class CodeBuddyFacade {
   }
 
   healthPayload() {
+    const credentials = this.currentCredentials();
     return {
       ok: true,
       provider: "codebuddy",
       models: this.config.models.length,
-      credentialSource: this.credentials.source,
-      uid: `${this.credentials.uid.slice(0, 8)}...`,
+      credentialSource: credentials.source,
+      uid: `${credentials.uid.slice(0, 8)}...`,
     };
   }
 
   getCredentials(): Credentials {
-    return this.credentials;
+    return this.currentCredentials();
   }
 
   async handleModels(): Promise<Response> {
@@ -174,7 +184,7 @@ export class CodeBuddyFacade {
     const url = `${this.config.endpoint}/v2/chat/completions`;
     const resp = await postChat({
       url,
-      headers: makeHeaders(this.credentials),
+      headers: makeHeaders(this.currentCredentials()),
       body: requestBody,
       fetchImpl: this.opts.fetchImpl,
       onUnauthorized: process.env.CODEBUDDY_AUTO_REFRESH === "0"
@@ -182,11 +192,11 @@ export class CodeBuddyFacade {
         : async () => {
           const next = await refreshAccessToken({
             config: this.config,
-            credentials: this.credentials,
+            credentials: this.currentCredentials(),
             fetchImpl: this.opts.fetchImpl,
           });
           if (!next) return null;
-          this.credentials = next;
+          this.source.adopt(next);
           return makeHeaders(next);
         },
       onQueue: async (peek) => {
@@ -194,7 +204,7 @@ export class CodeBuddyFacade {
         const retryAfterMs = Number(peek?.data?.retry_after ?? peek?.retry_after ?? 5) * 1000;
         const status = await fetchQueueStatus({
           config: this.config,
-          credentials: this.credentials,
+          credentials: this.currentCredentials(),
           model: model.id,
           requestId,
           fetchImpl: this.opts.fetchImpl,
