@@ -31,12 +31,9 @@ export class CodeBuddyFacade {
     this.source = source;
   }
 
-  // 当前凭证：按请求从凭证源读取。T1 阶段源恒非空（生产在启动时已强制加载）；
-  // T2 引入「凭证未就绪」空态处理。
-  private currentCredentials(): Credentials {
-    const c = this.source.get();
-    if (!c) throw new Error("CodeBuddy 凭证未就绪");
-    return c;
+  // 当前凭证：按请求从凭证源读取；凭证未就绪时为 null。
+  private currentCredentials(): Credentials | null {
+    return this.source.get();
   }
 
   modelsPayload() {
@@ -54,6 +51,15 @@ export class CodeBuddyFacade {
 
   healthPayload() {
     const credentials = this.currentCredentials();
+    if (!credentials) {
+      // 凭证未就绪：降级态而非服务故障，healthz 不抛错。
+      return {
+        ok: false,
+        provider: "codebuddy",
+        credentialsReady: false,
+        models: this.config.models.length,
+      };
+    }
     return {
       ok: true,
       provider: "codebuddy",
@@ -63,7 +69,7 @@ export class CodeBuddyFacade {
     };
   }
 
-  getCredentials(): Credentials {
+  getCredentials(): Credentials | null {
     return this.currentCredentials();
   }
 
@@ -122,6 +128,11 @@ export class CodeBuddyFacade {
   }
 
   private async respondInner(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
+    // 按需回源（惰性）：当前无凭证时先读一次凭证源再判定，登录后下一个请求即恢复、无需重启。
+    let ready = this.currentCredentials();
+    if (!ready) ready = await this.source.reload();
+    if (!ready) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
+
     let messages: any[];
     try {
       messages = normalizeMessages(body.messages ?? []);
@@ -184,15 +195,17 @@ export class CodeBuddyFacade {
     const url = `${this.config.endpoint}/v2/chat/completions`;
     const resp = await postChat({
       url,
-      headers: makeHeaders(this.currentCredentials()),
+      headers: makeHeaders(ready),
       body: requestBody,
       fetchImpl: this.opts.fetchImpl,
       onUnauthorized: process.env.CODEBUDDY_AUTO_REFRESH === "0"
         ? undefined
         : async () => {
+          const creds = this.currentCredentials();
+          if (!creds) return null;
           const next = await refreshAccessToken({
             config: this.config,
-            credentials: this.currentCredentials(),
+            credentials: creds,
             fetchImpl: this.opts.fetchImpl,
           });
           if (!next) return null;
@@ -200,11 +213,13 @@ export class CodeBuddyFacade {
           return makeHeaders(next);
         },
       onQueue: async (peek) => {
+        const creds = this.currentCredentials();
+        if (!creds) return false;
         const timeout = Number(process.env.CODEBUDDY_QUEUE_TIMEOUT_MS ?? 120000);
         const retryAfterMs = Number(peek?.data?.retry_after ?? peek?.retry_after ?? 5) * 1000;
         const status = await fetchQueueStatus({
           config: this.config,
-          credentials: this.currentCredentials(),
+          credentials: creds,
           model: model.id,
           requestId,
           fetchImpl: this.opts.fetchImpl,

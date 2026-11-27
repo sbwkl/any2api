@@ -35,6 +35,17 @@ describe("msg center poller", () => {
     await expect(poller.tick()).resolves.toBeUndefined();
   });
 
+  test("tick skips polling and does not throw while credentials are not ready", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      return Response.json({ data: { total: 0 } });
+    }) as unknown as typeof fetch;
+    const poller = new MsgCenterPoller({ config, getCredentials: () => null, fetchImpl });
+    await expect(poller.tick()).resolves.toBeUndefined();
+    expect(calls).toBe(0);
+  });
+
   test("start/stop polls on the interval", async () => {
     let calls = 0;
     const fetchImpl = (async () => {

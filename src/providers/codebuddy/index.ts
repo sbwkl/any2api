@@ -23,18 +23,22 @@ export function createCodebuddyProvider(deps: CodebuddyProviderDeps = {}): Provi
     prefix: "/codebuddy",
     required: false,
     create: async (): Promise<ProviderInstance> => {
-      // 生产默认：构造默认源时即加载真实凭证（缺凭证抛出 → registry 固化 503，与现状一致）；
-      // 注入凭证源时完全绕开真实加载。
+      // 生产默认：构造默认源时即加载真实凭证；注入凭证源时完全绕开真实加载。
+      // T2：无凭证也挂载成功（「凭证未就绪」态），不再因缺凭证抛错被 registry 固化为 503。
       const source = deps.credentialSource ?? defaultCredentialSource();
       const credentials = source.get();
-      if (!credentials) throw new Error("codebuddy 凭证源未就绪：未提供凭证");
-      const config = loadProductConfig(credentials.uid);
+      // loadProductConfig 不依赖凭证：无 uid 时走本地/回退模型目录。
+      const config = loadProductConfig(credentials?.uid);
       const facade = new CodeBuddyFacade(config, source, {
         deviceToken: process.env.CODEBUDDY_DEVICE_TOKEN || undefined,
         fetchImpl: deps.fetchImpl,
       });
 
-    serviceLogger.log(`[codebuddy] 凭证就绪 uid=${credentials.uid.slice(0, 8)}... 来源=${credentials.source}`);
+    if (credentials) {
+      serviceLogger.log(`[codebuddy] 凭证就绪 uid=${credentials.uid.slice(0, 8)}... 来源=${credentials.source}`);
+    } else {
+      serviceLogger.log("[codebuddy] 凭证未就绪：已挂载，等待登录后按需回源");
+    }
     serviceLogger.log(`[codebuddy] 模型池: ${config.models.map((m) => m.id).join(", ")}`);
     serviceLogger.log(`[codebuddy] 提示词: ${config.prompts.length} 个，agent: ${config.agents.map((a) => a.name).join(", ") || "(无)"}`);
 

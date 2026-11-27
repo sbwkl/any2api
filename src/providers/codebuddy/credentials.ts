@@ -23,10 +23,15 @@ export function staticSource(credentials: Credentials): CredentialSource {
   };
 }
 
-/** 生产默认源：构造时立即加载一次真实凭证（缺凭证抛出 → create 失败/503，与现状一致）；
+/** 生产默认源：构造时立即加载一次真实凭证，加载失败（未登录）进入「凭证未就绪」空态而非抛出；
  *  reload() 按需回源重跑 loadCredentials()，取源优先级不变（SESSION_JSON → env → Keychain + state.vscdb），失败返回 null。 */
 export function defaultCredentialSource(): CredentialSource {
-  let current: Credentials | null = loadCredentials();
+  let current: Credentials | null = null;
+  try {
+    current = loadCredentials();
+  } catch {
+    current = null;
+  }
   return {
     get: () => current,
     reload: async () => {

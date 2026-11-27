@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mountProviders } from "../../registry";
 import { createCodebuddyProvider } from "./index";
-import { staticSource } from "./credentials";
+import { staticSource, type CredentialSource } from "./credentials";
 import type { Credentials } from "./types";
 
 const oldEnv = { ...process.env };
@@ -88,5 +88,140 @@ describe("codebuddy provider with injected deps", () => {
     expect(json.providers).toEqual([
       { provider: "codebuddy", ok: true, models: 1, credentialSource: "env", uid: "env-u1..." },
     ]);
+  });
+});
+
+describe("codebuddy credentials-not-ready state", () => {
+  // 凭证未就绪的空源：get/reload 均无凭证（模拟「进程先启动、还没登录」）
+  const emptySource: CredentialSource = {
+    get: () => null,
+    reload: async () => null,
+    adopt: () => {},
+  };
+
+  test("mounts without credentials; healthz reports credentialsReady:false instead of a mount failure", async () => {
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: emptySource }),
+    ]);
+    const resp = await handler(new Request("http://localhost/healthz"));
+
+    expect(resp.status).toBe(200);
+    const json: any = await resp.json();
+    expect(json.ok).toBe(false);
+    expect(json.providers).toEqual([
+      { provider: "codebuddy", ok: false, credentialsReady: false, models: 1 },
+    ]);
+  });
+
+  test("chat while not ready returns 401 asking to log in CodeBuddy CN, not 503", async () => {
+    let upstreamCalls = 0;
+    const fetchImpl = (async () => {
+      upstreamCalls++;
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: emptySource, fetchImpl }),
+    ]);
+    const resp = await handler(chatRequest());
+
+    expect(resp.status).toBe(401);
+    const json: any = await resp.json();
+    expect(json.error.message).toBe("请登录 CodeBuddy CN");
+    expect(json.error.type).toBe("authentication_error");
+    expect(upstreamCalls).toBe(0);
+  });
+
+  test("/v1/models still serves the model list while not ready", async () => {
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: emptySource }),
+    ]);
+    const resp = await handler(new Request("http://localhost/codebuddy/v1/models"));
+
+    expect(resp.status).toBe(200);
+    const json: any = await resp.json();
+    expect(json.object).toBe("list");
+    expect(json.data.map((m: any) => m.id)).toContain("hy4flash-free");
+  });
+
+  test("next request succeeds after credentials appear on disk, no remount needed", async () => {
+    const upstreamAuths: string[] = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      upstreamAuths.push(new Headers(init?.headers).get("authorization") ?? "");
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    // 模拟磁盘凭证源：内存值与磁盘分离，reload() 代表按需读盘
+    let onDisk: Credentials | null = null;
+    let current: Credentials | null = null;
+    let reloadCalls = 0;
+    const lazyDiskSource: CredentialSource = {
+      get: () => current,
+      reload: async () => {
+        reloadCalls++;
+        current = onDisk;
+        return onDisk;
+      },
+      adopt: (next) => { current = next; },
+    };
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: lazyDiskSource, fetchImpl }),
+    ]);
+
+    const beforeLogin = await handler(chatRequest());
+    expect(beforeLogin.status).toBe(401);
+    expect(upstreamAuths.length).toBe(0);
+    expect(reloadCalls).toBe(1);
+
+    // 模拟用户在 CodeBuddy CN 登录：凭证落盘
+    onDisk = credentials;
+
+    const afterLogin = await handler(chatRequest());
+    expect(afterLogin.status).toBe(200);
+    expect(upstreamAuths).toEqual(["Bearer tok"]);
+    expect(reloadCalls).toBe(2);
+  });
+
+  test("default credential source mounts without credentials (not ready, not failed)", async () => {
+    // CODEBUDDY_TOKEN 已设但缺 CODEBUDDY_UID → loadCredentials 抛错；默认源应吞错进入未就绪态而非 create 失败
+    delete process.env.CODEBUDDY_SESSION_JSON;
+    process.env.CODEBUDDY_TOKEN = "tok-without-uid";
+
+    const handler = await mountProviders([createCodebuddyProvider()]);
+    const resp = await handler(new Request("http://localhost/healthz"));
+
+    expect(resp.status).toBe(200);
+    const json: any = await resp.json();
+    expect(json.ok).toBe(false);
+    expect(json.providers).toEqual([
+      { provider: "codebuddy", ok: false, credentialsReady: false, models: 1 },
+    ]);
+  });
+
+  test("requests with ready credentials do not reload the credential source", async () => {
+    let upstreamCalls = 0;
+    let reloadCalls = 0;
+    const readySource: CredentialSource = {
+      get: () => credentials,
+      reload: async () => {
+        reloadCalls++;
+        return credentials;
+      },
+      adopt: () => {},
+    };
+    const fetchImpl = (async () => {
+      upstreamCalls++;
+      return new Response(SSE, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const handler = await mountProviders([
+      createCodebuddyProvider({ credentialSource: readySource, fetchImpl }),
+    ]);
+    const resp = await handler(chatRequest());
+
+    expect(resp.status).toBe(200);
+    expect(upstreamCalls).toBe(1);
+    expect(reloadCalls).toBe(0);
   });
 });
