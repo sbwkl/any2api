@@ -24,6 +24,13 @@ const unb64 = (s: string) => new Uint8Array(Buffer.from(s, "base64"));
 const utf8 = (s: string) => new Uint8Array(Buffer.from(s, "utf-8"));
 const toUtf8 = (b: Uint8Array) => Buffer.from(b).toString("utf-8");
 
+/** 客户端取消是终止信号而不是网络故障：加密客户端不得把它当成可重试错误。 */
+function clientAbortError(): Error {
+  const err = new Error("client disconnected");
+  err.name = "AbortError";
+  return err;
+}
+
 // ---- u$：ECDH P-256 密钥协商 ----
 interface NegotiatedKey { keyId: string; sessionKey: Uint8Array; expiresIn: number }
 
@@ -214,31 +221,47 @@ export class SnapClient {
   }
 
   // 明文发送：每次尝试独立记录（无请求上下文时入口自然透传）
-  private sendPlaintext(url: string, headers: Record<string, string>, plaintext: string): Promise<Response> {
+  private sendPlaintext(
+    url: string,
+    headers: Record<string, string>,
+    plaintext: string,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     return traceUpstream(
-      { method: "POST", url, headers, body: plaintext },
+      { method: "POST", url, headers, body: plaintext, signal },
       { fetch: this.fetchImpl },
     );
   }
 
   // headers：provider 层业务头（x-ot-* 等）；bodyJson：OpenAI 格式请求体对象
-  async chat(url: string, headers: Record<string, string>, bodyObj: any, isRetry = false): Promise<Response> {
+  // opts.signal：入站请求的取消信号；中止时上游 fetch 同一条链一起中止，且不重试。
+  async chat(
+    url: string,
+    headers: Record<string, string>,
+    bodyObj: any,
+    opts: { isRetry?: boolean; signal?: AbortSignal } = {},
+  ): Promise<Response> {
+    const { isRetry = false, signal } = opts;
+    if (signal?.aborted) throw clientAbortError();
     // UXe 判定：仅 /api/v2/chat/completions 加密
     const pathname = new URL(url).pathname;
     if (process.env.CODEARTS_FORCE_PLAINTEXT === "1")
-      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj));
+      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj), signal);
     if (!ENCRYPT_PATHS.some((p) => pathname.startsWith(p))) {
-      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj));
+      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj), signal);
     }
     const baseUrl = new URL(url).origin;
     let key: NegotiatedKey;
     try {
+      // 取消不进入密钥协商：协商结果全局缓存，可能被其他请求等待，必须完成。
       key = await this.keys.getOrNegotiateKey(baseUrl);
     } catch (e: any) {
       // 明文回退对 chat 不可用（实测 8/8 得到内嵌 415）：直接报错，避免掩盖真实故障。
       // 调试场景仍可用 CODEARTS_FORCE_PLAINTEXT=1 显式走明文。
       throw new Error(`key exchange failed: ${e?.message ?? e}`);
     }
+    // 检查点：协商期间客户端可能已断开；此时不得再发 chat。
+    if (signal?.aborted) throw clientAbortError();
     const plaintext = JSON.stringify(bodyObj);
     const ts = Date.now();
     const aad = `POST|${pathname}|${ts}`;
@@ -267,26 +290,29 @@ export class SnapClient {
       }
       // L2 记录加密前明文（recordBody）；线上 body 为 base64 密文；线上头含 X-Encrypt-* 与重签名
       resp = await traceUpstream(
-        { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj },
+        { method: "POST", url, headers: h, body: b64(ciphertext), recordBody: bodyObj, signal },
         { fetch: decryptingFetch(this.fetchImpl, key) },
       );
     } catch (e: any) {
+      // 取消导致的 fetch 中止不是网络故障：绝不重试。
+      if (signal?.aborted) throw clientAbortError();
       if (!isRetry) {
         serviceLogger.warn(`[snap] 加密请求网络错误，同 key 重试一次: ${e?.message ?? e}`);
-        return this.chat(url, headers, bodyObj, true);
+        return this.chat(url, headers, bodyObj, { isRetry: true, signal });
       }
       throw new Error(`upstream network error: ${e?.message ?? e}`);
     }
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
+      if (signal?.aborted) throw clientAbortError();
       serviceLogger.warn(`[snap] 加密请求非2xx: status=${resp.status} body=${text.slice(0, 300)}`);
       if (text.includes("ENCRYPT_KEY_EXPIRED") && !isRetry) {
         this.keys.clearKey();
-        return this.chat(url, headers, bodyObj, true);
+        return this.chat(url, headers, bodyObj, { isRetry: true, signal });
       }
       if (TRANSIENT_STATUS.has(resp.status) && !isRetry) {
         serviceLogger.warn(`[snap] 上游 ${resp.status}，加密重试一次`);
-        return this.chat(url, headers, bodyObj, true);
+        return this.chat(url, headers, bodyObj, { isRetry: true, signal });
       }
       // 明文回退是死路径（实测 415），不再重发；把上游状态/原文交回 provider 归一。
       const headersOut = new Headers();

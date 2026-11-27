@@ -3,7 +3,7 @@ import { createECDH, createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startRequestTrace, type FetchLike } from "../../shared/trace";
+import { flushRequestTraces, runWithRequestTrace, startRequestTrace, type FetchLike } from "../../shared/trace";
 import { HeartbeatManager, SnapClient } from "./snap";
 import { SM4GCM } from "./sm4";
 
@@ -471,6 +471,201 @@ describe("snap.chat request-scoped attempts", () => {
     expect(recordedHeader(upstream[3].headers, "x-encrypt-key-id")).toBe("kid-2");
     expect(upstream[3].body).toEqual(chatBody());
     expect(upstream[3].response.status).toBe(200);
+  });
+});
+
+describe("client cancellation", () => {
+  function inboundWithSignal(signal: AbortSignal): Request {
+    return new Request("http://localhost/codearts/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "m", messages: [{ role: "user", content: "hi" }] }),
+      signal,
+    });
+  }
+
+  /** 加密 chat 的假 fetch：一直挂着，直到 init.signal 中止才 reject。 */
+  function hangingChatFetch(onChatStarted: () => void) {
+    return (call: RecordedCall): Response | Promise<Response> => {
+      if (call.url === KEY_EXCHANGE_URL)
+        return Response.json({ serverPublicKey: serverPublicKey(), keyId: "kid-1", expiresIn: 3600 });
+      onChatStarted();
+      return new Promise<Response>((_, reject) => {
+        const signal = call.init.signal;
+        const fail = () => reject(new DOMException("aborted", "AbortError"));
+        if (!signal) return; // 没有 signal 就永远挂着，超时会暴露回归
+        if (signal.aborted) fail();
+        else signal.addEventListener("abort", fail);
+      });
+    };
+  }
+
+  function serverPublicKey(): string {
+    return createECDH("prime256v1").generateKeys().toString("base64");
+  }
+
+  test("abort rejects the in-flight encrypted chat fetch without retrying and records L3 incomplete", async () => {
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const controller = new AbortController();
+    let chatStarted!: () => void;
+    const chatStartedP = new Promise<void>((r) => { chatStarted = r; });
+    const { fetch: fake, calls } = recordingFetch(hangingChatFetch(() => chatStarted()));
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const pending = runWithRequestTrace(inboundWithSignal(controller.signal), () =>
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel" }, chatBody(), { signal: controller.signal }));
+    await chatStartedP;
+    controller.abort();
+    await expect(pending).rejects.toBeDefined();
+    await flushRequestTraces();
+
+    // 上游 fetch 本身收到了 abort；取消后没有同 key 重试，也没有第二次 chat
+    const chatCalls = calls.filter((c) => c.url === CHAT_URL);
+    expect(chatCalls).toHaveLength(1);
+    expect(chatCalls[0].init.signal).toBeDefined();
+    expect(chatCalls[0].init.signal!.aborted).toBe(true);
+    // 密钥协商不跟随取消
+    const keyExchange = calls.find((c) => c.url === KEY_EXCHANGE_URL)!;
+    expect(keyExchange.init.signal).toBeUndefined();
+
+    const record = readRecords()[0];
+    // 观测：客户端断开是第一中断原因；上游可读响应未完成
+    expect(record.response.abort_reason).toBe("client_disconnect");
+    expect(record.response.complete).toBe(false);
+    const chatAttempt = record.upstream.find((u: any) => u.url === CHAT_URL);
+    expect(chatAttempt).toBeDefined();
+    expect(chatAttempt.response.complete).toBe(false);
+  });
+
+  test("abort during key exchange lets the exchange finish but never sends chat", async () => {
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const controller = new AbortController();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const { fetch: fake, calls } = recordingFetch(async (call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        await gate; // 模拟协商仍在进行时客户端断开
+        return Response.json({ serverPublicKey: serverPublicKey(), keyId: "kid-1", expiresIn: 3600 });
+      }
+      return new Response('data: {"ok":1}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } });
+    });
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const pending = runWithRequestTrace(inboundWithSignal(controller.signal), () =>
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-kx" }, chatBody(), { signal: controller.signal }));
+    await waitFor(() => calls.length === 1);
+    controller.abort();
+    release();
+    await expect(pending).rejects.toBeDefined();
+    await flushRequestTraces();
+
+    // 协商不被取消、也不抛出；但协商完成后不再发 chat
+    expect(calls.map((c) => c.url)).toEqual([KEY_EXCHANGE_URL]);
+    expect(calls[0].init.signal).toBeUndefined();
+    const record = readRecords()[0];
+    expect(record.response.abort_reason).toBe("client_disconnect");
+    expect(record.upstream.map((u: any) => u.url)).toEqual([KEY_EXCHANGE_URL]);
+  });
+
+  test("cancellation aborts the upstream fetch even when observability is off", async () => {
+    // beforeEach 已删除 TRACE_CAPTURE_DIR：观测关闭
+    const controller = new AbortController();
+    let chatStarted!: () => void;
+    const chatStartedP = new Promise<void>((r) => { chatStarted = r; });
+    const { fetch: fake, calls } = recordingFetch(hangingChatFetch(() => chatStarted()));
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const pending = snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-off" }, chatBody(), { signal: controller.signal });
+    await chatStartedP;
+    controller.abort();
+    await expect(pending).rejects.toBeDefined();
+
+    const chatCalls = calls.filter((c) => c.url === CHAT_URL);
+    expect(chatCalls).toHaveLength(1);
+    expect(chatCalls[0].init.signal!.aborted).toBe(true);
+  });
+
+  test("an already-aborted signal performs no key exchange and no chat", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { fetch: fake, calls } = recordingFetch(() => Response.json({ ok: true }));
+    const snap = new SnapClient("https://snap.test", fake);
+
+    await expect(
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-entry" }, chatBody(), { signal: controller.signal }),
+    ).rejects.toBeDefined();
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a 5xx received after abort is not retried", async () => {
+    const controller = new AbortController();
+    const { fetch: fake, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL)
+        return Response.json({ serverPublicKey: serverPublicKey(), keyId: "kid-1", expiresIn: 3600 });
+      controller.abort(); // 上游 5xx 与客户端断开同时发生：取消优先
+      return new Response("ENCRYPTED_STAGE_FAILED", { status: 500 });
+    });
+
+    const snap = new SnapClient("https://snap.test", fake);
+    await expect(
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-5xx" }, chatBody(), { signal: controller.signal }),
+    ).rejects.toBeDefined();
+    expect(calls.filter((c) => c.url === CHAT_URL)).toHaveLength(1);
+  });
+
+  test("abort after encrypted headers terminates the decryption stream without a new request", async () => {
+    process.env.TRACE_CAPTURE_DIR = dir;
+    const controller = new AbortController();
+    const server = createECDH("prime256v1");
+    const serverPublicKey = server.generateKeys().toString("base64");
+    const cipher = new SM4GCM();
+    const keyId = "kid-11";
+    const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
+    let sessionKey: Uint8Array | null = null;
+    const plain = 'data: {"ok":1}\n\n';
+
+    const { fetch: fake, calls } = recordingFetch((call) => {
+      if (call.url === KEY_EXCHANGE_URL) {
+        const reqBody = JSON.parse(String(call.init.body));
+        const shared = server.computeSecret(Buffer.from(reqBody.clientPublicKey, "base64"));
+        sessionKey = new Uint8Array(createHash("sha256").update(shared).digest().subarray(0, 16));
+        return Response.json({ serverPublicKey, keyId, expiresIn: 3600 });
+      }
+      return new Response(new ReadableStream<Uint8Array>({
+        start(ctrl) {
+          // 先给一帧可解密内容，之后挂起直到客户端取消（模拟真实 fetch 的 body 中止）
+          const { ciphertext, iv, authTag } = cipher.encrypt(sessionKey!, encoder.encode(plain), `${keyId}|0`);
+          ctrl.enqueue(encoder.encode(`${b64(iv)}:${b64(authTag)}:${b64(ciphertext)}\n\n`));
+          const fail = () => ctrl.error(new DOMException("aborted", "AbortError"));
+          const signal = call.init.signal;
+          if (!signal) return;
+          if (signal.aborted) fail();
+          else signal.addEventListener("abort", fail);
+        },
+      }), {
+        status: 200,
+        headers: { "X-Encrypt-Algo": "sm4-gcm", "X-Encrypt-Key-Id": keyId, "Content-Type": "text/event-stream" },
+      });
+    });
+
+    const snap = new SnapClient("https://snap.test", fake);
+    const resp = await runWithRequestTrace(inboundWithSignal(controller.signal), () =>
+      snap.chat(CHAT_URL, { "x-ot-trace-id": "trace-cancel-mid" }, chatBody(), { signal: controller.signal }));
+
+    const reader = resp.body!.getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+    expect(Buffer.from(first.value!).toString("utf8")).toContain('data: {"ok":1}');
+    controller.abort();
+    await expect(reader.read()).rejects.toBeDefined();
+    await flushRequestTraces();
+
+    // 解密流已开始后取消：同样不重试、不再发第二次 chat
+    expect(calls.filter((c) => c.url === CHAT_URL)).toHaveLength(1);
+    const record = readRecords()[0];
+    expect(record.response.abort_reason).toBe("client_disconnect");
+    const chatAttempt = record.upstream.find((u: any) => u.url === CHAT_URL);
+    expect(chatAttempt.response.complete).toBe(false);
   });
 });
 

@@ -19,6 +19,36 @@ function makeFacade(chat: () => Promise<Response>): OpenAIFacade {
   return facade;
 }
 
+/** 记录每次 snap.chat 的入参；chat 收到的第 4 个参数是调用选项（含 signal）。 */
+function makeRecordingFacade(chat: (...args: any[]) => Promise<Response>): { facade: OpenAIFacade; calls: any[][] } {
+  process.env.CODEARTS_CLI_AK = "ak";
+  process.env.CODEARTS_CLI_SK = "sk";
+  process.env.SNAP_ORIGIN = "https://example.test";
+  const calls: any[][] = [];
+  const snap = {
+    chat: async (...args: any[]) => {
+      calls.push(args);
+      return chat(...args);
+    },
+  } as any;
+  const gw = { models: [{ modelId: "m", modelName: "M" }] } as any;
+  const telemetry = { recordChat() {} } as any;
+  const facade = new OpenAIFacade(snap, gw, telemetry);
+  (facade as any).heartbeats = { startBusy() {}, stopBusy() {} };
+  return { facade, calls };
+}
+
+/** 上游先吐一帧，客户端取消时让流以 AbortError 终止；不取消则永不结束。 */
+function abortableSse(signal: AbortSignal): Response {
+  const enc = new TextEncoder();
+  return new Response(new ReadableStream<Uint8Array>({
+    start(ctrl) {
+      ctrl.enqueue(enc.encode(`data:{"id":"1","created":1,"object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"content":"par"}}]}\n\n`));
+      signal.addEventListener("abort", () => ctrl.error(new DOMException("aborted", "AbortError")));
+    },
+  }), { status: 200, headers: { "Content-Type": "text/event-stream" } });
+}
+
 const body = { model: "m", messages: [{ role: "user", content: "hi" }] };
 
 const okSse = [
@@ -186,4 +216,79 @@ test("streaming response moves usage off the finish chunk", async () => {
   expect(usageFrames[0].choices).toEqual([]);
   const finish = frames.find((f: any) => f.choices?.[0]?.finish_reason === "stop");
   expect(finish.usage ?? null).toBeNull();
+});
+
+test("handleChat forwards the inbound abort signal to the snap chat call", async () => {
+  const controller = new AbortController();
+  const { facade, calls } = makeRecordingFacade(async () =>
+    new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+  const req = new Request("http://localhost/codearts/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, stream: true }),
+    signal: controller.signal,
+  });
+  const resp = await facade.handleChat(req);
+  expect(resp.status).toBe(200);
+  await resp.text();
+  expect(calls).toHaveLength(1);
+  // 第 4 个参数是 snap.chat 的调用选项；它必须与入站请求绑定同一条取消链
+  expect(calls[0][3]?.signal).toBeDefined();
+  controller.abort();
+  expect(calls[0][3].signal.aborted).toBe(true);
+});
+
+test("an already-aborted request never calls the upstream chat", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const { facade, calls } = makeRecordingFacade(async () => Response.json({ ok: true }));
+  const resp = await facade.respond(body, false, "sessionAbortEntry", controller.signal);
+  expect(resp.status).toBe(499);
+  expect(calls).toHaveLength(0);
+});
+
+test("aborting during non-stream aggregation stops without retrying or re-requesting", async () => {
+  const controller = new AbortController();
+  let started!: () => void;
+  const startedP = new Promise<void>((resolve) => { started = resolve; });
+  const { facade, calls } = makeRecordingFacade(async () => {
+    started();
+    return abortableSse(controller.signal);
+  });
+  const pending = facade.respond(body, false, "sessionAbortAgg", controller.signal);
+  await startedP;
+  controller.abort();
+  const resp = await pending;
+  expect(resp.status).toBe(499);
+  // 取消不得触发外层重试，也不得再发第二次上游请求
+  expect(calls).toHaveLength(1);
+});
+
+test("aborting during a streamed response leaves exactly one upstream request", async () => {
+  const controller = new AbortController();
+  let started!: () => void;
+  const startedP = new Promise<void>((resolve) => { started = resolve; });
+  const { facade, calls } = makeRecordingFacade(async () => {
+    started();
+    return abortableSse(controller.signal);
+  });
+  const resp = await facade.respond({ ...body, stream: true }, true, "sessionAbortStream", controller.signal);
+  await startedP;
+  controller.abort();
+  await expect(resp.text()).rejects.toBeDefined();
+  expect(calls).toHaveLength(1);
+});
+
+test("after a 401 response an aborted request does not refresh credentials or resend", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const { facade } = makeRecordingFacade(async () => {
+    calls++;
+    // 上游返回 401 的同时客户端已断开：刷新与重发都必须放弃
+    controller.abort();
+    return new Response('{"error":"token expired"}', { status: 401, headers: { "Content-Type": "application/json" } });
+  });
+  const resp = await facade.respond(body, false, "sessionAbort401", controller.signal);
+  expect(resp.status).toBe(499);
+  expect(calls).toBe(1);
 });

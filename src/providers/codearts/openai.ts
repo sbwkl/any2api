@@ -76,9 +76,9 @@ export class OpenAIFacade {
     return getCredentials().origin ?? process.env.SNAP_ORIGIN ?? "https://snap-access.cn-north-4.myhuaweicloud.com";
   }
 
-  private chatUpstream(headers: Record<string, string>, body: any): Promise<Response> {
+  private chatUpstream(headers: Record<string, string>, body: any, signal?: AbortSignal): Promise<Response> {
     dumpUpstream("codearts", this.chatUrl, body);
-    return this.snap.chat(this.chatUrl, headers, body);
+    return this.snap.chat(this.chatUrl, headers, body, { signal });
   }
 
   modelsPayload(): any {
@@ -134,17 +134,21 @@ export class OpenAIFacade {
   }
 
   async handleChat(req: Request): Promise<Response> {
+    // 客户端已断开：不解析请求体、不建立会话、不发上游请求。
+    if (req.signal.aborted) return clientAbortResponse();
     const body = await req.json().catch(() => null);
     if (!body || !Array.isArray(body.messages))
       return jsonError(400, "invalid_request: messages is required");
     const sessionKey =
       (req.headers.get("x-codearts-session") || (typeof body.user === "string" && body.user) || "default").slice(0, 128);
-    return this.respond(body, body.stream === true, sessionKey);
+    return this.respond(body, body.stream === true, sessionKey, req.signal);
   }
 
   // 内部统一管线（协议适配层复用）：body 为 OpenAI chat 形态。
   // wantStream=true → 透传上游 SSE（OpenAI chunk）；false → 聚合为单个 chat.completion JSON。
-  async respond(body: any, wantStream: boolean, sessionKey: string): Promise<Response> {
+  // signal：入站请求的取消信号；一旦中止，立即停止本次请求发起的 chat 调用，且绝不重试。
+  async respond(body: any, wantStream: boolean, sessionKey: string, signal?: AbortSignal): Promise<Response> {
+    if (signal?.aborted) return clientAbortResponse();
     if (!body || !Array.isArray(body.messages))
       return jsonError(400, "invalid_request: messages is required");
     const model = this.resolveModel(body.model);
@@ -211,13 +215,16 @@ export class OpenAIFacade {
     };
 
     // 单次上游发送 + 401 刷新重试；非 2xx 统一转成协议层可归一的代理错误信封。
+    // 每个检查点都先看取消信号：取消优先于一切重试/刷新判断。
     const sendOnce = async (): Promise<Response> => {
+      if (signal?.aborted) throw clientAbortError();
       const headers = signedHeaders();
       const startMs = Date.now();
       let resp: Response;
       try {
-        resp = await this.chatUpstream(headers, mapped);
+        resp = await this.chatUpstream(headers, mapped, signal);
       } catch (e: any) {
+        if (signal?.aborted) throw clientAbortError();
         throw new Error(`upstream_error: ${e?.message ?? String(e)}`);
       }
       this.telemetry.recordChat({
@@ -225,24 +232,30 @@ export class OpenAIFacade {
       });
 
       if (!resp.ok && resp.status === 401) {
+        // 客户端已取消：不刷新凭证、不重发（刷新属于请求链内的凭证修复动作）。
+        if (signal?.aborted) throw clientAbortError();
         // STS 过期/失效：尝试强制刷新后重试一次（请求链内刷新与重发均进入四层记录）
         const errText = await resp.text().catch(() => "");
         try {
-          await refreshNow(this.fetchImpl);
+          await refreshNow(this.fetchImpl, signal);
         } catch (e: any) {
+          if (signal?.aborted) throw clientAbortError();
           const reason = extractUpstreamErrorMessage(errText) ?? `upstream 401, refresh failed: ${e?.message ?? e}`;
           return jsonError(401, reason);
         }
+        if (signal?.aborted) throw clientAbortError();
         serviceLogger.log("[openai] 401 → STS 已刷新，重试一次");
         try {
-          resp = await this.chatUpstream(signedHeaders(), mapped);
+          resp = await this.chatUpstream(signedHeaders(), mapped, signal);
         } catch (e: any) {
+          if (signal?.aborted) throw clientAbortError();
           // 刷新成功但重发网络失败：交给上层按瞬时错误处理，不要伪装成 401。
           throw new Error(`upstream_error: ${e?.message ?? String(e)}`);
         }
       }
       if (!resp.ok) {
         const text = await resp.text().catch(() => "");
+        if (signal?.aborted) throw clientAbortError();
         const message = extractUpstreamErrorMessage(text) ?? `upstream ${resp.status}`;
         return jsonError(resp.status, message);
       }
@@ -254,9 +267,11 @@ export class OpenAIFacade {
       try {
         resp = await sendOnce();
       } catch (e: any) {
+        if (signal?.aborted) return clientAbortResponse();
         const message = e?.message ?? String(e);
         return jsonError(classifyUpstreamStatus(message), message);
       }
+      if (signal?.aborted) return clientAbortResponse();
       if (!resp.ok) return resp; // 已是代理错误信封
       return new Response(resp.body ? normalizeChatSseUsage(resp.body) : resp.body, {
         status: 200,
@@ -274,16 +289,20 @@ export class OpenAIFacade {
     let lastMessage = "upstream error";
     let lastStatus = 502;
     for (let attempt = 1; attempt <= NON_STREAM_ATTEMPTS; attempt++) {
+      if (signal?.aborted) return clientAbortResponse();
       let resp: Response;
       try {
         resp = await sendOnce();
       } catch (e: any) {
+        // 取消不是瞬时故障：立即收手，不消耗外层尝试。
+        if (signal?.aborted) return clientAbortResponse();
         // snap 已重试过：直接按分类返回，不再消耗外层预算
         const message = e?.message ?? String(e);
         return jsonError(classifyUpstreamStatus(message), message);
       }
       if (!resp.ok) return resp;
       try {
+        if (signal?.aborted) return clientAbortResponse();
         const ct = resp.headers.get("content-type") ?? "";
         // 上游对非 stream 请求也回 SSE：聚合为单个 completion JSON。
         if (ct.includes("text/event-stream")) {
@@ -293,6 +312,8 @@ export class OpenAIFacade {
         const text = await resp.text();
         return new Response(text, { status: 200, headers: { "Content-Type": "application/json" } });
       } catch (e: any) {
+        // 读取/聚合阶段被取消：不把 AbortError 当瞬时故障重试。
+        if (signal?.aborted) return clientAbortResponse();
         lastMessage = e?.message ?? String(e);
         lastStatus = classifyUpstreamStatus(lastMessage);
         if (attempt < NON_STREAM_ATTEMPTS && isTransientFailure(lastMessage)) continue;
@@ -308,4 +329,15 @@ function jsonError(status: number, message: string): Response {
     status,
     headers: { "Content-Type": "application/json", [PROXY_ERROR_HEADER]: "proxy" },
   });
+}
+
+/** 客户端取消是终止信号而不是上游故障：不重试、不刷新、不再发新请求。 */
+function clientAbortError(): Error {
+  const err = new Error("client disconnected");
+  err.name = "AbortError";
+  return err;
+}
+
+function clientAbortResponse(): Response {
+  return new Response(null, { status: 499 });
 }
