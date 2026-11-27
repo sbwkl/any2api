@@ -157,7 +157,7 @@ test("a transient reset during non-stream aggregation is retried once", async ()
   expect(calls).toBe(2);
 });
 
-test("a connection failure is retried by the snap layer only, not again by the facade", async () => {
+test("a bare connection failure is not retried by the facade", async () => {
   let calls = 0;
   const facade = makeFacade(async () => {
     calls++;
@@ -167,8 +167,35 @@ test("a connection failure is retried by the snap layer only, not again by the f
   expect(resp.status).toBe(502);
   const j: any = await resp.json();
   expect(j.error.type).toBe("server_error");
-  // SnapClient 内部已有一次同 key 重试；门面不再叠加预算
+  // 裸网络错误由 SnapClient 判不可重试；门面也不再叠加预算
   expect(calls).toBe(1);
+});
+
+test("one retry budget is shared by every snap call of a single inbound request", async () => {
+  let calls = 0;
+  const { facade, calls: recordings } = makeRecordingFacade(async () => {
+    calls++;
+    return calls === 1
+      ? resetStream()
+      : new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  });
+  const resp = await facade.respond(body, false, "sessionBudget");
+  expect(resp.status).toBe(200);
+  expect(recordings).toHaveLength(2);
+  const budget = recordings[0][3]?.budget;
+  expect(budget).toBeDefined();
+  expect(typeof budget.attempts).toBe("number");
+  // 门面内层聚合与上游重试共用同一份预算，不会每次 chat 各起一份
+  expect(recordings[1][3]?.budget).toBe(budget);
+});
+
+test("streaming requests also carry the shared budget to the snap client", async () => {
+  const { facade, calls } = makeRecordingFacade(async () =>
+    new Response(okSse, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+  const resp = await facade.respond({ ...body, stream: true }, true, "sessionBudgetStream");
+  await resp.text();
+  expect(calls).toHaveLength(1);
+  expect(calls[0][3]?.budget).toBeDefined();
 });
 
 test("unknown model is rejected with 404 instead of falling back to models[0]", async () => {

@@ -12,6 +12,7 @@ import { aggregateSseToCompletion, normalizeChatSseUsage, NO_CHOICES } from "../
 import { classifyUpstreamStatus, errorTypeForStatus, extractUpstreamErrorMessage, isTransientUpstreamMessage, PROXY_ERROR_HEADER } from "../../shared/errors";
 import { dumpUpstream, type FetchLike } from "../../shared/trace";
 import { serviceLogger } from "../../shared/log";
+import { createRetryBudget, type RetryBudget } from "./retry";
 
 const CLIENT_TYPE = "IDE";
 const CLIENT_VERSION = "26.11.200";
@@ -76,9 +77,14 @@ export class OpenAIFacade {
     return getCredentials().origin ?? process.env.SNAP_ORIGIN ?? "https://snap-access.cn-north-4.myhuaweicloud.com";
   }
 
-  private chatUpstream(headers: Record<string, string>, body: any, signal?: AbortSignal): Promise<Response> {
+  private chatUpstream(
+    headers: Record<string, string>,
+    body: any,
+    signal?: AbortSignal,
+    budget?: RetryBudget,
+  ): Promise<Response> {
     dumpUpstream("codearts", this.chatUrl, body);
-    return this.snap.chat(this.chatUrl, headers, body, { signal });
+    return this.snap.chat(this.chatUrl, headers, body, { signal, budget });
   }
 
   modelsPayload(): any {
@@ -151,6 +157,9 @@ export class OpenAIFacade {
     if (signal?.aborted) return clientAbortResponse();
     if (!body || !Array.isArray(body.messages))
       return jsonError(400, "invalid_request: messages is required");
+    // 一次入站请求一份总尝试预算：门面内层（聚合重试、401 重发）与加密客户端共享，
+    // 避免分层重试成倍放大最坏 POST 次数。
+    const retryBudget = createRetryBudget();
     const model = this.resolveModel(body.model);
     // 未知模型必须显式 4xx：静默回退 models[0] 会让客户端以为在用 A 实际在用 B。
     if (!model) return jsonError(404, `model_not_found: ${String(body.model)}`);
@@ -222,7 +231,7 @@ export class OpenAIFacade {
       const startMs = Date.now();
       let resp: Response;
       try {
-        resp = await this.chatUpstream(headers, mapped, signal);
+        resp = await this.chatUpstream(headers, mapped, signal, retryBudget);
       } catch (e: any) {
         if (signal?.aborted) throw clientAbortError();
         throw new Error(`upstream_error: ${e?.message ?? String(e)}`);
@@ -246,7 +255,7 @@ export class OpenAIFacade {
         if (signal?.aborted) throw clientAbortError();
         serviceLogger.log("[openai] 401 → STS 已刷新，重试一次");
         try {
-          resp = await this.chatUpstream(signedHeaders(), mapped, signal);
+          resp = await this.chatUpstream(signedHeaders(), mapped, signal, retryBudget);
         } catch (e: any) {
           if (signal?.aborted) throw clientAbortError();
           // 刷新成功但重发网络失败：交给上层按瞬时错误处理，不要伪装成 401。
@@ -284,8 +293,8 @@ export class OpenAIFacade {
     }
 
     // 非流式：上游 SSE 聚合为单个 chat.completion JSON（服务端对 non-stream 请求也回 SSE）。
-    // 只对「聚合/读取阶段」的瞬时故障重试一次：连接建立类失败已由 SnapClient 在同一 key 内
-    // 重试一次，这里再叠一层会让单次请求最坏发 4 次加密 POST（流式路径只有 snap 那一次）。
+    // 只对「聚合/读取阶段」的瞬时故障再试一次；上游尝试与加密客户端共享同一份重试预算。
+    // #52 将退役这条独立尝试常量，并把重试边界收敛到「首字节前」。
     let lastMessage = "upstream error";
     let lastStatus = 502;
     for (let attempt = 1; attempt <= NON_STREAM_ATTEMPTS; attempt++) {

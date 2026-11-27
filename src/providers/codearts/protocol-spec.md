@@ -170,7 +170,7 @@ sessionKey = SHA256(ECDH_shared_secret).subarray(0,16)    // Uint8Array 16B
 - 复用条件：`Date.now() < expiresAt - 300_000`（提前 5 分钟换新）
 - `expiresAt = Date.now() + expiresIn*1000`
 - 协商失败且旧 key 未到期 → 继续用旧 key（fallbackOnFailure=true）
-- 收到 `ENCRYPT_KEY_EXPIRED`（响应体包含该串）→ `clearKey()` + 立即重协商 + **同一请求重试一次**
+- 收到 `ENCRYPT_KEY_EXPIRED`（响应体包含该串）→ `clearKey()` + 立即重协商 + **同一请求重试一次**（代理实现中这次重发扣一次共享重试预算）
 
 ### 3.3 请求加密
 
@@ -197,7 +197,7 @@ Content-Type: application/octet-stream
 然后 Ew signSimple re-sign（覆盖 Authorization/X-Sdk-Date）。
 **失败回退链**（客户端明确行为，代理可复用以提高拟真度）：协商失败→明文发送；加密请求网络错误→明文重发；非 2xx→读 body，含 ENCRYPT_KEY_EXPIRED→换 key 重试一次，否则明文重发。
 
-> **代理实现偏差（2026-11-25）**：chat 的明文回退实测 8/8 被上游以 415 拒绝，只会掩盖真实故障。代理不再对 chat 回退明文：协商失败直接报错；网络错误/5xx 用同一 key 重试一次；其余非 2xx 返回上游状态与原文，由协议层归一。`CODEARTS_FORCE_PLAINTEXT=1` 仅作调试。决策与证据见 `docs/exec-plans/completed/2026-11-25-p0-upstream-errors-tool-fidelity.md`。
+> **代理实现偏差（2026-11-25 / 2026-11-27）**：chat 的明文回退实测 8/8 被上游以 415 拒绝，只会掩盖真实故障。代理不再对 chat 回退明文：协商失败直接报错；非 2xx 按状态级重试表处理（429 / 406 / 502 总尝试 ≤10，500 / 503 / 504 / 407 总尝试 ≤3，其它 4xx/5xx 与裸网络错误不重试），同一入站请求共享一份尝试预算，退避指数增长并尊重 `retry-after` / `retry-after-ms`；`ENCRYPT_KEY_EXPIRED` 换 key 重发保留并扣预算。实现见 `src/providers/codearts/retry.ts` 与 #51。`CODEARTS_FORCE_PLAINTEXT=1` 仅作调试。首次偏差的决策与证据见 `docs/exec-plans/completed/2026-11-25-p0-upstream-errors-tool-fidelity.md`。
 
 ### 3.4 响应解密（SSE）
 
@@ -355,7 +355,7 @@ JS 对象构造序 → fetch 按插入序发出（Bun undici-ish）。拟真顺�
 
 - 加密 SSE 三段式 → 解密出标准 `data: {choices:[{delta:{content,reasoning_content,tool_calls}}],usage}` → 原样转 OpenAI chunk
 - `reasoning_content` 映射为 OpenAI `reasoning`/自定义字段（第三方按需）
-- 错误映射：SSE 内嵌错误按内嵌状态码分类为 400/415/429/502/504，归一为 OpenAI 4xx/5xx + 错误体；传输层只做有界重试（瞬时 5xx/网络错误一次）。内核 `x-session-retry` 协议（407 ×3、Busy 81101 系退避 ≤10~20 次、429/406 读 `retry-after` 与 `need-switch-model` 头）**代理尚未实现**，见 #34。
+- 错误映射：SSE 内嵌错误按内嵌状态码分类为 400/415/429/502/504，归一为 OpenAI 4xx/5xx + 错误体；传输层按状态级重试表恢复（429 / 406 / 502 总尝试 ≤10，500 / 503 / 504 / 407 总尝试 ≤3，其它 4xx/5xx 与裸网络错误不重试；共享单一预算 + 退避，见 §3.3 与 #51）。帧内 Busy（`ModelArts.81101`）/ 帧内 429 的识别仍待 #52。
 - `TM.00020005`（租户冻结）、`TM.00001054`（内容安全）→ 直接 4xx + 原文 error_msg
 
 ### 7.3.1 上游 usage 语义（OpenAI Chat 与 Anthropic 映射）
@@ -406,7 +406,7 @@ input_tokens = max(0, prompt_tokens - cached_tokens - cache_creation_tokens)
 - [ ] 心跳 PUT + 30s busy 节奏 + idle 收尾
 - [ ] OTLP 5s/30 条批量上报，与 chat 同 traceId（可选但强烈建议）
 - [ ] client-ip = 本机局域网 IPv4
-- [x] chat 不明文回退；瞬时 5xx/网络错误同 key 重试一次（有意偏差，见 §3.3 注）
+- [x] chat 不明文回退；按状态级重试表恢复（429 / 406 / 502 ≤10，500 / 503 / 504 / 407 ≤3，其它 4xx/5xx 与裸网络错误不重试，共享单一预算；有意偏差，见 §3.3 注）
 
 ---
 
