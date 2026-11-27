@@ -22,6 +22,8 @@ function jsonError(status: number, message: string, code?: any): Response {
 export class CodeBuddyFacade {
   private sessions = new SessionRegistry();
   private source: CredentialSource;
+  // 回源单飞：进行中的 reload 由并发请求共享，settle 后清空以便下次按需重新回源
+  private reloadPromise: Promise<Credentials | null> | null = null;
 
   constructor(
     private config: ProductConfig,
@@ -34,6 +36,16 @@ export class CodeBuddyFacade {
   // 当前凭证：按请求从凭证源读取；凭证未就绪时为 null。
   private currentCredentials(): Credentials | null {
     return this.source.get();
+  }
+
+  // 按需回源（单飞合并）：并发请求同时触发时共享同一次 reload()
+  private reloadOnce(): Promise<Credentials | null> {
+    if (!this.reloadPromise) {
+      this.reloadPromise = this.source.reload().finally(() => {
+        this.reloadPromise = null;
+      });
+    }
+    return this.reloadPromise;
   }
 
   modelsPayload() {
@@ -130,7 +142,7 @@ export class CodeBuddyFacade {
   private async respondInner(body: any, wantStream: boolean, sessionKey: string, profile: Profile): Promise<Response> {
     // 按需回源（惰性）：当前无凭证时先读一次凭证源再判定，登录后下一个请求即恢复、无需重启。
     let ready = this.currentCredentials();
-    if (!ready) ready = await this.source.reload();
+    if (!ready) ready = await this.reloadOnce();
     if (!ready) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
 
     let messages: any[];
@@ -193,6 +205,8 @@ export class CodeBuddyFacade {
     });
 
     const url = `${this.config.endpoint}/v2/chat/completions`;
+    // 内置刷新失败后经回源判定仍无新凭证（含磁盘无凭证）→ 401 终态指向「请登录 CodeBuddy CN」
+    let reauthStale = false;
     const resp = await postChat({
       url,
       headers: makeHeaders(ready),
@@ -208,7 +222,16 @@ export class CodeBuddyFacade {
             credentials: creds,
             fetchImpl: this.opts.fetchImpl,
           });
-          if (!next) return null;
+          if (!next) {
+            // 内置 refreshToken 刷新失败 → 按需回源：读到的 accessToken 或 uid 与当前不同才算新凭证，采纳并重试一次
+            const reloaded = await this.reloadOnce();
+            if (reloaded && (reloaded.accessToken !== creds.accessToken || reloaded.uid !== creds.uid)) {
+              this.source.adopt(reloaded);
+              return makeHeaders(reloaded);
+            }
+            reauthStale = true;
+            return null;
+          }
           this.source.adopt(next);
           return makeHeaders(next);
         },
@@ -242,6 +265,7 @@ export class CodeBuddyFacade {
     if (!resp.ok) {
       const err = await readUpstreamError(resp);
       if (resp.status === 401) {
+        if (reauthStale) return jsonError(401, "请登录 CodeBuddy CN", "credentials_not_ready");
         return jsonError(401, `CodeBuddy 鉴权失败，请重新登录或更新凭证：${err.message}`, err.code);
       }
       if (resp.status === 429) return jsonError(429, err.message, err.code);
