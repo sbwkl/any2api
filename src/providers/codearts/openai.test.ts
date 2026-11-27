@@ -14,11 +14,15 @@ function countAttempt(opts: any): void {
 }
 
 /** 记录每次 snap.chat 的入参；chat 收到的第 4 个参数是调用选项（含 signal）。 */
-function makeRecordingFacade(chat: (...args: any[]) => Promise<Response>): { facade: OpenAIFacade; calls: any[][] } {
+function makeRecordingFacade(
+  chat: (...args: any[]) => Promise<Response>,
+  opts: { refresh?: () => Promise<unknown> } = {},
+): { facade: OpenAIFacade; calls: any[][]; refreshCalls: () => number } {
   process.env.CODEARTS_CLI_AK = "ak";
   process.env.CODEARTS_CLI_SK = "sk";
   process.env.SNAP_ORIGIN = "https://example.test";
   const calls: any[][] = [];
+  let refreshCount = 0;
   const snap = {
     chat: async (...args: any[]) => {
       calls.push(args);
@@ -28,10 +32,13 @@ function makeRecordingFacade(chat: (...args: any[]) => Promise<Response>): { fac
   } as any;
   const gw = { models: [{ modelId: "m", modelName: "M" }] } as any;
   const telemetry = { recordChat() {} } as any;
-  const facade = new OpenAIFacade(snap, gw, telemetry, fetch, { retry: { sleep: async () => {}, random: () => 0 } });
+  const facade = new OpenAIFacade(snap, gw, telemetry, fetch, {
+    refresh: opts.refresh ? async () => { refreshCount++; return opts.refresh!(); } : undefined,
+    retry: { sleep: async () => {}, random: () => 0 },
+  });
   // 避免 HeartbeatManager 的 30s 定时器拖住测试进程
   (facade as any).heartbeats = { startBusy() {}, stopBusy() {} };
-  return { facade, calls };
+  return { facade, calls, refreshCalls: () => refreshCount };
 }
 
 /** 只关心门面行为的用例：不需要逐一检查 snap.chat 入参。 */
@@ -58,13 +65,14 @@ type UpstreamStep = { status: number; body?: string; headers?: Record<string, st
  */
 function makeScriptedFacade(
   script: UpstreamStep[],
-  opts: { refresh?: (signal?: AbortSignal) => Promise<unknown> } = {},
-): { facade: OpenAIFacade; chatCalls: string[]; refreshCalls: () => number } {
+  opts: { refresh?: () => Promise<unknown> } = {},
+): { facade: OpenAIFacade; chatCalls: string[]; refreshCalls: () => number; refreshSignals: () => unknown[] } {
   process.env.CODEARTS_CLI_AK = "ak";
   process.env.CODEARTS_CLI_SK = "sk";
   process.env.SNAP_ORIGIN = "https://snap.test";
   const serverPublicKey = createECDH("prime256v1").generateKeys().toString("base64");
   const chatCalls: string[] = [];
+  const refreshSignals: unknown[] = [];
   let refreshCount = 0;
   let index = 0;
   const fetchImpl: any = async (input: any) => {
@@ -84,11 +92,13 @@ function makeScriptedFacade(
   const gw = { models: [{ modelId: "m", modelName: "M" }] } as any;
   const telemetry = { recordChat() {} } as any;
   const facade = new OpenAIFacade(snap, gw, telemetry, fetchImpl, {
-    refresh: opts.refresh ? async (signal) => { refreshCount++; return opts.refresh!(signal); } : undefined,
+    refresh: opts.refresh
+      ? async (signal?: AbortSignal) => { refreshCount++; refreshSignals.push(signal); return opts.refresh!(); }
+      : undefined,
     retry: { sleep: async () => {}, now: () => 0, random: () => 0 },
   });
   (facade as any).heartbeats = { startBusy() {}, stopBusy() {} };
-  return { facade, chatCalls, refreshCalls: () => refreshCount };
+  return { facade, chatCalls, refreshCalls: () => refreshCount, refreshSignals: () => refreshSignals };
 }
 
 function sseStep(...frames: string[]): UpstreamStep {
@@ -245,6 +255,37 @@ test("the rate-limit ladder for an embedded Busy frame stops at ten total attemp
   const j: any = await resp.json();
   expect(j.error.type).toBe("rate_limit_error");
   expect(j.error.message).toContain("ModelArts.81101");
+  expect(calls).toBe(10);
+});
+
+test("force-plaintext frame retries also stop at ten upstream attempts", async () => {
+  // 明文早退路径同样扣共享预算：否则帧内重试没有任何上界。
+  process.env.CODEARTS_FORCE_PLAINTEXT = "1";
+  process.env.CODEARTS_CLI_AK = "ak";
+  process.env.CODEARTS_CLI_SK = "sk";
+  process.env.SNAP_ORIGIN = "https://snap.test";
+  let calls = 0;
+  const fetchImpl: any = async () => {
+    calls++;
+    // 预算未扣时会无限重发：越过上限立即抛错，让用例快速失败而不是挂死
+    if (calls > 20) throw new Error("unbounded plaintext retry");
+    return sseResponse(BUSY_FRAME);
+  };
+  const snap = new SnapClient("https://snap.test", fetchImpl, {
+    sleep: async () => {},
+    now: () => 0,
+    random: () => 0,
+  });
+  const gw = { models: [{ modelId: "m", modelName: "M" }] } as any;
+  const telemetry = { recordChat() {} } as any;
+  const facade = new OpenAIFacade(snap, gw, telemetry, fetchImpl, {
+    retry: { sleep: async () => {}, now: () => 0, random: () => 0 },
+  });
+  (facade as any).heartbeats = { startBusy() {}, stopBusy() {} };
+
+  const resp = await facade.respond(body, { stream: false, sessionKey: "sessionPlainBudget" });
+
+  expect(resp.status).toBe(429);
   expect(calls).toBe(10);
 });
 
@@ -498,15 +539,20 @@ test("aborting during a streamed response leaves exactly one upstream request", 
 test("after a 401 response an aborted request does not refresh credentials or resend", async () => {
   const controller = new AbortController();
   let calls = 0;
-  const { facade } = makeRecordingFacade(async () => {
-    calls++;
-    // 上游返回 401 的同时客户端已断开：刷新与重发都必须放弃
-    controller.abort();
-    return new Response('{"error":"token expired"}', { status: 401, headers: { "Content-Type": "application/json" } });
-  });
+  const { facade, refreshCalls } = makeRecordingFacade(
+    async () => {
+      calls++;
+      // 上游返回 401 的同时客户端已断开：刷新与重发都必须放弃
+      controller.abort();
+      return new Response('{"error":"token expired"}', { status: 401, headers: { "Content-Type": "application/json" } });
+    },
+    { refresh: async () => ({}) },
+  );
   const resp = await facade.respond(body, { stream: false, sessionKey: "sessionAbort401", signal: controller.signal });
   expect(resp.status).toBe(499);
   expect(calls).toBe(1);
+  // 刷新前已中止 → 不发起令牌交换
+  expect(refreshCalls()).toBe(0);
 });
 
 test("a 401 refresh resends once without consuming the transient retry budget", async () => {
@@ -544,16 +590,15 @@ test("a 401 refresh still fires when the retry budget is exhausted", async () =>
   expect(chatCalls).toHaveLength(11);
 });
 
-test("a 401 refresh aborted by the client stops without resending", async () => {
+test("a 401 refresh interrupted by a client abort still completes and does not resend", async () => {
   const controller = new AbortController();
-  const { facade, chatCalls } = makeScriptedFacade(
+  const { facade, chatCalls, refreshCalls, refreshSignals } = makeScriptedFacade(
     [{ status: 401, body: '{"error":"token expired"}' }],
     {
       refresh: async () => {
+        // 客户端在令牌交换期间断开：刷新不接收入站信号，仍然完成并回写轮换后的 refresh_token
         controller.abort();
-        const err: any = new Error("client disconnected");
-        err.name = "AbortError";
-        throw err;
+        return {};
       },
     },
   );
@@ -561,6 +606,10 @@ test("a 401 refresh aborted by the client stops without resending", async () => 
   const resp = await facade.respond(body, { stream: false, sessionKey: "session401AbortRefresh", signal: controller.signal });
 
   expect(resp.status).toBe(499);
+  expect(refreshCalls()).toBe(1);
+  // 刷新签名不再有 signal 参数：中止会让已轮换的 refresh_token 无法回写
+  expect(refreshSignals()).toEqual([undefined]);
+  // 刷新完成后已中止：不重发上游 chat
   expect(chatCalls).toHaveLength(1);
 });
 

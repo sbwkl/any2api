@@ -225,7 +225,7 @@ function decryptingFetch(fetchImpl: FetchLike, key: NegotiatedKey): FetchLike {
 // 100% 被上游拒绝（内嵌 415），只会掩盖真实故障。这里按状态级重试表恢复（见 retry.ts）：
 // 429/406/502 总尝试 ≤10，500/503/504/407 总尝试 ≤3，其它 4xx/5xx 与裸网络错误不重试；
 // ENCRYPT_KEY_EXPIRED 换 key 重发保留但不计为独立上限，同样扣共享预算。
-// CODEARTS_FORCE_PLAINTEXT=1 仅作调试开关。
+// CODEARTS_FORCE_PLAINTEXT=1 仅作调试开关；明文/端点路径不重试，但同样各扣一次共享预算。
 export class SnapClient {
   public keys: SessionKeyManager;
   private cipher = new SM4GCM();
@@ -267,11 +267,14 @@ export class SnapClient {
     const { signal } = opts;
     const budget = opts.budget ?? createRetryBudget();
     if (signal?.aborted) throw clientAbortError();
-    // UXe 判定：仅 /api/v2/chat/completions 加密
+    // UXe 判定：仅 /api/v2/chat/completions 加密；其余路径与调试开关走明文。
+    // 明文/端点路径同样是上游 chat 发送：扣一次共享预算，保证门面的帧内重试仍有上界；
+    // chargeBudget:false 只豁免本次调用的第一次发送（401 刷新后的重发），语义与加密路径一致。
     const pathname = new URL(url).pathname;
-    if (process.env.CODEARTS_FORCE_PLAINTEXT === "1")
-      return this.sendPlaintext(url, headers, JSON.stringify(bodyObj), signal);
-    if (!ENCRYPT_PATHS.some((p) => pathname.startsWith(p))) {
+    const encrypted = process.env.CODEARTS_FORCE_PLAINTEXT !== "1"
+      && ENCRYPT_PATHS.some((p) => pathname.startsWith(p));
+    if (!encrypted) {
+      if (opts.chargeBudget !== false) budget.attempts++;
       return this.sendPlaintext(url, headers, JSON.stringify(bodyObj), signal);
     }
     const baseUrl = new URL(url).origin;
