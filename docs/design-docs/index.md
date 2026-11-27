@@ -22,6 +22,7 @@
 ## 架构决策 ADR
 
 - [`adr/codearts-l3-decrypted-plaintext.md`](adr/codearts-l3-decrypted-plaintext.md) — CodeArts L3 默认记录解密后的明文响应（accepted）。
+- [`adr/codebuddy-credential-lazy-reload.md`](adr/codebuddy-credential-lazy-reload.md) — CodeBuddy 凭证按需惰性回源、免重启自愈（accepted）。
 - [`adr/`](adr/) — 难回退决策按主题新建，不分配顺序编号。
 
 ## RFC

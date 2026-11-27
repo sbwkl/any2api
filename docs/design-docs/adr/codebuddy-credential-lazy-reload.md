@@ -1,0 +1,25 @@
+# CodeBuddy 凭证按需惰性回源（免重启自愈）
+
+CodeBuddy 的凭证当前只在进程启动时读取一次：`registry` 的 `create()` 失败即被固化，之后该前缀永久 503；facade 构造时捕获 `credentials`，运行期 401 只用内存里的 `refreshToken` 刷新，刷新失败便直接报 401、从不回源重读。于是「进程先启动、之后才登录」和「运行中掉线、之后重登」这两种正常场景都必须重启服务才能恢复。本决策让 codebuddy 在**请求级按需回源**中自愈，不引入后台轮询或事件监听。
+
+## 决策
+
+- provider 在无凭证时仍**成功挂载**，进入「凭证未就绪」态；`create()` 不再因缺凭证失败。
+- 回源时机**只有两处**：① 进入请求时若当前无凭证，先重新读取凭证源再发送；② 上游返回 401 且内置 `refreshToken` 刷新失败时，重新读取凭证源——读到的 `accessToken`（或 `uid`）与当前不同则采纳并**重试上游一次**，否则返回 401「请登录 CodeBuddy CN」。
+- **不做**后台定时轮询、**不做**事件监听（不套用 codearts 的 60s 保活，也**不**监听 `state.vscdb` / Keychain 变更）。
+- 回源**单飞合并**（并发请求共享同一次回源）；采纳新凭证后重试上游**至多一次**。
+- 「新凭证」判定：读到的 `accessToken` 与当前不同，或 `uid` 改变。
+- 未就绪 / 鉴权失败对外返回 **401** 且文案指向「登录 CodeBuddy CN」；`healthz` 反映降级（`credentialsReady:false`）且**不抛错**；`/v1/models` 仍从缓存/回退返回，不因未就绪而 503。
+- 凭证源优先级**不变**：`CODEBUDDY_SESSION_JSON` → `CODEBUDDY_TOKEN` → Keychain + `state.vscdb`。
+- **范围**：仅 codebuddy；不改 `registry` 通用路由层；不改 codearts。
+
+## 背景与替代方案
+
+**现状缺陷**：`src/registry.ts` 启动时只 `create()` 一次、失败即固化返回 503；`src/providers/codebuddy/openai.ts` 构造时捕获 `credentials`、401 仅用内存 `refreshToken`、刷新失败不回源。两处叠加，使「先启动后登录」「运行中掉线重登」都只能靠重启解决——这与掉线重登本就属于正常场景的事实相悖。
+
+**替代方案**：
+- *codearts 式后台 60s 保活（重读 + lineage 采纳）*：需要常驻定时器，且 codebuddy 的磁盘 secret 由 app 直写、可能无 `refreshToken`，lineage 语义套用价值有限，整体更重。**否决**。
+- *事件驱动（`fs.watch` `state.vscdb` / Keychain 通知）*：跨平台脆弱，`state.vscdb` 常以 WAL 写入不易可靠监听。**否决**。
+- *仅「401 才回源」*：无法覆盖「启动时无凭证」——此时代理发不出上游请求、不会产生 401。**否决其单独成立**（必须补上「请求前无凭证先回源」一处）。
+
+**后果**：重登后**下一个请求即恢复、无需重启**；未就绪期返回 401 而非 503，避免把「该登录了」误报为服务故障；无主动续期，依赖 401 往返（可接受）；codearts 保持其自身模型，二者差异为有意为之。
